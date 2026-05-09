@@ -2,391 +2,358 @@
   <img src="../birdlogo.png" alt="ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi" width="240" />
 </p>
 
-# birdnet-esp32-rtsp-mic (Firmware)
+# birdnet-esp32-rtsp-mic Firmware
 
-This folder contains the Arduino firmware for an ESP32-C6 + I2S MEMS microphone (ICS-43434)
-that streams **mono 16-bit PCM** audio over **RTSP** and exposes an English Web UI plus a JSON API.
+Arduino firmware for an ESP32-C6 I2S microphone that serves **mono 16-bit PCM/L16** audio over
+**RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
+and Home Assistant MQTT Discovery.
 
-- Beginner-friendly overview + wiring: `../README.md`
-- Firmware versions / changes: `CHANGELOG.md`
-- License: MIT (`../LICENSE`)
 - Latest firmware: **v1.8.0** (2026-05-08)
-- One-click web flasher: **https://esp32mic.msmeteo.cz**
+- Tested board: Seeed Studio **XIAO ESP32-C6**
+- Reference microphone: **ICS-43434**; **INMP441** has been reported compatible with the same wiring
+- User-facing overview and wiring: `../README.md`
+- Changelog: `CHANGELOG.md`
+- Web flasher: **https://esp32mic.msmeteo.cz**
+- License: MIT (`../LICENSE`)
 
----
+## Important URLs
 
-## TL;DR
+Web UI:
 
-- Web UI: `http://<device-ip>/` (port **80**)
-- RTSP audio:
-  - `rtsp://<device-ip>:8554/audio` (primary stream, backward-compatible default)
-  - `rtsp://<device-ip>:8554/audio2`
-  - (or `.local` variants when mDNS is enabled)
-- Board: Seeed Studio **XIAO ESP32-C6** (tested)
-- Mic: **ICS-43434** (I2S, mono reference); **INMP441** has been reported compatible with the same
-  I2S wiring
-- Defaults: 48 kHz, gain 1.2, buffer 1024, Wi-Fi TX ~19.5 dBm, shiftBits 12, HPF ON (500 Hz),
-  CPU 160 MHz, thermal shutdown 80 C (protection ON)
-- First boot: WiFiManager AP **ESP32-RTSP-Mic-AP** (open) + setup portal at `192.168.4.1`
-- Limit: configurable **1-3 RTSP client sessions** (default 2)
+```text
+http://<device-ip>/
+```
 
----
+RTSP streams:
 
-## What's New (v1.8.0)
+```text
+rtsp://<device-ip>:8554/audio1    Stream 1
+rtsp://<device-ip>:8554/audio2    Stream 2
+rtsp://<device-ip>:8554/audio     Alias for /audio1, kept for older configs
+```
 
-- RTSP core refactor to multi-session model (`MAX_CLIENTS=2`) with independent session state.
-- Two stream paths: `/audio` (stream 1 alias) and `/audio2`, each independently enable/disable.
-- Auto-transport: TCP for BirdNET-Go, UDP for BirdNET-Pi (no manual selection needed).
-- Configurable max concurrent clients (default 2, options 1-3 via UI/API).
-- Per-stream persistent profile settings in NVS: target backend (BirdNET-Go / BirdNET-Pi).
+mDNS variants, if enabled and supported by your network:
+
+```text
+rtsp://<device-hostname>.local:8554/audio1
+rtsp://<device-hostname>.local:8554/audio2
+rtsp://<device-hostname>.local:8554/audio
+```
+
+The API and Web UI publish `/audio1` and `/audio2`. Use `/audio1` in new configurations. `/audio`
+remains available only as a compatibility alias for stream 1.
+
+## First Boot
+
+1. Flash with the web flasher or build manually.
+2. The device starts WiFiManager AP **ESP32-RTSP-Mic-AP**.
+3. Connect to the AP and open `192.168.4.1` if the captive portal does not open automatically.
+4. Save Wi-Fi credentials.
+5. After reboot, open `http://<device-ip>/`.
+
+Default hostname is unique per device, for example `esp32mic-a1b2c3`.
+
+## What's New In v1.8.0
+
+- Multi-session RTSP core with configurable **1-3 concurrent sessions**; default is 2.
+- Two documented stream paths: `/audio1` and `/audio2`; `/audio` aliases `/audio1`.
+- Per-stream enable/disable.
+- Per-stream target selection: BirdNET-Go or BirdNET-Pi.
+- Transport is selected from target: TCP for BirdNET-Go, UDP for BirdNET-Pi.
 - Per-stream live stats: client count, streaming state, packet rate, last play time.
-- API status extended with per-stream URLs, enabled state, and live data.
-- Unified Status card in Web UI: system info + two stream columns (config + live data).
-- Transport auto-derived from backend target (removed manual transport selector).
-- MQTT reconnect now allowed during streaming (120s interval) instead of blocking indefinitely.
-- Fixed mDNS hostname collision: uses WiFi.macAddress() (big-endian) instead of ESP.getEfuseMac() (little-endian).
+- `/api/status` exposes per-stream URLs, enable state, max clients, and live data.
+- Unified Web UI Status card with system info and both stream columns.
+- MQTT reconnect is allowed during streaming with a longer retry interval.
+- mDNS hostname generation now uses Wi-Fi MAC to avoid collisions on boards from the same vendor.
 
-## Previous: v1.6.0
+## Hardware
 
-- MQTT publish interval is configurable in UI/API (`mqtt_interval`), persisted in NVS; default `60 s` (range `10..3600`).
-- MQTT telemetry JSON (`<topic>/state`) now includes: `fw_build`, `reboot_reason`, `restart_counter`, `wifi_ssid`, `wifi_reconnect_count`, `stream_uptime_s`, `client_count`, `audio_format`.
-- Home Assistant MQTT Discovery now creates additional entities for the new diagnostics (build date, reboot reason, restart counter, Wi-Fi reconnect count/SSID, stream uptime, client count, sample rate, audio format).
-- MQTT state is published immediately on important events (Wi-Fi reconnect, stream start/stop, client connect/disconnect/timeout, schedule/thermal stops), plus periodic publish.
-- Boot diagnostics: firmware records reset reason and increments persistent restart counter on each boot.
-- Existing Time & Network features from v1.5.0 remain (stream schedule, deep sleep outside window, fail-open schedule behavior when time is unavailable).
-
----
-
-## One-click Web Flasher (Recommended)
-
-- Open **https://esp32mic.msmeteo.cz** in **Chrome or Edge on desktop**.
-- Click **Flash**, pick the USB JTAG/serial device, wait for upload and reboot.
-- After flashing, connect to AP **ESP32-RTSP-Mic-AP** (open).
-  The captive portal should appear; if it does not, open `192.168.4.1`.
-- Enter your Wi-Fi SSID/password, save. The device reboots and joins your Wi-Fi.
-
-Tip: use a USB-C *data* cable (not charge-only) and avoid USB hubs for flashing.
-
----
-
-## Wiring
+### I2S Wiring
 
 ![Wiring / pinout](../connection.png)
 
-### I2S (ICS-43434 / INMP441 <-> ESP32-C6)
-
-| ICS-43434 signal | ESP32-C6 GPIO | Notes |
+| Mic signal | ESP32-C6 GPIO | Code define |
 |---:|:--:|---|
-| **BCLK / SCK** | **21** | `#define I2S_BCLK_PIN 21` |
-| **LRCLK / WS** | **1**  | `#define I2S_LRCLK_PIN 1` |
-| **SD (DOUT)**  | **2**  | `#define I2S_DOUT_PIN 2` |
-| **VDD**        | 3V3    | Power |
-| **GND**        | GND    | Ground |
+| **BCLK / SCK** | **21** | `I2S_BCLK_PIN` |
+| **LRCLK / WS** | **1** | `I2S_LRCLK_PIN` |
+| **SD / DOUT** | **2** | `I2S_DOUT_PIN` |
+| **VDD** | 3V3 | Power |
+| **GND** | GND | Ground |
 
-- INMP441 can use the same I2S pins (`SCK` -> GPIO21, `WS` -> GPIO1, `SD` -> GPIO2) and has been
-  reported to work without firmware changes. If the module exposes `L/R` or `SEL`, set it to the
-  left channel (typically GND), because the firmware reads `ONLY_LEFT`.
-  Reference: https://github.com/Sukecz/esp32-birdnet-mic/discussions/25
+The firmware configures I2S as master/RX, reads the left channel, then shifts/scales samples to
+16-bit PCM. If using INMP441, set `L/R` or `SEL` to the left channel, usually GND.
 
-- I2S mode: **Master / RX**, reads **32-bit** samples, **ONLY_LEFT** channel; then shifts/scales to
-  16-bit PCM.
-- DMA: 8 buffers, `buf_len = min(bufferSize, 512)` samples.
+### XIAO ESP32-C6 Antenna Path
 
-### Antenna control (XIAO ESP32-C6)
+The firmware selects the external antenna path on XIAO ESP32-C6:
 
-- GPIO3 -> LOW (RF switch control enabled)
-- GPIO14 -> HIGH (select external antenna)
+```text
+GPIO3  -> LOW
+GPIO14 -> HIGH
+```
 
-XIAO ESP32-C6 clarification:
-- For XIAO ESP32-C6, external antenna is strongly recommended (Wi-Fi quality directly affects streaming reliability and thermal load).
-- With weak Wi-Fi signal, the ESP32 can run hotter due to repeated retries and sustained radio activity.
-- Running without an external antenna is possible, but you may need to comment out the GPIO3/GPIO14 block in `setup()` if your setup uses internal antenna path.
+Use an external 2.4 GHz antenna for reliable streaming. Weak Wi-Fi increases retries, heat, and the
+chance of audio dropouts. If your hardware uses the internal antenna path, adjust the GPIO3/GPIO14
+block in `setup()`.
 
----
+## Runtime Defaults
 
-## First Boot & Network
+- Sample rate: 48 kHz
+- Audio format: mono 16-bit PCM/L16
+- Gain: 1.2
+- Buffer: 1024 samples
+- I2S shift: 12 bits
+- High-pass filter: ON, 500 Hz
+- Wi-Fi TX power: about 19.5 dBm
+- CPU: 160 MHz
+- Thermal shutdown: 80 C, protection ON
+- Max RTSP clients: 2
+- mDNS: ON
+- Time sync: ON
 
-- Wi-Fi power save is **disabled** (`WiFi.setSleep(false)`) for stable streaming.
-- WiFiManager:
-  - AP: `ESP32-RTSP-Mic-AP`
-  - connect timeout: 60 s
-  - portal timeout: 180 s
-- Web UI: `http://<device-ip>/`
-- RTSP (VLC/ffplay/BirdNET-Go / BirdNET-Pi):
-  - `rtsp://<device-ip>:8554/audio`
-  - `rtsp://<device-ip>:8554/audio2`
-  - `rtsp://esp32mic.local:8554/audio` (only when mDNS is enabled and available on your LAN)
-  - `rtsp://esp32mic.local:8554/audio2` (only when mDNS is enabled and available on your LAN)
+## Web UI
 
-### mDNS notes
+The Web UI runs on port **80** and includes:
 
-- mDNS can be toggled in the Web UI.
-- Default mDNS/OTA hostname is unique per device, for example `esp32mic-a1b2c3`.
-- Hostname can be changed through the API:
-  `POST /api/set` with body `key=mdns_hostname&value=esp32mic-garden`
-- mDNS often fails on guest/isolated Wi-Fi networks (multicast blocked). If in doubt, use the IP.
-- If you run BirdNET-Go or BirdNET-Pi in Docker, mDNS name resolution may not work inside the container; use the
-  device IP (or a DHCP reservation) instead.
+- Status: IP, RSSI, uptime, heap, server state, stream states, packet rates.
+- Streams: URLs for `/audio1` and `/audio2`, enable/disable, max clients, BirdNET target.
+- Audio: sample rate, gain, buffer size, I2S shift, high-pass filter, signal level.
+- Time & Network: NTP state, time offset, mDNS, stream schedule, optional deep sleep, Wi-Fi actions.
+- Reliability: auto-recovery, threshold mode, check interval, scheduled reset.
+- Thermal: current/peak temperature, shutdown limit, protection latch, acknowledgement.
+- MQTT & Home Assistant: broker settings, publish interval, discovery republish.
+- Logs: ring buffer view and download.
+- Actions: RTSP server ON/OFF, reset I2S, reconnect Wi-Fi, reboot, restore defaults.
 
-### Time sync + logs
+## Stream Behavior
 
-- NTP sync is attempted on boot. If unsynced, it retries every **1 hour**; once synced, it refreshes
-  every **6 hours**.
-- You can turn time sync OFF in the Web UI (useful if the device has no internet access).
-- Time Offset is set in **hours** in the UI (stored internally as minutes in NVS).
-- Stream Schedule (Time & Network): if enabled, RTSP server is active only in the configured local-time window.
-  Cross-midnight windows are supported; if time is invalid, fail-open keeps stream allowed.
-  `Start == Stop` is an explicit empty window and keeps stream blocked even without valid time.
-- Optional Deep Sleep (Time & Network): if enabled, device can sleep only outside stream window and only with valid time;
-  when time is unsynced, deep sleep stays blocked (stream remains available by fail-open policy).
-- After timer wake from deep sleep, startup logs include one retained sleep summary line for overnight verification.
-- When the device has no valid time, logs fall back to **uptime** timestamps.
-- Logs: 120-line ring buffer in the UI + one-click download as text.
-- Logs panel keeps manual scroll position while browsing older entries.
+- Stream 1: `/audio1`; `/audio` is a compatibility alias for the same stream.
+- Stream 2: `/audio2`.
+- Each stream can be enabled or disabled.
+- Each stream can target BirdNET-Go or BirdNET-Pi.
+- BirdNET-Go target uses RTP over RTSP/TCP.
+- BirdNET-Pi target uses RTP/UDP when the client provides UDP ports.
+- RTSP keep-alive via `GET_PARAMETER` is supported.
+- Inactive non-streaming sessions time out after about 30 seconds.
 
----
+### Verify With ffmpeg Tools
 
-## Verify The Stream
+```bash
+ffplay -rtsp_transport tcp rtsp://<device-ip>:8554/audio1
+ffprobe -rtsp_transport tcp rtsp://<device-ip>:8554/audio1
+```
 
-- VLC: *Media* -> *Open Network Stream* -> paste the RTSP URL.
-- ffplay:
-  `ffplay -rtsp_transport tcp rtsp://<device-ip>:8554/audio`
-- ffprobe:
-  `ffprobe -rtsp_transport tcp rtsp://<device-ip>:8554/audio`
+For stream 2, replace `/audio1` with `/audio2`. If VLC/ffplay works, use the same URL in
+BirdNET-Go or BirdNET-Pi.
 
-If VLC/ffplay works, use the same RTSP URL in BirdNET-Go or BirdNET-Pi.
+## Network And Time
 
----
+- Wi-Fi power save is disabled with `WiFi.setSleep(false)` for stable streaming.
+- WiFiManager AP: `ESP32-RTSP-Mic-AP`.
+- WiFiManager connect timeout: 60 s.
+- WiFiManager portal timeout: 180 s.
+- mDNS can be enabled/disabled in the Web UI.
+- Hostname can be changed via API: `key=mdns_hostname&value=esp32mic-garden`.
+- mDNS often fails on isolated/guest Wi-Fi or inside Docker containers; use device IP in those cases.
+- NTP sync runs on boot, retries every hour until synced, then refreshes every 6 hours.
+- If time is unavailable, logs fall back to uptime timestamps.
 
-## Architecture (Quick Map)
+### Stream Schedule And Deep Sleep
 
-- MCU: ESP32-C6 (Seeed XIAO ESP32-C6 reference)
-- Input: I2S MEMS mic (ICS-43434 reference)
-- Output: RTSP server on port **8554** -> `audio` track, **L16/mono/16-bit PCM**
-  - RTP dynamic PT 96, `rtpmap:96 L16/<sample-rate>/1`
-  - Transport: `RTP/AVP/TCP;interleaved=0-1`
-  - Keep-alive: RTSP `GET_PARAMETER` supported
-- Control: Web UI (English) + JSON API (status, audio, perf/thermal, logs, actions, settings)
-- Reliability: watchdogs + auto-recovery when packet-rate drops below threshold
-- OTA: optional; protect with a password if enabled
-- Timeouts: RTSP inactivity timeout ~30 s; Wi-Fi health checks and reconnection
+Stream schedule is configured in Time & Network.
 
----
+- Cross-midnight windows are supported, for example `22:00-06:00`.
+- If time is invalid, schedule policy is fail-open: streaming stays allowed.
+- If start and stop are equal, the window is explicitly empty and streaming is blocked.
+- Optional deep sleep can run outside the stream window only when time is valid.
+- Deep sleep is blocked during startup grace, with active clients, or without valid time.
 
-## Build & Flash (Manual)
+API keys:
+
+```text
+stream_sched=on|off
+stream_start_min=<0..1439>
+stream_stop_min=<0..1439>
+deep_sleep_sched=on|off
+```
+
+## JSON API
+
+The API mirrors the Web UI. Inspect browser DevTools -> Network for exact calls.
+
+Important read endpoints:
+
+```text
+GET /api/status
+GET /api/audio_status
+GET /api/perf_status
+GET /api/thermal
+GET /api/logs
+```
+
+Mutating calls use `POST` and require header `X-ESP32MIC-CSRF: 1`.
+
+Common settings endpoint:
+
+```text
+POST /api/set
+```
+
+Examples of request bodies:
+
+```text
+key=stream1_enabled&value=on
+key=stream2_enabled&value=off
+key=max_clients&value=2
+key=stream1_target&value=0
+key=stream2_target&value=1
+key=hp_enable&value=on
+key=hp_cutoff&value=600
+```
+
+Target values:
+
+```text
+0 = BirdNET-Go
+1 = BirdNET-Pi
+```
+
+`/api/status` includes stream URLs and state, including:
+
+```text
+stream1_url_ip
+stream2_url_ip
+stream1_url_mdns
+stream2_url_mdns
+stream1_enabled
+stream2_enabled
+stream1_target
+stream2_target
+s1_clients
+s2_clients
+s1_streaming
+s2_streaming
+s1_pkt_rate
+s2_pkt_rate
+max_clients
+```
+
+## MQTT And Home Assistant
+
+MQTT settings are available in the Web UI and API.
+
+- Telemetry topic: `<topic_prefix>/state`
+- Availability topic: `<topic_prefix>/availability`
+- RTSP server command: `<topic_prefix>/cmd/rtsp_server` with `ON` or `OFF`
+- Reboot command: `<topic_prefix>/cmd/reboot` with `PRESS` or `REBOOT`
+- Publish interval: default 60 s, range 10-3600 s
+- Immediate publishes happen on important events such as stream start/stop and connection changes.
+
+Home Assistant MQTT Discovery creates entities for runtime values such as RSSI, uptime, heap,
+temperature, stream state, packet rate, client count, reboot reason, restart counter, firmware
+version/build, and Wi-Fi reconnect count.
+
+MQTT password is stored in device flash in plain text NVS.
+
+## Build And Flash Manually
 
 ### Arduino IDE
 
 1. Open `esp32-birdnet-mic/esp32-birdnet-mic.ino`.
-2. Install ESP32 Arduino core with ESP32-C6 support.
-3. Select board: *Seeed XIAO ESP32-C6* (or *ESP32-C6 Dev Module*).
-4. Compile & upload over USB-UART.
+2. Install an ESP32 Arduino core with ESP32-C6 support.
+3. Select *Seeed XIAO ESP32-C6* or *ESP32-C6 Dev Module*.
+4. Compile and upload over USB.
 
-### PlatformIO (VS Code)
+### arduino-cli
 
-- Framework: Arduino
-- Platform: espressif32
-- Target: ESP32-C6 (consider `env:xiao_esp32c6`)
-- Typical: `pio run -t upload`
-
----
-
-## Configuration
-
-### Compile-time defaults
-
-```c
-#define DEFAULT_SAMPLE_RATE 48000
-#define DEFAULT_GAIN_FACTOR 1.2f
-#define DEFAULT_BUFFER_SIZE 1024
-#define DEFAULT_WIFI_TX_DBM 19.5f
-
-// I2S pins:
-#define I2S_BCLK_PIN 21
-#define I2S_LRCLK_PIN 1
-#define I2S_DOUT_PIN 2
-
-// High-pass defaults
-#define DEFAULT_HPF_ENABLED true
-#define DEFAULT_HPF_CUTOFF_HZ 500
-
-// Thermal protection
-#define DEFAULT_OVERHEAT_PROTECTION true
-#define DEFAULT_OVERHEAT_LIMIT_C 80
+```bash
+arduino-cli compile --fqbn <BOARD_FQBN> esp32-birdnet-mic
+arduino-cli upload -p <PORT> --fqbn <BOARD_FQBN> esp32-birdnet-mic
 ```
 
-### Runtime (persisted in NVS via Preferences)
+### PlatformIO
 
-Namespace: `"audio"`.
+Typical target is an ESP32-C6 Arduino environment, for example `env:xiao_esp32c6`:
 
-Audio:
-- `sampleRate` (Hz) - default 48000
-- `gainFactor` - default 1.2
-- `bufferSize` (samples) - default 1024
-- `shiftBits` - default 12 on first boot
-- `hpEnable` - default true
-- `hpCutoff` (Hz) - default 500
+```bash
+pio run -t upload
+```
 
-Reliability:
-- `autoRecovery` - default true
-- `thrAuto` - default true (auto/manual threshold mode)
-- `minRate` (pkt/s) - default 50
-- `checkInterval` (minutes) - default 15
-- `schedReset` - default false
-- `resetHours` - default 24
+## Web UI Development
 
-Network / time:
-- `wifiTxDbm` (dBm) - default 19.5
-- `mdnsEn` - default true
-- `timeSyncEn` - default true
-- `timeOffset` (minutes) - default 0
-- `strSchedEn` - stream schedule enable (default false)
-- `strSchStart` (minutes from midnight, 0..1439) - stream window start
-- `strSchStop` (minutes from midnight, 0..1439) - stream window stop
-- `deepSchSlp` - enable deep sleep outside schedule window (default false)
+The Web UI source is `webui/index.html`. Firmware serves the compressed generated header
+`WebUI_gz.h` from PROGMEM.
 
-Thermal:
-- `ohEnable` - default true
-- `ohThresh` (C, step 5) - default 80
-- `ohLatched` - persisted latch state
-- `ohReason`, `ohStamp`, `ohTripC` - persisted info about the latest thermal shutdown
+After editing the UI, regenerate the header:
 
-Apply changes via Web UI/API; `restartI2S()` is called on relevant updates.
+```bash
+./tools/gen_webui_gzip_header.sh
+```
 
-### High-pass filter (HPF)
+## Persisted Configuration
 
-- Built-in 2nd-order high-pass filter to reduce low-frequency rumble.
-- UI: Audio -> `High-pass` ON/OFF, `HPF Cutoff` (Hz).
-- API:
-  - Enable/disable: `POST /api/set` body `key=hp_enable&value=on|off`
-  - Set cutoff: `POST /api/set` body `key=hp_cutoff&value=<Hz>`
+Most runtime settings are stored in NVS namespace `audio` through ESP32 Preferences.
 
-### Stream schedule (time window)
+Main keys:
 
-- UI: Time & Network -> `Stream Schedule`, `Stream Start`, `Stream Stop`, `Schedule Status`.
-- API:
-  - Enable/disable: `POST /api/set` body `key=stream_sched&value=on|off`
-  - Set start (minutes): `POST /api/set` body `key=stream_start_min&value=<0..1439>`
-  - Set stop (minutes): `POST /api/set` body `key=stream_stop_min&value=<0..1439>`
-  - Deep sleep outside window ON/OFF: `POST /api/set` body `key=deep_sleep_sched&value=on|off`
-- `/api/status` includes:
-  - `stream_schedule_enabled`
-  - `stream_schedule_start_min`
-  - `stream_schedule_stop_min`
-  - `stream_schedule_allow_now`
-  - `stream_schedule_time_valid`
-  - `deep_sleep_sched_enabled`
-  - `deep_sleep_status_code`
-  - `deep_sleep_next_sec`
+```text
+sampleRate       Audio sample rate
+gainFactor      Audio gain
+bufferSize       Samples per packet/buffer profile
+shiftBits        I2S right shift before gain
+hpEnable         High-pass enable
+hpCutoff         High-pass cutoff Hz
+wifiTxDbm        Wi-Fi TX power
+mdnsEn           mDNS enable
+timeSyncEn       NTP enable
+timeOffset       Local offset in minutes
+strSchedEn       Stream schedule enable
+strSchStart      Stream window start minute
+strSchStop       Stream window stop minute
+deepSchSlp       Deep sleep outside schedule window
+autoRecovery     Packet-rate recovery enable
+thrAuto          Automatic threshold mode
+minRate          Manual minimum packet rate
+checkInterval    Recovery check interval in minutes
+schedReset       Scheduled reset enable
+resetHours       Scheduled reset interval
+ohEnable         Thermal protection enable
+ohThresh         Thermal shutdown threshold C
+ohLatched        Persisted thermal latch
+```
 
----
+Apply changes through Web UI or API. Audio-related updates call `restartI2S()` when needed.
 
-## Web UI & JSON API
+## RTSP Implementation Notes
 
-- Status: IP, Wi-Fi RSSI, TX power, uptime, client, streaming, packet-rate.
-- Time & Network: NTP sync state, last sync, time offset (hours), mDNS toggle, RTSP URLs (IP + mDNS),
-  stream schedule (ON/OFF + start/stop + status), optional deep sleep outside schedule window (ON/OFF + status),
-  Wi-Fi reconnect action (with optional BSSID pinning), Wi-Fi reset action, log download.
-- Audio: edit values inline (Sample rate, Gain, Buffer). Latency and Profile are computed.
-- Reliability: auto-recovery (auto/manual threshold mode), check interval.
-- Thermal: enable/disable overheat protection, shutdown limit (30-95 C, step 5), status and last
-  shutdown info (`/api/thermal`). The latch survives reboots and must be acknowledged in the UI.
-- Wi-Fi: TX Power (dBm) editable inline.
-- Actions: Server ON/OFF, Reset I2S, Reconnect Wi-Fi (with optional BSSID pinning), Reboot, Defaults (restores app settings and reboots).
+- `DESCRIBE` returns SDP with `a=rtpmap:96 L16/<sample-rate>/1` and `a=control:track1`.
+- Stream selection is path-based: `/audio1` and `/audio` select stream 1; `/audio2` selects stream 2.
+- `SETUP` returns either `RTP/AVP/TCP;unicast;interleaved=0-1` or UDP ports, depending on target.
+- `PLAY` starts RTP packet output for that session.
+- `TEARDOWN` stops the session.
+- RTP timestamp increments by the number of audio samples per packet.
 
-The API mirrors the UI. Open DevTools -> Network to inspect endpoints and JSON.
+## Stability Notes
 
-Mutating API calls use `POST` and require header `X-ESP32MIC-CSRF: 1` (already sent by the built-in Web UI).
-
-### Web UI Storage Optimization
-
-- The Web UI is served as **gzip-compressed HTML from PROGMEM** (`WebUI_gz.h`).
-- Source HTML lives in `webui/index.html`.
-- After editing the UI, regenerate the embedded gzip header:
-  - `./tools/gen_webui_gzip_header.sh`
-
-### MQTT & Home Assistant Discovery
-
-- New Web UI card: **MQTT & Home Assistant**.
-- Configure:
-  - MQTT enable ON/OFF
-  - Broker host/IP
-  - Broker port
-  - Username / Password
-  - MQTT topic prefix
-  - Discovery prefix (default `homeassistant`)
-  - Client ID
-  - Publish interval in seconds (default `60`, range `10..3600`)
-- Use **Re-publish Discovery** to force re-announcement to Home Assistant.
-- Published telemetry topic: `<topic_prefix>/state`
-- Availability topic: `<topic_prefix>/availability` (`online` / `offline`)
-- Command topics:
-  - `<topic_prefix>/cmd/rtsp_server` (`ON` / `OFF`)
-  - `<topic_prefix>/cmd/reboot` (`PRESS` or `REBOOT`)
-- Discovery includes sensors/binary sensors/switch/button for key runtime values, including:
-  - Boot diagnostics: `reboot_reason`, `restart_counter`, `fw_version`, `fw_build`
-  - Wi-Fi diagnostics: `wifi_rssi`, `wifi_ssid`, `wifi_reconnect_count`
-  - Streaming diagnostics: `streaming`, `stream_uptime_s`, `client_count`, `packet_rate`
-  - System diagnostics: `free_heap_kb`, `temperature_c`, `uptime_s`
-- State is published periodically (default `60s`) and immediately on important events
-  (MQTT reconnect, stream start/stop, connection state changes).
-- Note: MQTT password is stored in NVS (plain text on device flash).
-
----
-
-## RTSP Details (From Code)
-
-- DESCRIBE returns SDP with `a=rtpmap:96 L16/<sample-rate>/1` and `a=control:track1`.
-- SETUP uses `RTP/AVP/TCP;unicast;interleaved=0-1` (server keeps a single client).
-- PLAY starts streaming; TEARDOWN stops it.
-- 30 s inactivity timeout when not streaming.
-- RTP timestamp increases by the number of audio samples per packet.
-
----
-
-## Diagnostics & Stability
-
-- Wi-Fi: aim for RSSI > -75 dBm; consider fixed channel if possible.
-- Buffers: increase above 512 in RF-noisy environments for smoother stream (adds latency).
-- Auto-recovery: pipeline restarts if `packet-rate < minRate`.
-- Thermal protection: when die temp >= limit (default 80 C), streaming stops and RTSP server is
-  disabled. The latch stays active across reboots until you acknowledge it in the UI.
-- Logs: use the ring buffer in the Web UI for drops/reconnects.
-- CPU: default 160 MHz for thermal/perf balance (adjustable in Advanced settings).
-
-### RF Noise / Wi-Fi TX Power
-
-Wi-Fi RF energy can couple into the microphone module, I2S wiring, power rails, or PCB layout.
-If the stream is stable but the audio contains noise, test lower TX power before changing audio
-settings.
-
-Recommended test:
-- Open Web UI -> Time & Network -> `WiFi TX Power`.
-- Set it to about **11 dBm**.
-- Monitor RSSI, packet-rate, reconnects, and audio quality.
-- If Wi-Fi becomes unstable, increase TX power step by step until the stream is reliable again.
-
-Hardware/layout tips:
-- Keep I2S wires short.
-- Keep the mic and I2S traces away from the ESP32 antenna/RF area.
-- Use a solid ground plane and local decoupling close to the mic.
-- Shielded cable or a grounded metal enclosure can help, but keep the Wi-Fi antenna outside the
-  metal box.
-
----
+- Aim for Wi-Fi RSSI better than about **-75 dBm**.
+- Increase buffer size in RF-noisy environments; this adds latency but improves stability.
+- If audio is noisy while Wi-Fi is otherwise stable, try lowering Wi-Fi TX power before changing audio settings.
+- Keep I2S wires short and away from the ESP32 RF area.
+- Use shielded cable for longer microphone runs.
+- Thermal protection disables RTSP when the chip reaches the configured limit; the latch survives reboot until acknowledged in the Web UI.
 
 ## Security
 
-- Keep the device on a trusted LAN; do not expose HTTP/RTSP to the internet.
-- Protect OTA with a password if you enable it.
-- Mutating API endpoints (`/api/set`, `/api/action/*`, `/api/thermal/clear`) require `POST` + header `X-ESP32MIC-CSRF: 1`.
+- Keep the device on a trusted LAN.
+- Do not expose HTTP, RTSP, or OTA to the public internet.
+- Protect OTA with a password if enabled.
+- Mutating API endpoints require `POST` and `X-ESP32MIC-CSRF: 1`, but read endpoints are not globally authenticated by default.
 
----
+## Known Limitations
 
-## Limitations
-
-- Single RTSP client at a time.
-- Status/read endpoints are not globally authenticated by default.
+- No TLS or built-in user authentication for the Web UI/API.
+- mDNS depends on multicast support in your LAN and often does not work across VLANs, guest networks, or Docker bridge networks.
+- The firmware is primarily tested on Seeed Studio XIAO ESP32-C6 with ICS-43434.
 
 ## Credits
 
