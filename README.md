@@ -99,6 +99,8 @@ Web UI screenshot:
 Notes:
 - Links are provided for convenience and may change over time. Always verify the exact part number
   (for example **ICS-43434**) in the listing before buying.
+- XIAO ESP32-C6 users: The firmware enables the external antenna by default via GPIO3/GPIO14.
+  If you do not have a U.FL antenna connected, WiFi signal will be very poor. Connect an external antenna via the U.FL connector before use.
 
 ## Tips & Best Practices
 
