@@ -7,7 +7,7 @@
 ESP32-C6 network microphone for **BirdNET-Go** and **BirdNET-Pi**. It reads an I2S MEMS microphone
 and serves mono **16-bit PCM/L16** audio over **RTSP**.
 
-- Latest firmware: **v1.8.0** (2026-05-08)
+- Latest firmware: **v1.9.0** (2026-05-09)
 - Target sketch: `esp32-birdnet-mic`
 - Web flasher: **https://esp32mic.msmeteo.cz** (Chrome/Edge desktop, USB-C data cable)
 - Detailed firmware docs: `esp32-birdnet-mic/README.md`
@@ -89,6 +89,8 @@ If VLC/ffplay works, use the same RTSP URL in BirdNET-Go or BirdNET-Pi.
 - Configurable **1-3 concurrent RTSP sessions**; default is 2.
 - Per-stream enable/disable and BirdNET-Go / BirdNET-Pi target selection.
 - Transport selection based on target: TCP for BirdNET-Go, UDP for BirdNET-Pi.
+- Dedicated audio producer task with ring buffer between I2S capture and RTSP packet output.
+- Audio/API diagnostics for I2S errors, ring-buffer drops, and RTSP write stalls/timeouts.
 - MQTT telemetry and Home Assistant MQTT Discovery.
 - Stream schedule by local time, including overnight windows.
 - Optional deep sleep outside the stream schedule window.
