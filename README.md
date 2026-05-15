@@ -7,7 +7,7 @@
 ESP32-C6 network microphone for **BirdNET-Go** and **BirdNET-Pi**. It reads an I2S MEMS microphone
 and serves mono **16-bit PCM/L16** audio over **RTSP**.
 
-- Latest firmware: **v1.9.0** (2026-05-09)
+- Latest firmware: **v1.9.1** (2026-05-15)
 - Target sketch: `esp32-birdnet-mic`
 - Web flasher: **https://esp32mic.msmeteo.cz** (Chrome/Edge desktop, USB-C data cable)
 - Detailed firmware docs: `esp32-birdnet-mic/README.md`
@@ -151,6 +151,13 @@ The firmware includes a configurable high-pass filter to reduce low-frequency ru
 - Reference microphone: ICS-43434.
 - Reported compatible microphone: INMP441 with the same I2S wiring.
 - Other ESP32 boards or I2S microphones may work, but may need pin or I2S format changes.
+
+## Arduino IDE Build Size
+
+Firmware v1.9.1 includes `esp32-birdnet-mic/build_opt.h`, which the ESP32 Arduino core loads
+automatically in Arduino IDE and `arduino-cli`. It disables unused C++ exception/unwind metadata and
+keeps the default XIAO ESP32-C6 partition scheme below the 1.2 MB app limit with about 60 KB reserve,
+without removing firmware features.
 
 ## More Documentation
 
