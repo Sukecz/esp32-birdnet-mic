@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
 #include "WebUI.h"
+#include "board_profile.h"
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi) ==================
 #define FW_VERSION "1.9.2"
@@ -53,7 +54,7 @@ bool mdnsRunning = false;
 #define DEFAULT_SAMPLE_RATE 48000
 #define DEFAULT_GAIN_FACTOR 1.2f
 #define DEFAULT_BUFFER_SIZE 1024   // Stable streaming profile by default
-#define DEFAULT_WIFI_TX_DBM 19.5f  // Default WiFi TX power in dBm
+#define DEFAULT_WIFI_TX_DBM BOARD_DEFAULT_WIFI_TX_DBM  // Default WiFi TX power (board-specific)
 #define DEFAULT_MQTT_PORT 1883
 #define DEFAULT_MQTT_PUBLISH_INTERVAL_SEC 60
 // High-pass filter defaults (to remove low-frequency rumble)
@@ -67,10 +68,7 @@ bool mdnsRunning = false;
 #define OVERHEAT_MAX_LIMIT_C 95
 #define OVERHEAT_LIMIT_STEP_C 5
 
-// -- Pins
-#define I2S_BCLK_PIN    21
-#define I2S_LRCLK_PIN   1
-#define I2S_DOUT_PIN    2
+// -- Pins (I2S_BCLK_PIN, I2S_LRCLK_PIN, I2S_DOUT_PIN defined in board_profile.h)
 
 // -- Servers
 WiFiServer rtspServer(8554);
@@ -89,7 +87,9 @@ enum StreamTarget : uint8_t {
 };
 
 struct StreamProfileConfig {
-    uint8_t target = STREAM_TARGET_BIRDNET_GO;
+    uint8_t target;
+    StreamProfileConfig() : target(STREAM_TARGET_BIRDNET_GO) {}
+    StreamProfileConfig(uint8_t t) : target(t) {}
 };
 
 struct ClientSession {
@@ -289,7 +289,7 @@ void saveAudioSettings();
 
 // -- WiFi TX power (configurable)
 float wifiTxPowerDbm = DEFAULT_WIFI_TX_DBM;
-wifi_power_t currentWifiPowerLevel = WIFI_POWER_19_5dBm;
+wifi_power_t currentWifiPowerLevel = WIFI_POWER_11dBm;
 
 // -- RTSP connect/PLAY statistics
 unsigned long lastRtspClientConnectMs = 0;
@@ -692,7 +692,7 @@ static String mqttBuildDeviceJson() {
     String json = "{";
     json += "\"ids\":[\"" + mqttJsonEscape(mqttDeviceId) + "\"],";
     json += "\"name\":\"ESP32 RTSP Mic\",";
-    json += "\"mdl\":\"XIAO ESP32-C6\",";
+    json += "\"mdl\":\"" BOARD_MODEL_JSON "\",";
     json += "\"mf\":\"Sukecz\",";
     json += "\"sw\":\"" + mqttJsonEscape(String(FW_VERSION_STR)) + "\",";
     json += "\"cu\":\"http://" + mqttJsonEscape(WiFi.localIP().toString()) + "/\"";
@@ -2261,8 +2261,13 @@ bool setup_i2s_driver() {
     i2s_config.channel_format = I2S_CHANNEL_FMT_ONLY_LEFT;
     i2s_config.communication_format = I2S_COMM_FORMAT_STAND_I2S;
     i2s_config.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
+#if I2S_DMA_USE_BUF_FIELDS
+    i2s_config.dma_buf_count = 8;
+    i2s_config.dma_buf_len = dma_buf_len;
+#else
     i2s_config.dma_desc_num = 8;
     i2s_config.dma_frame_num = dma_buf_len;
+#endif
 
     i2s_pin_config_t pin_config = {};
     pin_config.bck_io_num = I2S_BCLK_PIN;
@@ -2769,17 +2774,23 @@ void setup() {
     loadBootMetadata();
     simplePrintln("Boot reason: " + rebootReason + ", restart #" + String(restartCounter));
 
-    // Enable external antenna (for XIAO ESP32-C6).
-    // NOTE: If you are using a board without the RF switch (or no external antenna), comment out or remove this block.
+#if BOARD_HAS_XIAO_ANTENNA_SWITCH
+    // Enable external antenna (for XIAO ESP32-C6 only).
     pinMode(3, OUTPUT);
     digitalWrite(3, LOW);
     Serial.println("RF switch control enabled (GPIO3 LOW)");
     pinMode(14, OUTPUT);
     digitalWrite(14, HIGH);
     Serial.println("External antenna selected (GPIO14 HIGH)");
+#endif
 
     // Load settings from flash
     loadAudioSettings();
+
+    // C3 is single-core 160 MHz max; clamp any value saved from a different chip
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+    if (cpuFrequencyMhz > 160) cpuFrequencyMhz = 160;
+#endif
 
     // Allocate buffers with current size
     i2s_32bit_buffer = (int32_t*)malloc(currentBufferSize * sizeof(int32_t));

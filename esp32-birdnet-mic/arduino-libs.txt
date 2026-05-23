@@ -1,0 +1,8 @@
+# Install these in Arduino IDE: Sketch → Include Library → Manage Libraries
+#
+# 1. WiFiManager  by tzapu          (search: WiFiManager)
+# 2. PubSubClient by Nick O'Leary   (search: PubSubClient)
+#
+# Board: ESP32C3 Dev Module
+# Flash Size: 4MB
+# USB CDC On Boot: Enabled
