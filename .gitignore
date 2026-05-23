@@ -3,3 +3,5 @@ OTAinstructions.txt
 espota.exe
 AGENTS.md
 web-flasher/
+.pio/
+birdnet_Stream_s3/

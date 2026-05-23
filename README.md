@@ -15,6 +15,30 @@ and serves mono **16-bit PCM/L16** audio over **RTSP**.
 - Changelog: `esp32-birdnet-mic/CHANGELOG.md`
 - License: MIT (`LICENSE`)
 
+## Community board ports
+
+This fork adds a board abstraction layer (`esp32-birdnet-mic/board_profile.h`) that makes it easy
+to run the firmware on boards other than the upstream XIAO ESP32-C6. Each board gets its own
+profile header and documentation file. Two boards are currently supported:
+
+### ESP32-C3 Super Mini
+
+- Wiring, build, and flash: **[BOARD-ESP32-C3-SUPERMINI.md](BOARD-ESP32-C3-SUPERMINI.md)**
+- I2S pins: BCLK → GPIO 10, WS → GPIO 4, DATA → GPIO 5
+- PlatformIO: `pio run -e esp32-c3-super-mini`
+- Default Wi-Fi TX power: 11 dBm (C3 is sensitive to high TX power)
+- Do **not** use GPIO 3 as an I2S pin on C3 — it is a strapping pin that can prevent boot.
+
+### ESP32-S3 Super Mini
+
+- Wiring, build, and flash: **[BOARD-ESP32-S3-SUPERMINI.md](BOARD-ESP32-S3-SUPERMINI.md)**
+- I2S pins: BCLK → GPIO 4, WS → GPIO 5, DATA → GPIO 6
+- PlatformIO: `pio run -e esp32-s3-super-mini` (update `board_profile.h` and `platformio.ini` first — see board doc)
+- The `esp32-s3-devkitc-1` board definition defaults to 8 MB flash. Set `board_build.flash_size = 4MB` **and** `board_upload.flash_size = 4MB` for S3 Super Mini.
+
+> **Note:** Do **not** use the upstream [esp32mic.msmeteo.cz](https://esp32mic.msmeteo.cz) flasher
+> or `manual-ota-firmware/firmware-app.bin` on C3 or S3 boards — those binaries are for ESP32-C6 only.
+
 ## Quick Start
 
 1. Open **https://esp32mic.msmeteo.cz**.
@@ -155,9 +179,11 @@ The firmware includes a configurable high-pass filter to reduce low-frequency ru
 ## Compatibility
 
 - Target board: ESP32-C6, tested with Seeed Studio XIAO ESP32-C6.
+- Community ports: **ESP32-C3 Super Mini** and **ESP32-S3 Super Mini** (see board docs above).
 - Reference microphone: ICS-43434.
 - Reported compatible microphone: INMP441 with the same I2S wiring.
 - Other ESP32 boards or I2S microphones may work, but may need pin or I2S format changes.
+- See `esp32-birdnet-mic/board_profile.h` for the board abstraction layer.
 
 ## Arduino IDE Build Size
 
