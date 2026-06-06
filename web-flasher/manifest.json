@@ -1,0 +1,30 @@
+{
+  "name": "birdnet-esp32-rtsp-mic",
+  "version": "1.9.2",
+  "homepage": "https://github.com/Sukecz/esp32-birdnet-mic",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-C6",
+      "baud": 115200,
+      "parts": [
+        {
+          "path": "bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware-app.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}

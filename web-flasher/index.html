@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>birdnet-esp32-rtsp-mic | Web Flasher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #0ea5e9;
+      --accent-2: #f59e0b;
+      --shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      color: var(--text);
+      background: radial-gradient(160% 140% at 30% -10%, rgba(14,165,233,0.08), transparent 60%),
+                  radial-gradient(120% 120% at 80% 0%, rgba(245,158,11,0.08), transparent 55%),
+                  var(--bg);
+      padding: 40px 16px 60px;
+    }
+    .shell {
+      max-width: 960px;
+      margin: 0 auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 34px;
+      box-shadow: var(--shadow);
+    }
+    .logo {
+      width: 120px;
+      height: auto;
+      display: block;
+      margin: 0 auto 18px;
+      filter: drop-shadow(0 8px 18px rgba(14,165,233,0.18));
+    }
+    .eyebrow {
+      color: var(--accent-2);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-weight: 700;
+      font-size: 12px;
+      margin: 0 0 10px;
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: clamp(30px, 4vw, 42px);
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      font-variant-numeric: lining-nums;
+    }
+    .lede {
+      margin: 12px auto 26px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.6;
+      max-width: 700px;
+      text-align: center;
+    }
+    .cta {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+    esp-web-install-button::part(button) {
+      background: linear-gradient(120deg, var(--accent), var(--accent-2));
+      color: #082f49;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 22px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      box-shadow: 0 18px 40px rgba(14,165,233,0.25);
+    }
+    esp-web-install-button::part(button):hover { filter: brightness(1.05); }
+    .mini {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+    .chips {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 10px 0 18px;
+    }
+    .chip {
+      padding: 7px 12px;
+      border-radius: 12px;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      color: #334155;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 14px;
+      margin: 12px 0 8px;
+    }
+    .card {
+      background: #fbfdff;
+      border: 1px dashed #d3dce7;
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: #0f172a;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+      font-size: 14px;
+      line-height: 1.6;
+      font-variant-numeric: lining-nums;
+    }
+    .card strong { color: #0b1433; font-size: 14.5px; }
+    .ota-box {
+      margin-top: 18px;
+      background: linear-gradient(135deg, rgba(14,165,233,0.10), rgba(245,158,11,0.10));
+      border-style: solid;
+    }
+    .ota-form {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .ota-form input {
+      flex: 1 1 220px;
+      min-width: 0;
+      padding: 12px 13px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      font: inherit;
+    }
+    .ota-form button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-weight: 800;
+      cursor: pointer;
+      color: #082f49;
+      background: linear-gradient(120deg, var(--accent), var(--accent-2));
+    }
+    .status-line {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .footer-card {
+      margin-top: 16px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    a:hover { text-decoration: underline; }
+    @media (max-width: 640px) {
+      .shell { padding: 26px; }
+      .logo { width: 96px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <img src="bird.png" alt="BirdNET Mic logo" class="logo">
+    <p class="eyebrow">birdnet-esp32-rtsp-mic</p>
+    <h1>Flash your Seeed XIAO ESP32‑C6 in one click</h1>
+    <p class="lede">Plug the board via USB‑C, hit Flash, and let the browser handle everything. No drivers, no CLI.</p>
+
+    <div class="cta">
+      <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+      <div class="mini">Chrome or Edge (desktop) · USB‑C data cable · For firmware updates, choose the option that keeps existing data.</div>
+    </div>
+
+    <div class="chips">
+      <span class="chip">ESP32‑C6</span>
+      <span class="chip">WebSerial</span>
+      <span class="chip">One-click flash</span>
+      <span class="chip" id="fw-version-chip">Firmware: loading...</span>
+    </div>
+
+    <div class="grid">
+      <div class="card"><strong>1) Connect</strong><br>USB‑C to your PC. If flashing fails, hold BOOT while plugging in.</div>
+      <div class="card"><strong>2) Flash</strong><br>Click Flash → pick the USB JTAG/serial device → for updates, keep existing data when asked.</div>
+      <div class="card"><strong>3) Done</strong><br>Board reboots with birdnet-esp32-rtsp-mic firmware.</div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><strong>After flash: Wi‑Fi setup</strong><br>The device starts an access point named <em>ESP32-RTSP-Mic-AP</em> (open network). Connect to it, you will be redirected to the captive portal (or open <code>192.168.4.1</code>). Enter your Wi‑Fi SSID/password, save, and the board will reboot and join your Wi‑Fi.</div>
+      <div class="card"><strong>If portal doesn’t pop up</strong><br>Open a browser on the same device and go to <code>http://192.168.4.1</code>. Once Wi‑Fi is saved, reconnect to your normal network. The device advertises itself via mDNS as <code>esp32mic.local</code> (or see IP in your router).</div>
+      <div class="card"><strong>RTSP streams</strong><br>After Wi‑Fi is set, use <code>rtsp://&lt;device-ip&gt;:8554/audio1</code> (stream 1) and <code>rtsp://&lt;device-ip&gt;:8554/audio2</code> (stream 2). Same paths work with <code>esp32mic.local</code> when mDNS is available.</div>
+    </div>
+
+    <div class="card ota-box">
+      <strong>OTA update without USB</strong><br>
+      If the device is already on Wi‑Fi, enter its IP address and open the OTA update page.
+      The device can either download the latest firmware from this web flasher automatically, or you can upload the app-only <code>firmware-app.bin</code> file manually.
+      <div class="ota-form">
+        <input id="ota-ip" inputmode="numeric" autocomplete="off" placeholder="Device IP, e.g. 192.168.1.80">
+        <button type="button" id="ota-open">Open OTA update</button>
+      </div>
+      <div class="status-line" id="ota-status">Default build: external antenna enabled, no OTA password.</div>
+    </div>
+
+    <div class="card footer-card">
+      <strong>Project</strong><br>
+      ESP32 RTSP microphone for BirdNET-Go / BirdNET-Pi. Source & docs on
+      <a href="https://github.com/Sukecz/esp32-birdnet-mic" target="_blank" rel="noreferrer">GitHub</a>.
+    </div>
+    <p class="mini" style="margin-top:12px;text-align:center;">© <a href="https://github.com/Sukecz" target="_blank" rel="noreferrer">Sukecz</a></p>
+  </div>
+
+  <script type="module" src="https://unpkg.com/esp-web-tools@10.2.1/dist/web/install-button.js?module"></script>
+  <script>
+    (async function loadFirmwareVersion() {
+      const chip = document.getElementById("fw-version-chip");
+      if (!chip) return;
+      try {
+        const response = await fetch("manifest.json", { cache: "no-store" });
+        if (!response.ok) throw new Error("manifest fetch failed");
+        const manifest = await response.json();
+        const version = manifest && manifest.version ? String(manifest.version).trim() : "";
+        chip.textContent = version ? ("Firmware: v" + version) : "Firmware: unknown";
+      } catch (_) {
+        chip.textContent = "Firmware: unknown";
+      }
+    })();
+
+    (function bindOtaOpen() {
+      const input = document.getElementById("ota-ip");
+      const button = document.getElementById("ota-open");
+      const status = document.getElementById("ota-status");
+      if (!input || !button || !status) return;
+      button.addEventListener("click", () => {
+        let ip = String(input.value || "").trim();
+        ip = ip.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+        if (!/^[a-zA-Z0-9.-]+(?::\d+)?$/.test(ip)) {
+          status.textContent = "Enter the device IP address first, for example 192.168.1.80.";
+          return;
+        }
+        window.location.href = "http://" + ip + "/ota";
+      });
+    })();
+  </script>
+</body>
+</html>
+<!--
+
+NOTE: For offline/local hosting we optionally bundle the install-button code below (commented). Remove the external script tag above and uncomment this block if a CDN is blocked.
+
+<script type="module">
+import { defineCustomElements } from 'https://unpkg.com/esp-web-tools@11/dist/loader/index.esm.js';
+import { installButton } from 'https://unpkg.com/esp-web-tools@11/dist/web/install-button.js';
+// register custom elements
+defineCustomElements();
+</script>
+
+-->
