@@ -6,6 +6,10 @@ Lokální cesta projektu na MINIPC: `/home/msminipc/Arduino/Birdnetmic`.
 
 Aktuální připravený obraz: **firmware 1.9.3** (2026-06-11).
 
+Poznámka k 1.9.3: obraz obsahuje doplněnou RTSP/UDP kompatibilitu pro BirdNET-Pi
+(`RTP-Info`, `source`/`ssrc` a RTCP port handling). Bylo ověřeno proti čisté instalaci
+`Nachtzuster/BirdNET-Pi` se streamem `/audio2` v BirdNET-Pi/UDP režimu.
+
 Výchozí veřejný build:
 - má zapnutou externí anténu na XIAO ESP32-C6,
 - nemá nastavené OTA heslo,

@@ -57,6 +57,9 @@ Default hostname is unique per device, for example `esp32mic-a1b2c3`.
 
 - Default buffer is now **512 samples** after BirdNET-Pi UDP testing showed stutter with 1024-sample
   packets.
+- BirdNET-Pi UDP compatibility is improved by handling the advertised RTCP port and adding standard
+  RTP metadata expected by ffmpeg-based clients.
+- UDP was validated with a clean Nachtzuster/BirdNET-Pi install using `/audio2` in BirdNET-Pi mode.
 - Sample rate settings now accept **8,000-192,000 Hz** in both the Web UI and API.
 - Audio settings are saved only after the I2S pipeline restarts successfully; unsupported settings
   roll back immediately instead of silently reverting later.

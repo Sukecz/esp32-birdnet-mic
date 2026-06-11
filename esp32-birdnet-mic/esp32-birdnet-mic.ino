@@ -95,6 +95,7 @@ struct StreamProfileConfig {
 struct ClientSession {
     WiFiClient client;
     WiFiUDP udpSocket;
+    WiFiUDP rtcpSocket;
     TransportMode transport = TRANSPORT_TCP;
     IPAddress clientRtpAddress = IPAddress();
     uint16_t clientRtpPort = 0;
@@ -111,7 +112,10 @@ struct ClientSession {
 
     void reset() {
         if (client.connected()) client.stop();
-        if (transport == TRANSPORT_UDP) udpSocket.stop();
+        if (transport == TRANSPORT_UDP) {
+            udpSocket.stop();
+            rtcpSocket.stop();
+        }
         transport = TRANSPORT_TCP;
         clientRtpPort = 0;
         serverRtpPort = 0;
@@ -2407,6 +2411,22 @@ void sendRTPPacket(ClientSession &session, const int16_t* networkAudioData, int 
     }
 }
 
+static void drainRtcpPackets(ClientSession &session) {
+    if (session.transport != TRANSPORT_UDP) return;
+    uint8_t buffer[64];
+    int packetSize = session.rtcpSocket.parsePacket();
+    while (packetSize > 0) {
+        while (packetSize > 0) {
+            int toRead = packetSize;
+            if (toRead > (int)sizeof(buffer)) toRead = sizeof(buffer);
+            int readNow = session.rtcpSocket.read(buffer, toRead);
+            if (readNow <= 0) break;
+            packetSize -= readNow;
+        }
+        packetSize = session.rtcpSocket.parsePacket();
+    }
+}
+
 // Audio streaming
 void streamAudio() {
     bool anyStreaming = false;
@@ -2495,9 +2515,14 @@ static void parseTransportHeader(ClientSession &session, const String &request, 
         }
         if (session.client.connected()) session.clientRtpAddress = session.client.remoteIP();
         session.serverRtpPort = (uint16_t)(5004 + (clientIdx * 2));
+        session.udpSocket.stop();
+        session.rtcpSocket.stop();
         session.udpSocket.begin(session.serverRtpPort);
+        session.rtcpSocket.begin(session.serverRtpPort + 1);
         transportResponse = "RTP/AVP/UDP;unicast;client_port=" + String(session.clientRtpPort) + "-" + String(session.clientRtpPort + 1);
         transportResponse += ";server_port=" + String(session.serverRtpPort) + "-" + String(session.serverRtpPort + 1);
+        transportResponse += ";source=" + WiFi.localIP().toString();
+        transportResponse += ";ssrc=" + String(rtpSSRC, HEX);
     } else {
         session.transport = TRANSPORT_TCP;
         transportResponse = "RTP/AVP/TCP;unicast;interleaved=0-1";
@@ -2564,10 +2589,13 @@ void handleRTSPCommand(ClientSession &session, String request, uint8_t clientIdx
         session.client.print("Transport: " + transportResponse + "\r\n\r\n");
 
     } else if (request.startsWith("PLAY")) {
+        String ip = WiFi.localIP().toString();
+        String streamPath = (session.profileIndex == 1) ? "/audio2" : "/audio1";
         session.client.print("RTSP/1.0 200 OK\r\n");
         session.client.print("CSeq: " + cseq + "\r\n");
         session.client.print("Session: " + session.sessionId + "\r\n");
-        session.client.print("Range: npt=0.000-\r\n\r\n");
+        session.client.print("Range: npt=0.000-\r\n");
+        session.client.print("RTP-Info: url=rtsp://" + ip + ":8554" + streamPath + "/track1;seq=0;rtptime=0\r\n\r\n");
 
         bool wasAnyStreaming = anyRtspSessionStreaming();
         bool wasProfileStreaming = anyRtspSessionStreaming(session.profileIndex);
@@ -2973,6 +3001,7 @@ void loop() {
 
         for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
             if (clients[i].client.connected()) {
+                drainRtcpPackets(clients[i]);
                 if (clients[i].client.available()) {
                     clients[i].lastActivity = millis();
                     lastRTSPActivity = clients[i].lastActivity;

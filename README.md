@@ -109,7 +109,8 @@ If VLC/ffplay works, use the same RTSP URL in BirdNET-Go or BirdNET-Pi.
 
 Default audio settings are 48 kHz, mono 16-bit PCM/L16, gain 1.2, and a 512-sample packet buffer.
 The 512-sample default is the balanced profile and avoids the BirdNET-Pi UDP stutter observed with
-1024-sample packets, while still working well for BirdNET-Go TCP.
+1024-sample packets, while still working well for BirdNET-Go TCP. Firmware v1.9.3 also improves
+BirdNET-Pi UDP compatibility by handling RTCP and RTP metadata expected by ffmpeg-based clients.
 
 ## Recommended Hardware
 

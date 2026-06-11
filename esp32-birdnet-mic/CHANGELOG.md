@@ -3,6 +3,12 @@
 ## 1.9.3 — 2026-06-11
 - Defaults: changed the packet buffer default from 1024 to 512 samples after BirdNET-Pi UDP testing
   showed stutter with 1024-sample packets.
+- RTSP/UDP compatibility: opened the advertised RTCP server port, drained incoming RTCP packets,
+  and added `source`, `ssrc`, and `RTP-Info` metadata so ffmpeg/BirdNET-Pi handles UDP RTP streams
+  more reliably.
+- Validation: clean Nachtzuster/BirdNET-Pi host install tested with `rtsp://192.168.1.80:8554/audio2`
+  in BirdNET-Pi/UDP mode; ffmpeg produced full 15-second WAV files and BirdNET-Pi analysis read
+  5 audio chunks per segment.
 - Audio settings: sample rate validation now accepts up to 192000 Hz in both Web UI and API.
 - Audio settings: gain, sample rate, buffer, and I2S shift are now persisted only after the I2S
   pipeline restarts successfully; failed audio changes roll back instead of rebooting or silently
