@@ -54,7 +54,7 @@
       "parts": [
         {
           "path": "bootloader-c5.bin",
-          "offset": 0
+          "offset": 8192
         },
         {
           "path": "partitions-c5.bin",
