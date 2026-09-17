@@ -8,10 +8,11 @@ Arduino firmware for Seeed XIAO ESP32 I2S microphones that serve **mono 16-bit P
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Latest firmware: **v1.22** (2026-08-01)
+- Latest firmware: **v1.23** (2026-09-17; C6 OTA smoke test passed, extended validation pending)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Runtime-tested board: Seeed Studio **XIAO ESP32-C6**
-- Reference microphone: **ICS-43434**; **INMP441** has been reported compatible with the same wiring
+- Microphones: **ICS-43434/INMP441** in default Philips I2S mode, or **Adafruit SPH0645LM4H** in
+  selectable MSB / left-justified mode
 - User-facing overview and wiring: `../README.md`
 - Changelog: `CHANGELOG.md`
 - Web flasher: **https://esp32mic.msmeteo.cz**
@@ -203,7 +204,23 @@ by chip.
 | **GND** | GND | - | - | - | - | Ground |
 
 The firmware configures I2S as master/RX, reads the left channel, then shifts/scales samples to
-16-bit PCM. If using INMP441, set `L/R` or `SEL` to the left channel, usually GND.
+16-bit PCM. Set `L/R` or `SEL` to the left channel, usually GND. The same physical wiring is used
+for ICS-43434, INMP441, and Adafruit SPH0645LM4H, but their sample alignment differs:
+
+- **ICS-43434 / INMP441:** standard Philips I2S; firmware default.
+- **Adafruit SPH0645LM4H:** MSB / left-justified; select it in **Audio -> Microphone format** or set
+  API key `mic_format` to `1`.
+
+Legacy INMP441 order codes received an EOL notice in 2018, while TDK currently marks both the
+INMP441 family and ICS-43434 as Production/NRND (not recommended for new designs). The SPH0645
+option therefore provides a currently available path for new builds. It
+was tested on contributor hardware and reported to behave like the existing microphones; the
+maintainer has not independently hardware-tested it yet.
+
+Selecting the wrong UI format cannot electrically damage either microphone. The setting changes
+only the ESP32 I2S receiver's one-bit alignment (`bit_shift`); power, pin direction, BCLK/WS rates,
+and wiring remain unchanged. A mismatch produces incorrectly decoded audio. Supplying the wrong
+voltage or wiring a module incorrectly is a separate electrical risk; use 3.3 V only.
 
 Firmware v1.21 outputs MCLK at 256 times the configured sample rate. This allows experimental
 PCM1808 ADC hardware to run in slave I2S mode with its left input captured by the existing mono
@@ -229,6 +246,7 @@ GPIO3/GPIO14 block in `setup()`.
 
 - Sample rate: 48 kHz
 - Audio format: mono 16-bit PCM/L16
+- Microphone format: ICS-43434 / INMP441 (Philips I2S)
 - Gain: 1.5
 - Buffer: 512 samples
 - I2S shift: 12 bits
@@ -253,7 +271,7 @@ The Web UI runs on port **80** and includes:
 
 - Status: IP, RSSI, uptime, heap, server state, stream states, packet rates.
 - Streams: URLs for `/audio1` and `/audio2`, enable/disable, max clients, BirdNET target.
-- Audio: sample rate, gain, buffer size, I2S shift, high-pass filter, signal level.
+- Audio: microphone format, sample rate, gain, buffer size, I2S shift, high-pass filter, signal level.
 - Audio API diagnostics: producer state, ring-buffer capacity/chunks/drops/flushes, I2S errors,
   and RTSP write stalls/timeouts.
 - Time & Network: NTP state, time offset, mDNS, stream schedule, optional deep sleep, Wi-Fi actions.
@@ -373,6 +391,7 @@ key=stream2_enabled&value=off
 key=max_clients&value=2
 key=stream1_target&value=0
 key=stream2_target&value=1
+key=mic_format&value=1
 key=hp_enable&value=on
 key=hp_cutoff&value=600
 ```
@@ -383,6 +402,9 @@ Target values:
 0 = BirdNET-Go
 1 = BirdNET-Pi
 ```
+
+Microphone-format values are `0` for ICS-43434/INMP441 Philips I2S (default) and `1` for Adafruit
+SPH0645 MSB / left-justified.
 
 `/api/status` includes stream URLs and state, including:
 
@@ -490,6 +512,7 @@ sampleRate       Audio sample rate
 gainFactor      Audio gain
 bufferSize       Samples per packet/buffer profile
 shiftBits        I2S right shift before gain
+micFormat        I2S sample alignment: 0 = Philips, 1 = MSB / left-justified
 hpEnable         High-pass enable
 hpCutoff         High-pass cutoff Hz
 wifiTxDbm        Wi-Fi TX power
@@ -512,7 +535,8 @@ ohLatched        Persisted thermal latch
 ```
 
 Apply changes through Web UI or API. Audio-related updates call `restartI2S()` when needed.
-Current validation ranges include `sampleRate=8000..192000` and `bufferSize=256..8192`.
+Current validation ranges include `sampleRate=8000..192000`, `bufferSize=256..8192`, and
+`micFormat=0..1`.
 
 ## RTSP Implementation Notes
 
@@ -547,7 +571,8 @@ Current validation ranges include `sampleRate=8000..192000` and `bufferSize=256.
 - No TLS or built-in user authentication for the Web UI/API.
 - mDNS depends on multicast support in your LAN and often does not work across VLANs, guest networks, or Docker bridge networks.
 - The firmware is primarily runtime-tested on Seeed Studio XIAO ESP32-C6 with ICS-43434; C3/S3/C5
-  builds are compile-verified in Arduino ESP32 core 3.3.8.
+  builds are compile-verified in Arduino ESP32 core 3.3.8. SPH0645 support is contributor-tested but
+  has not been independently verified by the maintainer on physical hardware.
 
 ## Credits
 

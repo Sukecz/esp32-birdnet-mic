@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.23 - 2026-09-17
+- Microphones: add a persisted Web UI/API choice between the legacy ICS-43434/INMP441 Philips I2S
+  alignment and Adafruit SPH0645 MSB/left-justified alignment. Invalid stored/API values are
+  rejected or repaired, format changes restart I2S transactionally, and a failed restart rolls back.
+- Hardware safety: document that choosing the wrong format cannot damage the microphone because it
+  changes only receive-side bit alignment; incorrect wiring or voltage remains unsafe. SPH0645 was
+  tested by a contributor, but has not yet been physically verified by the maintainer.
+- Lifecycle documentation: identify the historical INMP441 EOL notice and the current TDK NRND
+  status of both legacy families, and recommend the available Adafruit SPH0645 path for new builds.
+- Stream health: retain the last stop across reconnects, with timestamp, stream and reason; show separate TCP stall, write failure/timeout and client disconnect/TEARDOWN counters in the Web UI. Counters cover all clients since boot.
+- RTSP cleanup: detect disconnected sessions without the contradictory WiFiClient boolean check, release their sockets, and count actual disconnects.
+- MQTT discovery: publish one retained message per second, retry a failed step after 60 seconds, and allow completion during continuous audio streaming. Discovery socket writes have a 20 ms budget; incomplete packets close the MQTT connection before retry.
+- MQTT status: clear recovered discovery/state errors and expose discovery completion separately from broker connectivity.
+- Release checks: pin build dependencies and provide a read-only GitHub/public OTA artifact equality check.
+- Validation: local checks and C3/S3/C5/C6 builds passed. Local C6 OTA tests on 2026-09-08 and 2026-09-17 passed; the earlier first-minute check reached 93 pkt/s and completed discovery with zero I2S/buffer/RTSP errors. Extended runtime and failure-recovery validation remain pending.
+
 ## 1.22 - 2026-08-01
 - RTSP/TCP stability: RTP writes now use a genuinely non-blocking socket send with an explicit
   ten-second recovery window. Live testing showed that shorter limits converted temporary

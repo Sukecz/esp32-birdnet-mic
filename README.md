@@ -7,7 +7,7 @@
 Seeed XIAO ESP32 network microphone for **BirdNET-Go** and **BirdNET-Pi**. It reads an I2S MEMS
 microphone and serves mono **16-bit PCM/L16** audio over **RTSP**.
 
-- Latest firmware: **v1.22** (2026-08-01)
+- Latest firmware: **v1.23** (2026-09-17; C6 OTA smoke test passed, extended validation pending)
 - Target sketch: `esp32-birdnet-mic`
 - Web flasher: **https://esp32mic.msmeteo.cz** (Chrome/Edge desktop, USB-C data cable)
 - Manual OTA firmware: `manual-ota-firmware/firmware-app-<board>.bin` (`firmware-app.bin` remains the C6 alias)
@@ -60,7 +60,9 @@ Default build notes:
 ## Wiring
 
 Tested build targets: **Seeed Studio XIAO ESP32-C3/S3/C5/C6**. Runtime hardware validation is still
-primarily on **XIAO ESP32-C6** + **ICS-43434** I2S microphone.
+primarily on **XIAO ESP32-C6** + **ICS-43434** I2S microphone. Adafruit SPH0645 support was tested
+on contributor hardware; the maintainer does not currently have that module for an independent
+physical test.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/connection-dark.png">
@@ -83,9 +85,22 @@ Firmware **v1.11 or newer is required for the C3/S3/C5 GPIO mappings below**. Ve
 | **VDD** | 3V3 | - | - | - | - | Power |
 | **GND** | GND | - | - | - | - | Ground |
 
-**INMP441** has also been reported to work with the same I2S pins. If your board exposes `L/R` or
-`SEL`, set it to the left channel, usually GND, because the firmware reads the left I2S channel.
-See discussion #25: https://github.com/Sukecz/esp32-birdnet-mic/discussions/25
+All supported digital microphones use the same BCLK/WS/DOUT pins and must be powered from **3.3 V**.
+If the module exposes `L/R` or `SEL`, set it to the left channel, usually GND, because the firmware
+reads the left I2S channel. Select the connected device under **Audio -> Microphone format**:
+
+| Microphone | UI format | Supply status | Validation |
+|---|---|---|---|
+| **ICS-43434** | Philips I2S (default) | Legacy; TDK lists it as Production/NRND (not recommended for new designs) | Maintainer-tested reference |
+| **INMP441** | Philips I2S (default) | Legacy order codes received a 2018 EOL notice; TDK now lists the family as Production/NRND | User-reported compatible; see [discussion #25](https://github.com/Sukecz/esp32-birdnet-mic/discussions/25) |
+| **Adafruit SPH0645LM4H** | MSB / left-justified | Currently sold alternative for new builds | Contributor-tested; not yet maintainer-tested |
+
+The SPH0645 option is provided because legacy INMP441 order codes reached EOL and TDK marks both
+older families NRND, making them poor choices for a new design even where stock is available. Choosing the wrong
+format in the UI **cannot electrically damage the microphone**: it changes only the ESP32 receiver's
+bit alignment, not power, GPIO direction, or clock frequency. The audio will instead be decoded
+incorrectly and may sound distorted, shifted, or unusually quiet. Incorrect wiring or applying 5 V
+to a microphone module can still cause damage.
 
 Firmware v1.21 also outputs a 256-fs MCLK on D7 for experimental PCM1808 ADC setups. Configure the
 PCM1808 for slave I2S mode and connect the microphone path to its left input; RTSP output remains
@@ -150,8 +165,9 @@ BirdNET-Pi UDP compatibility by handling RTCP and RTP metadata expected by ffmpe
 | Seeed Studio XIAO ESP32-S3 | 1 | Supported XIAO target board | [Seeed Studio](https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html) |
 | Seeed Studio XIAO ESP32-C5 | 1 | Supported XIAO target board | [Seeed Studio](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C5-p-6609.html) |
 | Seeed Studio XIAO ESP32-C6 | 1 | Supported XIAO target board | [Seeed Studio](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html) |
-| MEMS I2S microphone **ICS-43434** | 1 | Tested reference microphone | [AliExpress](https://www.aliexpress.com/item/1005008956861273.html) |
-| MEMS I2S microphone **INMP441** | 1 | Reported compatible with same wiring | - |
+| MEMS I2S microphone **Adafruit SPH0645LM4H** | 1 | Preferred available option for new builds; select MSB / left-justified in the Web UI | [Adafruit](https://www.adafruit.com/product/3421) |
+| MEMS I2S microphone **ICS-43434** | 1 | Tested legacy reference; NRND | [TDK product status](https://product.tdk.com/en/search/sw_piezo/mic/mems-mic/info?part_no=ICS-43434) |
+| MEMS I2S microphone **INMP441** | 1 | Legacy order codes reached EOL; current family listing is NRND; reported compatible with Philips I2S mode | [TDK product status](https://product.tdk.com/en/search/sw_piezo/mic/mems-mic/info?part_no=INMP441) |
 | Shielded cable, 5+ core | Optional | I2S mic needs 5 conductors: 3V3, GND, BCLK, LRCLK/WS, and SD/DOUT. A 6-core cable is a good practical choice for spare/shield handling. | [AliExpress](https://www.aliexpress.com/item/1005010375728700.html) |
 | 5 V power supply | 1 | At least 1 A recommended. **The AliExpress page may default to 12 V; manually select the 5 V version. Never connect 12 V to the XIAO.** | [AliExpress](https://www.aliexpress.com/item/1005002624537795.html) |
 | 2.4 GHz antenna, IPEX/U.FL | Recommended | Important for stable XIAO Wi-Fi streaming | [AliExpress](https://www.aliexpress.com/item/1005005439361093.html) |
@@ -203,8 +219,10 @@ The firmware includes a configurable high-pass filter to reduce low-frequency ru
   [XIAO ESP32-C6](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html).
 - Web flasher auto-selects firmware by ESP chip family. It cannot distinguish board variants that
   share the same chip family.
-- Reference microphone: ICS-43434.
-- Reported compatible microphone: INMP441 with the same I2S wiring.
+- ICS-43434 and INMP441 use the default Philips I2S mode; both are legacy NRND families, and older
+  INMP441 order codes received an EOL notice.
+- Adafruit SPH0645LM4H uses the selectable MSB / left-justified mode and is the available option for
+  new builds. Its code path is contributor-tested but not yet maintainer-tested on physical hardware.
 - Other ESP32 boards or I2S microphones may work, but may need pin or I2S format changes.
 
 ## Arduino IDE Build Size

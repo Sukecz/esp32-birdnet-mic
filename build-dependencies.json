@@ -1,0 +1,5 @@
+{
+  "arduino_cli": "1.5.0",
+  "core": {"id": "esp32:esp32", "version": "3.3.8"},
+  "libraries": {"WiFiManager": "2.0.17", "PubSubClient": "2.8"}
+}

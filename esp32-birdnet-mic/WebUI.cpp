@@ -42,6 +42,7 @@ extern uint32_t currentSampleRate;
 extern float currentGainFactor;
 extern uint16_t currentBufferSize;
 extern uint8_t i2sShiftBits;
+extern uint8_t micFormat;
 extern uint32_t minAcceptableRate;
 extern uint32_t performanceCheckInterval;
 extern bool autoRecoveryEnabled;
@@ -122,6 +123,7 @@ extern String formatUptime(unsigned long seconds);
 extern String formatSince(unsigned long eventMs);
 extern bool restartI2S();
 extern bool applyAudioConfig(uint32_t newRate, float newGain, uint16_t newBuffer, uint8_t newShift);
+extern bool applyMicFormatConfig(uint8_t newFormat);
 extern uint16_t maxHighpassCutoffForRate(uint32_t sampleRate);
 extern void saveAudioSettings();
 extern void applyWifiTxPower(bool log);
@@ -162,6 +164,14 @@ static String getOtaVersionUrl() {
 extern uint16_t mqttPublishIntervalSec;
 extern bool mqttConnected;
 extern String mqttLastError;
+extern bool mqttDiscoveryPublished;
+extern uint32_t rtspWriteFailCount;
+extern uint32_t rtspTeardownCount;
+extern uint32_t rtspDisconnectCount;
+extern String lastStreamStopReason;
+extern String lastStreamStopTime;
+extern uint8_t lastStreamStopStream;
+extern unsigned long lastStreamStopMs;
 extern bool isStreamScheduleAllowedNow(bool* timeValidOut);
 extern String mdnsHostname;
 extern bool attemptTimeSync(bool logResult, bool quickMode);
@@ -881,6 +891,7 @@ static void httpStatus() {
     json += "\"mqtt_client_id\":\"" + jsonEscape(mqttClientId) + "\",";
     json += "\"mqtt_interval_sec\":" + String((uint32_t)mqttPublishIntervalSec) + ",";
     json += "\"mqtt_last_error\":\"" + jsonEscape(mqttLastError) + "\",";
+    json += "\"mqtt_discovery_status\":\"" + String(!mqttEnabled ? "disabled" : !mqttConnected ? "waiting for connection" : mqttDiscoveryPublished ? "published" : "pending / retrying") + "\",";
     bool schedTimeValid = false;
     bool schedAllowNow = isStreamScheduleAllowedNow(&schedTimeValid);
     json += "\"stream_schedule_enabled\":" + String(streamScheduleEnabled?"true":"false") + ",";
@@ -909,6 +920,7 @@ static void httpAudioStatus() {
     json += "\"gain\":" + String(currentGainFactor,2) + ",";
     json += "\"buffer_size\":" + String(currentBufferSize) + ",";
     json += "\"i2s_shift\":" + String(i2sShiftBits) + ",";
+    json += "\"mic_format\":" + String(micFormat) + ",";
     json += "\"latency_ms\":" + String(latency_ms,1) + ",";
     extern bool highpassEnabled; extern uint16_t highpassCutoffHz;
     json += "\"profile\":\"" + jsonEscape(profileName(currentBufferSize)) + "\",";
@@ -929,7 +941,14 @@ static void httpAudioStatus() {
     json += "\"rb_drops\":" + String(audioRingBufferDropCount) + ",";
     json += "\"rb_flushes\":" + String(audioRingBufferFlushCount) + ",";
     json += "\"rtsp_write_stalls\":" + String(rtspWriteStallCount) + ",";
-    json += "\"rtsp_write_timeouts\":" + String(rtspWriteTimeoutCount);
+    json += "\"rtsp_write_timeouts\":" + String(rtspWriteTimeoutCount) + ",";
+    json += "\"rtsp_write_failures\":" + String(rtspWriteFailCount) + ",";
+    json += "\"rtsp_client_teardowns\":" + String(rtspTeardownCount) + ",";
+    json += "\"rtsp_client_disconnects\":" + String(rtspDisconnectCount) + ",";
+    json += "\"last_stop_reason\":\"" + jsonEscape(lastStreamStopReason) + "\",";
+    json += "\"last_stop_time\":\"" + jsonEscape(lastStreamStopTime) + "\",";
+    json += "\"last_stop_stream\":" + String(lastStreamStopStream) + ",";
+    json += "\"last_stop_age\":\"" + jsonEscape(lastStreamStopTime.length() ? formatSince(lastStreamStopMs) : String("never")) + "\"";
     json += "}";
     apiSendJSON(json);
 }
@@ -1204,6 +1223,14 @@ static bool applyAndSaveAudio(uint32_t newRate, float newGain, uint16_t newBuffe
     return false;
 }
 
+static bool applyAndSaveMicFormat(uint8_t newFormat) {
+    if (applyMicFormatConfig(newFormat)) {
+        saveAudioSettings();
+        return true;
+    }
+    return false;
+}
+
 static void httpSet() {
     if (!requireMutationAuth()) return;
 
@@ -1249,6 +1276,13 @@ static void httpSet() {
         uint8_t v;
         if (argToUChar(v) && v <= 24) {
             applied = applyAndSaveAudio(currentSampleRate, currentGainFactor, currentBufferSize, v);
+        }
+    }
+    else if (key == "mic_format") {
+        handled = true;
+        uint8_t v;
+        if (argToUChar(v) && v <= 1) {
+            applied = applyAndSaveMicFormat(v);
         }
     }
     else if (key == "wifi_tx") {

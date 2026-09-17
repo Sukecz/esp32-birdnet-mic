@@ -18,9 +18,11 @@
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
 #include "WebUI.h"
+#include "DiscoveryProgress.h"
+#include "DiscoveryClient.h"
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi) ==================
-#define FW_VERSION "1.22"
+#define FW_VERSION "1.23"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 // Build timestamp for diagnostics (compile time)
@@ -136,6 +138,13 @@ enum StreamTarget : uint8_t {
     STREAM_TARGET_BIRDNET_PI = 1
 };
 
+enum MicFormat : uint8_t {
+    MIC_FORMAT_PHILIPS = 0,  // ICS-43434 / INMP441
+    MIC_FORMAT_MSB = 1       // Adafruit SPH0645LM4H
+};
+
+static constexpr uint8_t DEFAULT_MIC_FORMAT = MIC_FORMAT_PHILIPS;
+
 struct StreamProfileConfig {
     uint8_t target = STREAM_TARGET_BIRDNET_GO;
 };
@@ -163,7 +172,7 @@ struct ClientSession {
     unsigned long packetsSent = 0;
 
     void reset() {
-        if (client.connected()) client.stop();
+        client.stop();
         if (transport == TRANSPORT_UDP) {
             udpSocket.stop();
             rtcpSocket.stop();
@@ -185,6 +194,10 @@ struct ClientSession {
         packetsSent = 0;
     }
 };
+
+static const char* micFormatName(uint8_t format) {
+    return format == MIC_FORMAT_MSB ? "SPH0645/MSB" : "ICS43434/Philips";
+}
 
 ClientSession clients[MAX_CLIENTS];
 StreamProfileConfig streamProfiles[2] = {
@@ -240,6 +253,7 @@ uint32_t currentSampleRate = DEFAULT_SAMPLE_RATE;
 float currentGainFactor = DEFAULT_GAIN_FACTOR;
 uint16_t currentBufferSize = DEFAULT_BUFFER_SIZE;
 uint8_t i2sShiftBits = 12;  // (1) compile-time default respected on first boot
+uint8_t micFormat = DEFAULT_MIC_FORMAT;
 
 // -- Audio metering / clipping diagnostics
 uint16_t lastPeakAbs16 = 0;       // last block peak absolute value (0..32767)
@@ -385,7 +399,7 @@ uint16_t mqttPublishIntervalSec = DEFAULT_MQTT_PUBLISH_INTERVAL_SEC;
 bool mqttConnected = false;
 String mqttLastError = "disabled";
 String mqttDeviceId = "";
-WiFiClient mqttNetClient;
+DiscoveryClient mqttNetClient;
 PubSubClient mqttClient(mqttNetClient);
 IPAddress mqttResolvedIp;
 String mqttResolvedHost = "";
@@ -395,6 +409,7 @@ unsigned long lastMqttPublishMs = 0;
 unsigned long lastMqttLogMs = 0;
 bool mqttDiscoveryPublished = false;
 bool mqttForceDiscovery = false;
+DiscoveryProgress mqttDiscoveryProgress;
 static const unsigned long MQTT_RECONNECT_INTERVAL_MS = 10000UL;
 static const unsigned long MQTT_STREAMING_RECONNECT_INTERVAL_MS = 300000UL;
 static const int32_t MQTT_STREAMING_CONNECT_TIMEOUT_MS = 500;
@@ -415,6 +430,17 @@ unsigned long lastRtpPacketMs = 0;
 String lastStreamStopReason = "none";
 unsigned long lastStreamStopMs = 0;
 uint32_t rtspWriteFailCount = 0;
+uint32_t rtspTeardownCount = 0;
+uint32_t rtspDisconnectCount = 0;
+String lastStreamStopTime = "";
+uint8_t lastStreamStopStream = 0;
+
+void recordStreamStop(const char* reason, uint8_t stream) {
+    lastStreamStopReason = reason;
+    lastStreamStopMs = millis();
+    lastStreamStopTime = timeSynced ? formatDateTime() : String("Clock unsynced");
+    lastStreamStopStream = stream;
+}
 String lastRtspClientIp = "none";
 
 // ===============================================
@@ -898,30 +924,6 @@ static const MqttDiscoveryEntity MQTT_DISCOVERY_ENTITIES[] = {
     {"button", "reboot"},
 };
 
-static void mqttClearRetainedTopic(const String &topic) {
-    if (topic.length() == 0) return;
-    mqttClient.publish(topic.c_str(), "", true);
-}
-
-static void mqttClearDiscoveryForDeviceId(const String &deviceId) {
-    if (deviceId.length() == 0 || deviceId == mqttDeviceId) return;
-    for (const MqttDiscoveryEntity &entity : MQTT_DISCOVERY_ENTITIES) {
-        String topic = mqttDiscoveryPrefix + "/" + entity.component + "/" + deviceId + "/" + entity.objectId + "/config";
-        mqttClearRetainedTopic(topic);
-    }
-}
-
-static void mqttClearLegacyRetainedTopics() {
-    mqttClearDiscoveryForDeviceId("esp32mic_000000000000");
-
-    String currentAvailability = mqttAvailabilityTopic();
-    String oldZeroAvailability = "esp32mic/esp32mic_000000000000/availability";
-    if (oldZeroAvailability != currentAvailability) mqttClearRetainedTopic(oldZeroAvailability);
-
-    String oldRepeatedAvailability = String("esp32mic/") + mqttDeviceId + "/availability";
-    if (oldRepeatedAvailability != currentAvailability) mqttClearRetainedTopic(oldRepeatedAvailability);
-}
-
 static bool mqttPublishState(bool force) {
     if (!mqttClient.connected()) return false;
     unsigned long now = millis();
@@ -930,15 +932,32 @@ static bool mqttPublishState(bool force) {
     String topic = mqttStateTopic();
     String payload = mqttBuildStateJson();
     bool ok = mqttClient.publish(topic.c_str(), payload.c_str(), false);
-    if (ok) lastMqttPublishMs = now;
+    if (ok) {
+        lastMqttPublishMs = now;
+        if (mqttLastError == "state_publish_failed") {
+            mqttLastError = mqttDiscoveryProgress.failed ? "discovery_publish_failed" : "ok";
+        }
+    }
     return ok;
 }
 
-static bool mqttPublishDiscovery() {
-    if (!mqttClient.connected()) return false;
-
-    mqttClearLegacyRetainedTopics();
-
+// Send one retained message per step, including legacy cleanup. No burst of
+// discovery traffic in the audio loop, and failed steps retry after a minute.
+static bool mqttPublishDiscoveryStep(uint16_t step) {
+    constexpr uint16_t count = sizeof(MQTT_DISCOVERY_ENTITIES) / sizeof(MQTT_DISCOVERY_ENTITIES[0]);
+    static_assert(count * 2 + 2 == DiscoveryProgress::total, "Discovery step count mismatch");
+    if (step < count) {
+        const auto &entity = MQTT_DISCOVERY_ENTITIES[step];
+        String topic = mqttDiscoveryPrefix + "/" + entity.component + "/esp32mic_000000000000/" + entity.objectId + "/config";
+        if (mqttDeviceId == "esp32mic_000000000000") return true;
+        return mqttClient.publish(topic.c_str(), "", true);
+    }
+    if (step < count + 2) {
+        String topic = step == count ? String("esp32mic/esp32mic_000000000000/availability")
+                                    : String("esp32mic/") + mqttDeviceId + "/availability";
+        if (topic == mqttAvailabilityTopic()) return true;
+        return mqttClient.publish(topic.c_str(), "", true);
+    }
     String dev = mqttBuildDeviceJson();
     String st = mqttStateTopic();
     String av = mqttAvailabilityTopic();
@@ -948,111 +967,127 @@ static bool mqttPublishDiscovery() {
     String cmdS2Enabled = mqttCmdStreamEnabledTopic(1);
     String cmdS1Target = mqttCmdStreamTargetTopic(0);
     String cmdS2Target = mqttCmdStreamTargetTopic(1);
-    bool ok = true;
-
     String p;
+    switch (step - count - 2) {
+    case 0:
+        p = "{\"name\":\"WiFi RSSI\",\"uniq_id\":\"" + mqttDeviceId + "_wifi_rssi\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.wifi_rssi }}\",\"unit_of_meas\":\"dBm\",\"dev_cla\":\"signal_strength\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "wifi_rssi", p);
+    case 1:
+        p = "{\"name\":\"Free Heap\",\"uniq_id\":\"" + mqttDeviceId + "_heap_kb\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.free_heap_kb }}\",\"unit_of_meas\":\"KB\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "heap_kb", p);
+    case 2:
+        p = "{\"name\":\"Packet Rate\",\"uniq_id\":\"" + mqttDeviceId + "_pkt_rate\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.current_rate_pkt_s }}\",\"unit_of_meas\":\"pkt/s\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "packet_rate", p);
+    case 3:
+        p = "{\"name\":\"Temperature\",\"uniq_id\":\"" + mqttDeviceId + "_temp_c\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.temperature_c }}\",\"unit_of_meas\":\"\u00B0C\",\"dev_cla\":\"temperature\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "temperature_c", p);
+    case 4:
+        p = "{\"name\":\"Peak Temperature\",\"uniq_id\":\"" + mqttDeviceId + "_max_temp_c\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.max_temperature_c }}\",\"unit_of_meas\":\"\u00B0C\",\"dev_cla\":\"temperature\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:thermometer-high\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "max_temperature_c", p);
+    case 5:
+        p = "{\"name\":\"Uptime\",\"uniq_id\":\"" + mqttDeviceId + "_uptime_s\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.uptime_s }}\",\"unit_of_meas\":\"s\",\"dev_cla\":\"duration\",\"stat_cla\":\"total_increasing\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "uptime_s", p);
+    case 6:
+        p = "{\"name\":\"Streaming\",\"uniq_id\":\"" + mqttDeviceId + "_streaming\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.streaming else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"dev_cla\":\"running\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("binary_sensor", "streaming", p);
+    case 7:
+        p = "{\"name\":\"RTSP Server\",\"uniq_id\":\"" + mqttDeviceId + "_rtsp_server\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.rtsp_server_enabled else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"cmd_t\":\"" + cmdRtsp + "\",\"ic\":\"mdi:radio-tower\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("switch", "rtsp_server", p);
+    case 8:
+        p = "{\"name\":\"RTSP Client\",\"uniq_id\":\"" + mqttDeviceId + "_rtsp_client\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.client }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "rtsp_client", p);
+    case 9:
+        p = "{\"name\":\"Firmware\",\"uniq_id\":\"" + mqttDeviceId + "_fw_version\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.fw_version }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "fw_version", p);
+    case 10:
+        p = "{\"name\":\"Build Date\",\"uniq_id\":\"" + mqttDeviceId + "_fw_build\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.fw_build }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "fw_build", p);
+    case 11:
+        p = "{\"name\":\"Reboot Reason\",\"uniq_id\":\"" + mqttDeviceId + "_reboot_reason\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.reboot_reason }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "reboot_reason", p);
+    case 12:
+        p = "{\"name\":\"Restart Counter\",\"uniq_id\":\"" + mqttDeviceId + "_restart_counter\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.restart_counter }}\",\"stat_cla\":\"total_increasing\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "restart_counter", p);
+    case 13:
+        p = "{\"name\":\"WiFi SSID\",\"uniq_id\":\"" + mqttDeviceId + "_wifi_ssid\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.wifi_ssid }}\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:wifi\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "wifi_ssid", p);
+    case 14:
+        p = "{\"name\":\"WiFi Reconnects\",\"uniq_id\":\"" + mqttDeviceId + "_wifi_reconnect_count\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.wifi_reconnect_count }}\",\"stat_cla\":\"total_increasing\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:wifi-refresh\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "wifi_reconnect_count", p);
+    case 15:
+        p = "{\"name\":\"Stream Uptime\",\"uniq_id\":\"" + mqttDeviceId + "_stream_uptime_s\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream_uptime_s }}\",\"unit_of_meas\":\"s\",\"dev_cla\":\"duration\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "stream_uptime_s", p);
+    case 16:
+        p = "{\"name\":\"RTSP Client Count\",\"uniq_id\":\"" + mqttDeviceId + "_client_count\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.client_count }}\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:account-multiple\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "client_count", p);
+    case 17:
+        p = "{\"name\":\"Stream 1 Enabled\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_enabled\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.stream1_enabled else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"cmd_t\":\"" + cmdS1Enabled + "\",\"ic\":\"mdi:microphone\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("switch", "stream1_enabled", p);
+    case 18:
+        p = "{\"name\":\"Stream 2 Enabled\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_enabled\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.stream2_enabled else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"cmd_t\":\"" + cmdS2Enabled + "\",\"ic\":\"mdi:microphone\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("switch", "stream2_enabled", p);
+    case 19:
+        p = "{\"name\":\"Stream 1 Streaming\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_streaming\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.stream1_streaming else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"dev_cla\":\"running\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("binary_sensor", "stream1_streaming", p);
+    case 20:
+        p = "{\"name\":\"Stream 2 Streaming\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_streaming\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.stream2_streaming else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"dev_cla\":\"running\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("binary_sensor", "stream2_streaming", p);
+    case 21:
+        p = "{\"name\":\"Stream 1 Clients\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_clients\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream1_clients }}\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:account-multiple\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "stream1_clients", p);
+    case 22:
+        p = "{\"name\":\"Stream 2 Clients\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_clients\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream2_clients }}\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:account-multiple\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "stream2_clients", p);
+    case 23:
+        p = "{\"name\":\"Stream 1 Packet Rate\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_packet_rate\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream1_packet_rate }}\",\"unit_of_meas\":\"pkt/s\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "stream1_packet_rate", p);
+    case 24:
+        p = "{\"name\":\"Stream 2 Packet Rate\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_packet_rate\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream2_packet_rate }}\",\"unit_of_meas\":\"pkt/s\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "stream2_packet_rate", p);
+    case 25:
+        p = "{\"name\":\"Stream 1 URL\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_url\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream1_url_ip }}\",\"ic\":\"mdi:link-variant\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "stream1_url", p);
+    case 26:
+        p = "{\"name\":\"Stream 2 URL\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_url\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream2_url_ip }}\",\"ic\":\"mdi:link-variant\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "stream2_url", p);
+    case 27:
+        p = "{\"name\":\"Stream 1 Target\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_target\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream1_target }}\",\"cmd_t\":\"" + cmdS1Target + "\",\"options\":[\"BirdNET-Go\",\"BirdNET-Pi\"],\"ic\":\"mdi:target\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("select", "stream1_target", p);
+    case 28:
+        p = "{\"name\":\"Stream 2 Target\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_target\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream2_target }}\",\"cmd_t\":\"" + cmdS2Target + "\",\"options\":[\"BirdNET-Go\",\"BirdNET-Pi\"],\"ic\":\"mdi:target\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("select", "stream2_target", p);
+    case 29:
+        p = "{\"name\":\"Sample Rate\",\"uniq_id\":\"" + mqttDeviceId + "_sample_rate_hz\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.sample_rate }}\",\"unit_of_meas\":\"Hz\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "sample_rate_hz", p);
+    case 30:
+        p = "{\"name\":\"Audio Format\",\"uniq_id\":\"" + mqttDeviceId + "_audio_format\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.audio_format }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("sensor", "audio_format", p);
+    case 31:
+        p = "{\"name\":\"Reboot Device\",\"uniq_id\":\"" + mqttDeviceId + "_reboot\",\"cmd_t\":\"" + cmdReboot + "\",\"pl_prs\":\"PRESS\",\"ent_cat\":\"config\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
+        return mqttPublishDiscoveryConfig("button", "reboot", p);
+    default: return false;
+    }
+}
 
-    p = "{\"name\":\"WiFi RSSI\",\"uniq_id\":\"" + mqttDeviceId + "_wifi_rssi\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.wifi_rssi }}\",\"unit_of_meas\":\"dBm\",\"dev_cla\":\"signal_strength\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "wifi_rssi", p);
+static void mqttScheduleDiscovery() {
+    mqttDiscoveryPublished = false;
+    mqttForceDiscovery = true;
+    mqttDiscoveryProgress.reset();
+}
 
-    p = "{\"name\":\"Free Heap\",\"uniq_id\":\"" + mqttDeviceId + "_heap_kb\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.free_heap_kb }}\",\"unit_of_meas\":\"KB\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "heap_kb", p);
-
-    p = "{\"name\":\"Packet Rate\",\"uniq_id\":\"" + mqttDeviceId + "_pkt_rate\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.current_rate_pkt_s }}\",\"unit_of_meas\":\"pkt/s\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "packet_rate", p);
-
-    p = "{\"name\":\"Temperature\",\"uniq_id\":\"" + mqttDeviceId + "_temp_c\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.temperature_c }}\",\"unit_of_meas\":\"\u00B0C\",\"dev_cla\":\"temperature\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "temperature_c", p);
-
-    p = "{\"name\":\"Peak Temperature\",\"uniq_id\":\"" + mqttDeviceId + "_max_temp_c\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.max_temperature_c }}\",\"unit_of_meas\":\"\u00B0C\",\"dev_cla\":\"temperature\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:thermometer-high\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "max_temperature_c", p);
-
-    p = "{\"name\":\"Uptime\",\"uniq_id\":\"" + mqttDeviceId + "_uptime_s\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.uptime_s }}\",\"unit_of_meas\":\"s\",\"dev_cla\":\"duration\",\"stat_cla\":\"total_increasing\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "uptime_s", p);
-
-    p = "{\"name\":\"Streaming\",\"uniq_id\":\"" + mqttDeviceId + "_streaming\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.streaming else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"dev_cla\":\"running\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("binary_sensor", "streaming", p);
-
-    p = "{\"name\":\"RTSP Server\",\"uniq_id\":\"" + mqttDeviceId + "_rtsp_server\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.rtsp_server_enabled else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"cmd_t\":\"" + cmdRtsp + "\",\"ic\":\"mdi:radio-tower\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("switch", "rtsp_server", p);
-
-    p = "{\"name\":\"RTSP Client\",\"uniq_id\":\"" + mqttDeviceId + "_rtsp_client\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.client }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "rtsp_client", p);
-
-    p = "{\"name\":\"Firmware\",\"uniq_id\":\"" + mqttDeviceId + "_fw_version\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.fw_version }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "fw_version", p);
-
-    p = "{\"name\":\"Build Date\",\"uniq_id\":\"" + mqttDeviceId + "_fw_build\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.fw_build }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "fw_build", p);
-
-    p = "{\"name\":\"Reboot Reason\",\"uniq_id\":\"" + mqttDeviceId + "_reboot_reason\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.reboot_reason }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "reboot_reason", p);
-
-    p = "{\"name\":\"Restart Counter\",\"uniq_id\":\"" + mqttDeviceId + "_restart_counter\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.restart_counter }}\",\"stat_cla\":\"total_increasing\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "restart_counter", p);
-
-    p = "{\"name\":\"WiFi SSID\",\"uniq_id\":\"" + mqttDeviceId + "_wifi_ssid\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.wifi_ssid }}\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:wifi\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "wifi_ssid", p);
-
-    p = "{\"name\":\"WiFi Reconnects\",\"uniq_id\":\"" + mqttDeviceId + "_wifi_reconnect_count\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.wifi_reconnect_count }}\",\"stat_cla\":\"total_increasing\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:wifi-refresh\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "wifi_reconnect_count", p);
-
-    p = "{\"name\":\"Stream Uptime\",\"uniq_id\":\"" + mqttDeviceId + "_stream_uptime_s\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream_uptime_s }}\",\"unit_of_meas\":\"s\",\"dev_cla\":\"duration\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "stream_uptime_s", p);
-
-    p = "{\"name\":\"RTSP Client Count\",\"uniq_id\":\"" + mqttDeviceId + "_client_count\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.client_count }}\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:account-multiple\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "client_count", p);
-
-    p = "{\"name\":\"Stream 1 Enabled\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_enabled\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.stream1_enabled else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"cmd_t\":\"" + cmdS1Enabled + "\",\"ic\":\"mdi:microphone\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("switch", "stream1_enabled", p);
-
-    p = "{\"name\":\"Stream 2 Enabled\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_enabled\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.stream2_enabled else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"cmd_t\":\"" + cmdS2Enabled + "\",\"ic\":\"mdi:microphone\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("switch", "stream2_enabled", p);
-
-    p = "{\"name\":\"Stream 1 Streaming\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_streaming\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.stream1_streaming else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"dev_cla\":\"running\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("binary_sensor", "stream1_streaming", p);
-
-    p = "{\"name\":\"Stream 2 Streaming\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_streaming\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ 'ON' if value_json.stream2_streaming else 'OFF' }}\",\"pl_on\":\"ON\",\"pl_off\":\"OFF\",\"dev_cla\":\"running\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("binary_sensor", "stream2_streaming", p);
-
-    p = "{\"name\":\"Stream 1 Clients\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_clients\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream1_clients }}\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:account-multiple\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "stream1_clients", p);
-
-    p = "{\"name\":\"Stream 2 Clients\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_clients\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream2_clients }}\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"ic\":\"mdi:account-multiple\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "stream2_clients", p);
-
-    p = "{\"name\":\"Stream 1 Packet Rate\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_packet_rate\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream1_packet_rate }}\",\"unit_of_meas\":\"pkt/s\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "stream1_packet_rate", p);
-
-    p = "{\"name\":\"Stream 2 Packet Rate\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_packet_rate\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream2_packet_rate }}\",\"unit_of_meas\":\"pkt/s\",\"stat_cla\":\"measurement\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "stream2_packet_rate", p);
-
-    p = "{\"name\":\"Stream 1 URL\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_url\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream1_url_ip }}\",\"ic\":\"mdi:link-variant\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "stream1_url", p);
-
-    p = "{\"name\":\"Stream 2 URL\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_url\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream2_url_ip }}\",\"ic\":\"mdi:link-variant\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "stream2_url", p);
-
-    p = "{\"name\":\"Stream 1 Target\",\"uniq_id\":\"" + mqttDeviceId + "_stream1_target\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream1_target }}\",\"cmd_t\":\"" + cmdS1Target + "\",\"options\":[\"BirdNET-Go\",\"BirdNET-Pi\"],\"ic\":\"mdi:target\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("select", "stream1_target", p);
-
-    p = "{\"name\":\"Stream 2 Target\",\"uniq_id\":\"" + mqttDeviceId + "_stream2_target\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.stream2_target }}\",\"cmd_t\":\"" + cmdS2Target + "\",\"options\":[\"BirdNET-Go\",\"BirdNET-Pi\"],\"ic\":\"mdi:target\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("select", "stream2_target", p);
-
-    p = "{\"name\":\"Sample Rate\",\"uniq_id\":\"" + mqttDeviceId + "_sample_rate_hz\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.sample_rate }}\",\"unit_of_meas\":\"Hz\",\"stat_cla\":\"measurement\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "sample_rate_hz", p);
-
-    p = "{\"name\":\"Audio Format\",\"uniq_id\":\"" + mqttDeviceId + "_audio_format\",\"stat_t\":\"" + st + "\",\"val_tpl\":\"{{ value_json.audio_format }}\",\"ent_cat\":\"diagnostic\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("sensor", "audio_format", p);
-
-    p = "{\"name\":\"Reboot Device\",\"uniq_id\":\"" + mqttDeviceId + "_reboot\",\"cmd_t\":\"" + cmdReboot + "\",\"pl_prs\":\"PRESS\",\"ent_cat\":\"config\",\"avty_t\":\"" + av + "\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\",\"dev\":" + dev + "}";
-    ok &= mqttPublishDiscoveryConfig("button", "reboot", p);
-
-    if (ok) {
+static void mqttServiceDiscovery() {
+    if (!mqttClient.connected() || !mqttForceDiscovery) return;
+    if (!mqttDiscoveryProgress.ready(millis())) return;
+    mqttNetClient.discoveryWrite = true;
+    bool ok = mqttPublishDiscoveryStep(mqttDiscoveryProgress.step);
+    mqttNetClient.discoveryWrite = false;
+    mqttDiscoveryProgress.completeStep(ok, millis());
+    if (!ok) mqttLastError = "discovery_publish_failed";
+    if (mqttDiscoveryProgress.done()) {
         mqttDiscoveryPublished = true;
         mqttForceDiscovery = false;
+        if (mqttLastError == "discovery_publish_failed") mqttLastError = "ok";
     }
-    return ok;
 }
 
 static void mqttMessageCallback(char* topic, byte* payload, unsigned int length) {
@@ -1206,18 +1241,15 @@ static bool mqttConnectNow(bool streamingReconnect = false) {
         mqttClient.subscribe(mqttCmdStreamTargetTopic(i).c_str());
     }
     mqttClient.subscribe(mqttCmdRebootTopic().c_str());
-    mqttDiscoveryPublished = false;
-    if (!streamingReconnect && !mqttPublishDiscovery()) {
-        mqttLastError = "discovery_publish_failed";
-    }
+    mqttScheduleDiscovery();
     mqttPublishState(true);
     simplePrintln("MQTT connected to " + mqttHost + ":" + String(mqttPort));
     return true;
 }
 
 void mqttRequestReconnect(bool forceDiscovery) {
-    if (forceDiscovery) mqttForceDiscovery = true;
-    mqttDiscoveryPublished = false;
+    (void)forceDiscovery;
+    mqttScheduleDiscovery();
     lastMqttReconnectAttempt = 0;
     lastMqttPublishMs = 0;
     if (mqttClient.connected()) {
@@ -1229,12 +1261,8 @@ void mqttRequestReconnect(bool forceDiscovery) {
 }
 
 void mqttPublishDiscoverySoon() {
-    mqttForceDiscovery = true;
-    if (mqttClient.connected()) {
-        if (!mqttPublishDiscovery()) mqttLastError = "discovery_publish_failed";
-    } else {
-        mqttRequestReconnect(true);
-    }
+    mqttScheduleDiscovery();
+    if (!mqttClient.connected()) mqttRequestReconnect(true);
 }
 
 void checkMqtt() {
@@ -1275,9 +1303,8 @@ void checkMqtt() {
 
     mqttConnected = true;
     mqttClient.loop();
-    if (!isStreaming && (mqttForceDiscovery || !mqttDiscoveryPublished)) {
-        if (!mqttPublishDiscovery()) mqttLastError = "discovery_publish_failed";
-    }
+    mqttServiceDiscovery();
+    if (!mqttClient.connected()) { mqttConnected = false; return; }
     if (!mqttPublishState(false)) {
         mqttLastError = "state_publish_failed";
     }
@@ -1939,6 +1966,7 @@ void loadAudioSettings() {
     currentBufferSize = audioPrefs.getUShort("bufferSize", DEFAULT_BUFFER_SIZE);
     // (1) respect compile-time default 12 on first boot
     i2sShiftBits = audioPrefs.getUChar("shiftBits", i2sShiftBits);
+    micFormat = audioPrefs.getUChar("micFormat", DEFAULT_MIC_FORMAT);
     autoRecoveryEnabled = audioPrefs.getBool("autoRecovery", true);
     scheduledResetEnabled = audioPrefs.getBool("schedReset", false);
     resetIntervalHours = audioPrefs.getUInt("resetHours", 24);
@@ -2010,6 +2038,10 @@ void loadAudioSettings() {
         i2sShiftBits = 12;
         settingsRepaired = true;
     }
+    if (micFormat > MIC_FORMAT_MSB) {
+        micFormat = DEFAULT_MIC_FORMAT;
+        settingsRepaired = true;
+    }
     if (resetIntervalHours < 1U || resetIntervalHours > 168U) {
         resetIntervalHours = 24;
         settingsRepaired = true;
@@ -2070,6 +2102,7 @@ void loadAudioSettings() {
                   ", Buffer=" + String(currentBufferSize) +
                   ", WiFiTX=" + String(txShown, 1) + "dBm" +
                   ", shiftBits=" + String(i2sShiftBits) +
+                  ", micFormat=" + String(micFormatName(micFormat)) +
                   ", HPF=" + String(highpassEnabled?"on":"off") +
                   ", HPFcut=" + String(highpassCutoffHz) + "Hz");
 }
@@ -2082,6 +2115,7 @@ void saveAudioSettings() {
     audioPrefs.putFloat("gainFactor", currentGainFactor);
     audioPrefs.putUShort("bufferSize", currentBufferSize);
     audioPrefs.putUChar("shiftBits", i2sShiftBits);
+    audioPrefs.putUChar("micFormat", micFormat);
     audioPrefs.putBool("autoRecovery", autoRecoveryEnabled);
     audioPrefs.putBool("schedReset", scheduledResetEnabled);
     audioPrefs.putUInt("resetHours", resetIntervalHours);
@@ -2190,6 +2224,7 @@ void resetToDefaultSettings() {
     currentGainFactor = DEFAULT_GAIN_FACTOR;
     currentBufferSize = DEFAULT_BUFFER_SIZE;
     i2sShiftBits = 12;  // compile-time default respected
+    micFormat = DEFAULT_MIC_FORMAT;
 
     autoRecoveryEnabled = true;
     autoThresholdEnabled = true;
@@ -2283,6 +2318,24 @@ bool applyAudioConfig(uint32_t newRate, float newGain, uint16_t newBuffer, uint8
     minAcceptableRate = oldMinRate;
     if (!restartI2S()) {
         simplePrintln("Audio rollback failed; reboot recommended.");
+    }
+    return false;
+}
+
+// Change only the receiver's sample alignment. This does not change GPIO
+// direction, voltage, BCLK frequency, WS frequency, or microphone power.
+bool applyMicFormatConfig(uint8_t newFormat) {
+    if (newFormat > MIC_FORMAT_MSB) return false;
+    if (newFormat == micFormat) return true;
+
+    uint8_t oldFormat = micFormat;
+    micFormat = newFormat;
+    if (restartI2S()) return true;
+
+    simplePrintln("Mic format setting rejected: I2S restart failed, rolling back.");
+    micFormat = oldFormat;
+    if (!restartI2S()) {
+        simplePrintln("Mic format rollback failed; reboot recommended.");
     }
     return false;
 }
@@ -2543,6 +2596,11 @@ bool setup_i2s_driver() {
     // leave D7 unconnected and continue to use the same BCLK/WS/SD wiring.
     std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
     std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    if (micFormat == MIC_FORMAT_MSB) {
+        std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(
+            I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO);
+        std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    }
 
     err = i2s_channel_init_std_mode(i2s_rx_handle, &std_cfg);
     if (err != ESP_OK) {
@@ -2562,7 +2620,9 @@ bool setup_i2s_driver() {
 
     simplePrintln("I2S ready: " + String(currentSampleRate) + "Hz, gain " +
                   String(currentGainFactor, 1) + ", buffer " + String(currentBufferSize) +
-                  ", shiftBits " + String(i2sShiftBits) + ", pins MCLK/BCLK/WS/SD " +
+                  ", shiftBits " + String(i2sShiftBits) +
+                  ", micFormat " + String(micFormatName(micFormat)) +
+                  ", pins MCLK/BCLK/WS/SD " +
                   String(I2S_MCLK_PIN) + "/" + String(I2S_BCLK_PIN) + "/" +
                   String(I2S_LRCLK_PIN) + "/" + String(I2S_DOUT_PIN));
     if (!startAudioProducer()) {
@@ -2639,8 +2699,7 @@ static void stopStreamOnWriteFailure(ClientSession &session, const char* reason)
     uint8_t pi = session.profileIndex;
     session.streaming = false;
     rtspWriteFailCount++;
-    lastStreamStopReason = reason;
-    lastStreamStopMs = millis();
+    recordStreamStop(reason, pi + 1);
     session.reset();
     // Flush only after streamAudio() returns its currently borrowed item.
     audioRingBufferFlushPending = true;
@@ -2951,8 +3010,6 @@ void handleRTSPCommand(ClientSession &session, String request, uint8_t clientIdx
         }
         rtspPlayCount++;
         lastRtpPacketMs = millis();
-        lastStreamStopReason = "none";
-        lastStreamStopMs = 0;
         simplePrintln("STREAMING STARTED stream" + String(session.profileIndex + 1));
         mqttPublishState(true);
 
@@ -2989,6 +3046,7 @@ void handleRTSPCommand(ClientSession &session, String request, uint8_t clientIdx
         session.client.print("RTSP/1.0 200 OK\r\n");
         session.client.print("CSeq: " + cseq + "\r\n");
         session.client.print("Session: " + session.sessionId + "\r\n\r\n");
+        bool wasStreaming = session.streaming;
         session.streaming = false;
         bool anyStillStreaming = false;
         for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
@@ -2997,10 +3055,10 @@ void handleRTSPCommand(ClientSession &session, String request, uint8_t clientIdx
             }
         }
         if (!anyStillStreaming) streamStats[session.profileIndex].streaming = false;
-        lastStreamStopReason = "RTSP TEARDOWN";
-        lastStreamStopMs = millis();
+        rtspTeardownCount++;
+        if (wasStreaming) recordStreamStop("Client requested TEARDOWN", session.profileIndex + 1);
         simplePrintln(teardownLog);
-        simplePrintln("STREAMING STOPPED (" + lastStreamStopReason + ")");
+        if (wasStreaming) simplePrintln("STREAMING STOPPED (" + lastStreamStopReason + ")");
         mqttPublishState(true);
     } else if (request.startsWith("GET_PARAMETER")) {
         session.client.print("RTSP/1.0 200 OK\r\n");
@@ -3104,9 +3162,8 @@ void stopRtspClientsForStream(uint8_t profileIndex, const char* reason) {
         rtspClient = WiFiClient();
         rtspSessionId = "";
     }
-    if (reason && reason[0]) {
-        lastStreamStopReason = reason;
-        if (hadStreaming) lastStreamStopMs = millis();
+    if (hadStreaming && reason && reason[0]) {
+        recordStreamStop(reason, profileIndex + 1);
     }
 }
 
@@ -3123,9 +3180,8 @@ void stopAllRtspClients(const char* reason) {
     rtspClient = WiFiClient();
     rtspSessionId = "";
     isStreaming = false;
-    if (reason && reason[0]) {
-        lastStreamStopReason = reason;
-        if (hadStreaming) lastStreamStopMs = millis();
+    if (hadStreaming && reason && reason[0]) {
+        recordStreamStop(reason, 0);
     }
 }
 
@@ -3335,14 +3391,16 @@ void loop() {
     // RTSP client management (configurable 1-3 concurrent sessions)
     if (rtspServerEnabled) {
         for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-            if (clients[i].client && !clients[i].client.connected()) {
+            // WiFiClient::operator bool() calls connected(); do not combine it
+            // with !connected(), which would miss established disconnections.
+            if ((clients[i].connectedAtMs != 0 || clients[i].streaming) && !clients[i].client.connected()) {
                 bool wasStreaming = clients[i].streaming;
-                clients[i].reset();
                 if (wasStreaming) {
-                    lastStreamStopReason = "TCP client disconnected";
-                    lastStreamStopMs = millis();
-                    mqttPublishState(true);
+                    rtspDisconnectCount++;
+                    recordStreamStop("TCP client disconnected", clients[i].profileIndex + 1);
                 }
+                clients[i].reset();
+                if (wasStreaming) mqttPublishState(true);
             }
             if (clients[i].client.connected() && !clients[i].streaming) {
                 if (millis() - clients[i].lastActivity > 30000UL) {
