@@ -7,3 +7,6 @@ tmp/
 
 # Python validation caches
 __pycache__/
+
+# Editor-generated asset metadata
+*.uid-zps
