@@ -214,8 +214,8 @@ format:
   API key `mic_format` to `1`.
 - **ICS-43434 / INMP441 (legacy):** standard Philips I2S; firmware default.
 
-SPH0645 support was tested on contributor hardware but has not yet been independently hardware-tested
-by the maintainer. ICS-43434 and INMP441 remain supported for existing builds.
+SPH0645 support was tested on contributor hardware. ICS-43434 and INMP441 remain supported for
+existing builds.
 
 The wrong format only produces incorrectly decoded audio; it does not change the wiring or damage
 the microphone. Incorrect wiring or 5 V power can still cause damage.
@@ -569,8 +569,8 @@ Current validation ranges include `sampleRate=8000..192000`, `bufferSize=256..81
 - No TLS or built-in user authentication for the Web UI/API.
 - mDNS depends on multicast support in your LAN and often does not work across VLANs, guest networks, or Docker bridge networks.
 - The firmware is primarily runtime-tested on Seeed Studio XIAO ESP32-C6 with ICS-43434; C3/S3/C5
-  builds are compile-verified in Arduino ESP32 core 3.3.8. SPH0645 support is contributor-tested but
-  has not been independently verified by the maintainer on physical hardware.
+  builds are compile-verified in Arduino ESP32 core 3.3.8. SPH0645 support was tested on contributor
+  hardware.
 
 ## Credits
 

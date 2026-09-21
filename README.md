@@ -91,7 +91,7 @@ option under **Audio -> Microphone format**:
 
 | Microphone | UI format | Recommendation | Validation |
 |---|---|---|---|
-| **Adafruit SPH0645LM4H** | MSB / left-justified | **Recommended for new builds** | Contributor-tested; not yet maintainer-tested |
+| **Adafruit SPH0645LM4H** | MSB / left-justified | **Recommended for new builds** | Tested on contributor hardware |
 | **ICS-43434** | Philips I2S (default) | Legacy NRND part | Maintainer-tested reference |
 | **INMP441** | Philips I2S (default) | Legacy NRND family; older order codes are EOL | User-reported compatible; see [discussion #25](https://github.com/Sukecz/esp32-birdnet-mic/discussions/25) |
 
