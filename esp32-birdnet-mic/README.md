@@ -11,8 +11,8 @@ and Home Assistant MQTT Discovery.
 - Latest firmware: **v1.23** (2026-09-17; C6 OTA smoke test passed, extended validation pending)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Runtime-tested board: Seeed Studio **XIAO ESP32-C6**
-- Microphones: **ICS-43434/INMP441** in default Philips I2S mode, or **Adafruit SPH0645LM4H** in
-  selectable MSB / left-justified mode
+- Recommended microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
+- Legacy microphones: **ICS-43434/INMP441** in default Philips I2S mode
 - User-facing overview and wiring: `../README.md`
 - Changelog: `CHANGELOG.md`
 - Web flasher: **https://esp32mic.msmeteo.cz**
@@ -188,8 +188,10 @@ Default hostname is unique per device, for example `esp32mic-a1b2c3`.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/connection-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="../assets/connection.png">
-  <img alt="Wiring diagram for the XIAO ESP32-C6 and ICS-43434 microphone" src="../assets/connection.png">
+  <img alt="Wiring diagram for a XIAO ESP32-C6 and I2S microphone; ICS-43434 module shown" src="../assets/connection.png">
 </picture>
+
+*ICS-43434 module shown; use the same connections for SPH0645LM4H and INMP441.*
 
 Use the same physical XIAO pin labels on every supported board. The underlying GPIO numbers differ
 by chip.
@@ -203,24 +205,20 @@ by chip.
 | **VDD** | 3V3 | - | - | - | - | Power |
 | **GND** | GND | - | - | - | - | Ground |
 
-The firmware configures I2S as master/RX, reads the left channel, then shifts/scales samples to
-16-bit PCM. Set `L/R` or `SEL` to the left channel, usually GND. The same physical wiring is used
-for ICS-43434, INMP441, and Adafruit SPH0645LM4H, but their sample alignment differs:
+Use the same physical wiring for all supported microphones and power them from **3.3 V**. Connect
+`L/R` or `SEL` to **GND** because the firmware reads the left channel. Then select the matching
+format:
 
-- **ICS-43434 / INMP441:** standard Philips I2S; firmware default.
-- **Adafruit SPH0645LM4H:** MSB / left-justified; select it in **Audio -> Microphone format** or set
+- **Adafruit SPH0645LM4H (recommended for new builds):** MSB / left-justified; select it in
+  **Audio -> Microphone format** or set
   API key `mic_format` to `1`.
+- **ICS-43434 / INMP441 (legacy):** standard Philips I2S; firmware default.
 
-Legacy INMP441 order codes received an EOL notice in 2018, while TDK currently marks both the
-INMP441 family and ICS-43434 as Production/NRND (not recommended for new designs). The SPH0645
-option therefore provides a currently available path for new builds. It
-was tested on contributor hardware and reported to behave like the existing microphones; the
-maintainer has not independently hardware-tested it yet.
+SPH0645 support was tested on contributor hardware but has not yet been independently hardware-tested
+by the maintainer. ICS-43434 and INMP441 remain supported for existing builds.
 
-Selecting the wrong UI format cannot electrically damage either microphone. The setting changes
-only the ESP32 I2S receiver's one-bit alignment (`bit_shift`); power, pin direction, BCLK/WS rates,
-and wiring remain unchanged. A mismatch produces incorrectly decoded audio. Supplying the wrong
-voltage or wiring a module incorrectly is a separate electrical risk; use 3.3 V only.
+The wrong format only produces incorrectly decoded audio; it does not change the wiring or damage
+the microphone. Incorrect wiring or 5 V power can still cause damage.
 
 Firmware v1.21 outputs MCLK at 256 times the configured sample rate. This allows experimental
 PCM1808 ADC hardware to run in slave I2S mode with its left input captured by the existing mono

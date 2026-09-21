@@ -59,16 +59,16 @@ Default build notes:
 
 ## Wiring
 
-Tested build targets: **Seeed Studio XIAO ESP32-C3/S3/C5/C6**. Runtime hardware validation is still
-primarily on **XIAO ESP32-C6** + **ICS-43434** I2S microphone. Adafruit SPH0645 support was tested
-on contributor hardware; the maintainer does not currently have that module for an independent
-physical test.
+For a new build, use the **Adafruit SPH0645LM4H**. It uses the same wiring shown below as the older
+ICS-43434 and INMP441 microphones; only the microphone-format setting is different.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/connection-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/connection.png">
-  <img alt="Wiring diagram for the XIAO ESP32-C6 and ICS-43434 microphone" src="assets/connection.png">
+  <img alt="Wiring diagram for a XIAO ESP32-C6 and I2S microphone; ICS-43434 module shown" src="assets/connection.png">
 </picture>
+
+*ICS-43434 module shown; use the same connections for SPH0645LM4H and INMP441.*
 
 Use the same physical XIAO pin labels on every supported board. The underlying GPIO numbers differ
 by chip.
@@ -85,22 +85,18 @@ Firmware **v1.11 or newer is required for the C3/S3/C5 GPIO mappings below**. Ve
 | **VDD** | 3V3 | - | - | - | - | Power |
 | **GND** | GND | - | - | - | - | Ground |
 
-All supported digital microphones use the same BCLK/WS/DOUT pins and must be powered from **3.3 V**.
-If the module exposes `L/R` or `SEL`, set it to the left channel, usually GND, because the firmware
-reads the left I2S channel. Select the connected device under **Audio -> Microphone format**:
+All supported microphones use the same wiring and **3.3 V** power. Connect `L/R` or `SEL` to
+**GND** so the microphone uses the left channel read by the firmware. Then choose the matching
+option under **Audio -> Microphone format**:
 
-| Microphone | UI format | Supply status | Validation |
+| Microphone | UI format | Recommendation | Validation |
 |---|---|---|---|
-| **ICS-43434** | Philips I2S (default) | Legacy; TDK lists it as Production/NRND (not recommended for new designs) | Maintainer-tested reference |
-| **INMP441** | Philips I2S (default) | Legacy order codes received a 2018 EOL notice; TDK now lists the family as Production/NRND | User-reported compatible; see [discussion #25](https://github.com/Sukecz/esp32-birdnet-mic/discussions/25) |
-| **Adafruit SPH0645LM4H** | MSB / left-justified | Currently sold alternative for new builds | Contributor-tested; not yet maintainer-tested |
+| **Adafruit SPH0645LM4H** | MSB / left-justified | **Recommended for new builds** | Contributor-tested; not yet maintainer-tested |
+| **ICS-43434** | Philips I2S (default) | Legacy NRND part | Maintainer-tested reference |
+| **INMP441** | Philips I2S (default) | Legacy NRND family; older order codes are EOL | User-reported compatible; see [discussion #25](https://github.com/Sukecz/esp32-birdnet-mic/discussions/25) |
 
-The SPH0645 option is provided because legacy INMP441 order codes reached EOL and TDK marks both
-older families NRND, making them poor choices for a new design even where stock is available. Choosing the wrong
-format in the UI **cannot electrically damage the microphone**: it changes only the ESP32 receiver's
-bit alignment, not power, GPIO direction, or clock frequency. The audio will instead be decoded
-incorrectly and may sound distorted, shifted, or unusually quiet. Incorrect wiring or applying 5 V
-to a microphone module can still cause damage.
+Choosing the wrong format only makes the audio decode incorrectly; it does not change the wiring or
+damage the microphone. Incorrect wiring or 5 V power can still cause damage.
 
 Firmware v1.21 also outputs a 256-fs MCLK on D7 for experimental PCM1808 ADC setups. Configure the
 PCM1808 for slave I2S mode and connect the microphone path to its left input; RTSP output remains
@@ -165,7 +161,7 @@ BirdNET-Pi UDP compatibility by handling RTCP and RTP metadata expected by ffmpe
 | Seeed Studio XIAO ESP32-S3 | 1 | Supported XIAO target board | [Seeed Studio](https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html) |
 | Seeed Studio XIAO ESP32-C5 | 1 | Supported XIAO target board | [Seeed Studio](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C5-p-6609.html) |
 | Seeed Studio XIAO ESP32-C6 | 1 | Supported XIAO target board | [Seeed Studio](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html) |
-| MEMS I2S microphone **Adafruit SPH0645LM4H** | 1 | Preferred available option for new builds; select MSB / left-justified in the Web UI | [Adafruit](https://www.adafruit.com/product/3421) |
+| MEMS I2S microphone **Adafruit SPH0645LM4H** | 1 | **Recommended for new builds**; select MSB / left-justified in the Web UI | [Adafruit](https://www.adafruit.com/product/3421) |
 | MEMS I2S microphone **ICS-43434** | 1 | Tested legacy reference; NRND | [TDK product status](https://product.tdk.com/en/search/sw_piezo/mic/mems-mic/info?part_no=ICS-43434) |
 | MEMS I2S microphone **INMP441** | 1 | Legacy order codes reached EOL; current family listing is NRND; reported compatible with Philips I2S mode | [TDK product status](https://product.tdk.com/en/search/sw_piezo/mic/mems-mic/info?part_no=INMP441) |
 | Shielded cable, 5+ core | Optional | I2S mic needs 5 conductors: 3V3, GND, BCLK, LRCLK/WS, and SD/DOUT. A 6-core cable is a good practical choice for spare/shield handling. | [AliExpress](https://www.aliexpress.com/item/1005010375728700.html) |
@@ -219,10 +215,8 @@ The firmware includes a configurable high-pass filter to reduce low-frequency ru
   [XIAO ESP32-C6](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html).
 - Web flasher auto-selects firmware by ESP chip family. It cannot distinguish board variants that
   share the same chip family.
-- ICS-43434 and INMP441 use the default Philips I2S mode; both are legacy NRND families, and older
-  INMP441 order codes received an EOL notice.
-- Adafruit SPH0645LM4H uses the selectable MSB / left-justified mode and is the available option for
-  new builds. Its code path is contributor-tested but not yet maintainer-tested on physical hardware.
+- Adafruit SPH0645LM4H is recommended for new builds. Select its MSB / left-justified mode.
+- ICS-43434 and INMP441 use the default Philips I2S mode and are legacy NRND families.
 - Other ESP32 boards or I2S microphones may work, but may need pin or I2S format changes.
 
 ## Arduino IDE Build Size

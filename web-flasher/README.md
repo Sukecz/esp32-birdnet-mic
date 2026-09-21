@@ -5,9 +5,9 @@ ESP32-C3/S3/C5/C6) directly from the browser with ESP Web Tools.
 
 Current images: **firmware 1.23** (2026-09-17; C6 OTA smoke test passed, extended validation pending).
 
-The firmware supports a persisted microphone-format choice for Adafruit SPH0645
-(MSB/left-justified) alongside the legacy ICS-43434/INMP441 Philips-I2S mode. Firmware artifacts must
-match the selected board family.
+For new builds, the recommended microphone is **Adafruit SPH0645LM4H** with the selectable
+MSB/left-justified format. Legacy ICS-43434/INMP441 microphones remain supported in the default
+Philips-I2S mode. Firmware artifacts must match the selected board family.
 
 ESP Web Tools automatically selects the `ESP32-C3`, `ESP32-S3`, `ESP32-C5`, or `ESP32-C6` manifest
 entry based on the connected chip. It cannot distinguish between different boards with the same chip
@@ -80,13 +80,11 @@ Firmware 1.9.2 and newer includes an Arduino IDE build-size fix: the
 `esp32-birdnet-mic/build_opt.h` file disables unused C++ exception/unwind metadata and keeps the
 tight default 1.2 MB app partition on XIAO ESP32-C3/C6 below the limit without removing features.
 
-The default **Philips I2S** mode supports the maintainer-tested **ICS-43434** and user-reported
-**INMP441** with the same physical XIAO pins (`SCK` -> D3, `WS` -> D1, `SD` -> D2). Legacy INMP441
-order codes received an EOL notice, and TDK currently marks both older families Production/NRND, so
-new builds can select **Adafruit SPH0645** and its
-MSB/left-justified format in the device Web UI. That path was contributor-tested but is not yet
-maintainer-tested on physical hardware. A wrong format selection affects decoded audio only; it
-does not change power or signal direction and cannot itself damage the microphone.
+All supported microphones use the same physical wiring: `SCK` -> D3, `WS` -> D1, `SD` -> D2,
+3.3 V power, and `L/R` or `SEL` -> GND. For the recommended **Adafruit SPH0645LM4H**, select
+**MSB / left-justified** in the device Web UI. ICS-43434 and INMP441 use the default
+**Philips I2S** setting. Choosing the wrong format affects decoded audio only; incorrect wiring or
+5 V power can damage the microphone.
 
 Firmware 1.21 also provides a 256-fs MCLK on D7 for experimental PCM1808 ADC testing. Existing
 ICS-43434 and INMP441 installations leave D7 unconnected and require no wiring change.
