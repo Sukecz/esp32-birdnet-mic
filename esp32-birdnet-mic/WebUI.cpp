@@ -1281,7 +1281,8 @@ static void httpSet() {
     else if (key == "mic_format") {
         handled = true;
         uint8_t v;
-        if (argToUChar(v) && v <= 1) {
+        // 0 = Philips I2S, 1 = MSB I2S, 2 = PDM
+        if (argToUChar(v) && v <= 2) {
             applied = applyAndSaveMicFormat(v);
         }
     }
