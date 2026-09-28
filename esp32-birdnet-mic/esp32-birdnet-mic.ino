@@ -2631,6 +2631,32 @@ bool setup_i2s_driver() {
         return false;
     }
 
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(currentSampleRate),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
+        .gpio_cfg = {
+            .mclk = (gpio_num_t)I2S_MCLK_PIN,
+            .bclk = (gpio_num_t)I2S_BCLK_PIN,
+            .ws = (gpio_num_t)I2S_LRCLK_PIN,
+            .dout = I2S_GPIO_UNUSED,
+            .din = (gpio_num_t)I2S_DOUT_PIN,
+            .invert_flags = {
+                .mclk_inv = false,
+                .bclk_inv = false,
+                .ws_inv = false,
+            },
+        },
+    };
+    // PCM1808 slave mode accepts 256/384/512 fs. Mics without an MCLK input
+    // leave D7 unconnected and continue to use the same BCLK/WS/SD wiring.
+    std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    if (micFormat == MIC_FORMAT_MSB) {
+        std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(
+            I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO);
+        std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    }
+
     if (micFormatIsPdm(micFormat)) {
         // The PDM receiver decimates the 1-bit stream in hardware and hands
         // back ready 16-bit PCM, so this path needs no bit shift downstream.
@@ -2648,32 +2674,6 @@ bool setup_i2s_driver() {
 
         err = i2s_channel_init_pdm_rx_mode(i2s_rx_handle, &pdm_cfg);
     } else {
-        i2s_std_config_t std_cfg = {
-            .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(currentSampleRate),
-            .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
-            .gpio_cfg = {
-                .mclk = (gpio_num_t)I2S_MCLK_PIN,
-                .bclk = (gpio_num_t)I2S_BCLK_PIN,
-                .ws = (gpio_num_t)I2S_LRCLK_PIN,
-                .dout = I2S_GPIO_UNUSED,
-                .din = (gpio_num_t)I2S_DOUT_PIN,
-                .invert_flags = {
-                    .mclk_inv = false,
-                    .bclk_inv = false,
-                    .ws_inv = false,
-                },
-            },
-        };
-        // PCM1808 slave mode accepts 256/384/512 fs. Mics without an MCLK input
-        // leave D7 unconnected and continue to use the same BCLK/WS/SD wiring.
-        std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-        std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
-        if (micFormat == MIC_FORMAT_MSB) {
-            std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(
-                I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO);
-            std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
-        }
-
         err = i2s_channel_init_std_mode(i2s_rx_handle, &std_cfg);
     }
     if (err != ESP_OK) {
