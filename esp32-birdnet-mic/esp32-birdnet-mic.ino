@@ -2,6 +2,7 @@
 #include <esp_wifi.h>
 #include <WiFiManager.h>
 #include "driver/i2s_std.h"
+#include "driver/i2s_pdm.h"
 #include <ArduinoOTA.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
@@ -122,6 +123,24 @@ static constexpr int I2S_LRCLK_PIN = 1;
 static constexpr int I2S_DOUT_PIN = 2;
 #endif
 
+// PDM microphones (M5Stack SPM1423, MSM261 and similar) are two-wire: they use
+// CLK and DATA only, and none of the BCLK/WS/SD trio above. The M5Stack AtomS3U
+// carries an SPM1423 on dedicated pins, so its mic needs no wiring at all.
+// Boards without an onboard PDM mic reuse the BCLK and SD pads instead, keeping
+// the physical wiring positions unchanged when swapping a module in.
+// The ESP32 core ships no separate AtomS3U variant, so AtomS3U builds use the
+// m5stack_atoms3 FQBN and land on this same define.
+#if defined(ARDUINO_M5STACK_ATOMS3) || defined(ARDUINO_M5Stack_ATOMS3)
+// M5Stack's AtomS3U pinmap table lists these under "MIC_CLK | MIC_DATA" in the
+// opposite column order; this assignment matches M5's own ESPHome config
+// (i2s_lrclk_pin GPIO39, i2s_din_pin GPIO38).
+static constexpr int I2S_PDM_CLK_PIN = 39;  // AtomS3U SPM1423 clock (G39)
+static constexpr int I2S_PDM_DIN_PIN = 38;  // AtomS3U SPM1423 data  (G38)
+#else
+static constexpr int I2S_PDM_CLK_PIN = I2S_BCLK_PIN;
+static constexpr int I2S_PDM_DIN_PIN = I2S_DOUT_PIN;
+#endif
+
 // -- Servers
 WiFiServer rtspServer(8554);
 WiFiClient rtspClient;
@@ -140,7 +159,8 @@ enum StreamTarget : uint8_t {
 
 enum MicFormat : uint8_t {
     MIC_FORMAT_PHILIPS = 0,  // ICS-43434 / INMP441
-    MIC_FORMAT_MSB = 1       // Adafruit SPH0645LM4H
+    MIC_FORMAT_MSB = 1,      // Adafruit SPH0645LM4H
+    MIC_FORMAT_PDM = 2       // M5Stack SPM1423 / MSM261, two-wire PDM
 };
 
 static constexpr uint8_t DEFAULT_MIC_FORMAT = MIC_FORMAT_PHILIPS;
@@ -195,8 +215,18 @@ struct ClientSession {
     }
 };
 
+// PDM capture differs from the two I2S formats in wiring, driver mode and
+// sample width, so several paths branch on it.
+static inline bool micFormatIsPdm(uint8_t format) {
+    return format == MIC_FORMAT_PDM;
+}
+
 static const char* micFormatName(uint8_t format) {
-    return format == MIC_FORMAT_MSB ? "SPH0645/MSB" : "ICS43434/Philips";
+    switch (format) {
+        case MIC_FORMAT_MSB: return "SPH0645/MSB";
+        case MIC_FORMAT_PDM: return "SPM1423/PDM";
+        default:             return "ICS43434/Philips";
+    }
 }
 
 ClientSession clients[MAX_CLIENTS];
@@ -233,6 +263,13 @@ unsigned long lastRTSPActivity = 0;
 
 // -- Buffers
 int32_t* i2s_32bit_buffer = nullptr;
+// Sample width the capture buffer is currently allocated for. The producer uses
+// this rather than reading micFormat directly: a format change updates
+// micFormat before the producer is stopped, so a live read could size a capture
+// for the new format while the buffer is still allocated for the old one. Both
+// allocation sites run with the producer stopped, so this never changes
+// underneath a capture in flight.
+static size_t i2sCaptureSampleBytes = sizeof(int32_t);
 int16_t* i2s_16bit_buffer = nullptr;
 int16_t* i2s_16bit_network_buffer = nullptr;
 uint8_t* rtpPacketScratch = nullptr;
@@ -2038,7 +2075,7 @@ void loadAudioSettings() {
         i2sShiftBits = 12;
         settingsRepaired = true;
     }
-    if (micFormat > MIC_FORMAT_MSB) {
+    if (micFormat > MIC_FORMAT_PDM) {
         micFormat = DEFAULT_MIC_FORMAT;
         settingsRepaired = true;
     }
@@ -2322,10 +2359,12 @@ bool applyAudioConfig(uint32_t newRate, float newGain, uint16_t newBuffer, uint8
     return false;
 }
 
-// Change only the receiver's sample alignment. This does not change GPIO
-// direction, voltage, BCLK frequency, WS frequency, or microphone power.
+// Change the receiver's input format. Switching between the two I2S formats
+// changes only bit alignment, leaving GPIO direction, voltage, BCLK frequency,
+// WS frequency, and microphone power untouched. Switching to or from PDM also
+// changes which pins the driver drives, since PDM uses its own CLK/DATA pair.
 bool applyMicFormatConfig(uint8_t newFormat) {
-    if (newFormat > MIC_FORMAT_MSB) return false;
+    if (newFormat > MIC_FORMAT_PDM) return false;
     if (newFormat == micFormat) return true;
 
     uint8_t oldFormat = micFormat;
@@ -2356,7 +2395,13 @@ bool restartI2S() {
     if (i2s_16bit_network_buffer) { free(i2s_16bit_network_buffer); i2s_16bit_network_buffer = nullptr; }
     if (rtpPacketScratch) { free(rtpPacketScratch); rtpPacketScratch = nullptr; }
 
-    i2s_32bit_buffer = (int32_t*)malloc(currentBufferSize * sizeof(int32_t));
+    // PDM delivers 16-bit samples where the I2S formats deliver 32-bit ones,
+    // so the capture buffer only needs half the space in PDM mode. Every path
+    // that changes the format reallocates through here, so this stays in step.
+    const size_t captureSampleBytes =
+        micFormatIsPdm(micFormat) ? sizeof(int16_t) : sizeof(int32_t);
+    i2sCaptureSampleBytes = captureSampleBytes;
+    i2s_32bit_buffer = (int32_t*)malloc(currentBufferSize * captureSampleBytes);
     i2s_16bit_buffer = (int16_t*)malloc(currentBufferSize * sizeof(int16_t));
     i2s_16bit_network_buffer = (int16_t*)malloc(currentBufferSize * sizeof(int16_t));
     rtpPacketScratch = (uint8_t*)malloc(16 + (size_t)currentBufferSize * sizeof(int16_t));
@@ -2441,8 +2486,13 @@ void audioProducerTask(void* /*arg*/) {
 
     while (!audioProducerStopRequested) {
         size_t bytesRead = 0;
+        // PDM RX returns 16-bit samples where the I2S formats return 32-bit
+        // ones, and the capture buffer is allocated to match. Follow that
+        // allocation so the read can never outrun the buffer.
+        const size_t sampleBytes = i2sCaptureSampleBytes;
+        const bool pdmMode = (sampleBytes == sizeof(int16_t));
         esp_err_t result = i2s_channel_read(i2s_rx_handle, i2s_32bit_buffer,
-                                            currentBufferSize * sizeof(int32_t),
+                                            currentBufferSize * sampleBytes,
                                             &bytesRead, 100);
         if (audioProducerStopRequested) break;
 
@@ -2452,7 +2502,7 @@ void audioProducerTask(void* /*arg*/) {
             continue;
         }
 
-        int samplesRead = bytesRead / sizeof(int32_t);
+        int samplesRead = bytesRead / sampleBytes;
         if (samplesRead <= 0) continue;
 
         // If HPF params changed dynamically, recompute in the producer context.
@@ -2462,8 +2512,13 @@ void audioProducerTask(void* /*arg*/) {
 
         bool clipped = false;
         float peakAbs = 0.0f;
+        const int16_t* pdmSamples = (const int16_t*)i2s_32bit_buffer;
         for (int i = 0; i < samplesRead; i++) {
-            float sample = (float)(i2s_32bit_buffer[i] >> i2sShiftBits);
+            // PDM samples arrive as finished 16-bit PCM. i2sShiftBits exists to
+            // right-align the 32-bit I2S formats and must not be applied here:
+            // a typical shift of 12 would drive every PDM sample to zero.
+            float sample = pdmMode ? (float)pdmSamples[i]
+                                   : (float)(i2s_32bit_buffer[i] >> i2sShiftBits);
             if (highpassEnabled) sample = hpf.process(sample);
             float amplified = sample * currentGainFactor;
             float aabs = fabsf(amplified);
@@ -2602,7 +2657,25 @@ bool setup_i2s_driver() {
         std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
     }
 
-    err = i2s_channel_init_std_mode(i2s_rx_handle, &std_cfg);
+    if (micFormatIsPdm(micFormat)) {
+        // The PDM receiver decimates the 1-bit stream in hardware and hands
+        // back ready 16-bit PCM, so this path needs no bit shift downstream.
+        // Fields are assigned rather than brace-initialized because din and
+        // dins[] share an anonymous union in i2s_pdm_rx_gpio_config_t.
+        i2s_pdm_rx_clk_config_t pdm_clk = I2S_PDM_RX_CLK_DEFAULT_CONFIG(currentSampleRate);
+        i2s_pdm_rx_slot_config_t pdm_slot = I2S_PDM_RX_SLOT_PCM_FMT_DEFAULT_CONFIG(
+            I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+        i2s_pdm_rx_config_t pdm_cfg = {};
+        pdm_cfg.clk_cfg = pdm_clk;
+        pdm_cfg.slot_cfg = pdm_slot;
+        pdm_cfg.gpio_cfg.clk = (gpio_num_t)I2S_PDM_CLK_PIN;
+        pdm_cfg.gpio_cfg.din = (gpio_num_t)I2S_PDM_DIN_PIN;
+        pdm_cfg.gpio_cfg.invert_flags.clk_inv = 0;
+
+        err = i2s_channel_init_pdm_rx_mode(i2s_rx_handle, &pdm_cfg);
+    } else {
+        err = i2s_channel_init_std_mode(i2s_rx_handle, &std_cfg);
+    }
     if (err != ESP_OK) {
         simplePrintln("I2S pin/mode setup failed: " + String(esp_err_to_name(err)));
         i2s_del_channel(i2s_rx_handle);
@@ -2618,13 +2691,17 @@ bool setup_i2s_driver() {
         return false;
     }
 
+    String pinSummary = micFormatIsPdm(micFormat)
+        ? ("pins CLK/DATA " + String(I2S_PDM_CLK_PIN) + "/" + String(I2S_PDM_DIN_PIN))
+        : ("pins MCLK/BCLK/WS/SD " +
+           String(I2S_MCLK_PIN) + "/" + String(I2S_BCLK_PIN) + "/" +
+           String(I2S_LRCLK_PIN) + "/" + String(I2S_DOUT_PIN));
     simplePrintln("I2S ready: " + String(currentSampleRate) + "Hz, gain " +
                   String(currentGainFactor, 1) + ", buffer " + String(currentBufferSize) +
-                  ", shiftBits " + String(i2sShiftBits) +
+                  ", shiftBits " + (micFormatIsPdm(micFormat) ? String("n/a (PDM)")
+                                                              : String(i2sShiftBits)) +
                   ", micFormat " + String(micFormatName(micFormat)) +
-                  ", pins MCLK/BCLK/WS/SD " +
-                  String(I2S_MCLK_PIN) + "/" + String(I2S_BCLK_PIN) + "/" +
-                  String(I2S_LRCLK_PIN) + "/" + String(I2S_DOUT_PIN));
+                  ", " + pinSummary);
     if (!startAudioProducer()) {
         i2s_channel_disable(i2s_rx_handle);
         i2s_del_channel(i2s_rx_handle);
@@ -3236,7 +3313,13 @@ void setup() {
     loadAudioSettings();
 
     // Allocate buffers with current size
-    i2s_32bit_buffer = (int32_t*)malloc(currentBufferSize * sizeof(int32_t));
+    // PDM delivers 16-bit samples where the I2S formats deliver 32-bit ones,
+    // so the capture buffer only needs half the space in PDM mode. Every path
+    // that changes the format reallocates through here, so this stays in step.
+    const size_t captureSampleBytes =
+        micFormatIsPdm(micFormat) ? sizeof(int16_t) : sizeof(int32_t);
+    i2sCaptureSampleBytes = captureSampleBytes;
+    i2s_32bit_buffer = (int32_t*)malloc(currentBufferSize * captureSampleBytes);
     i2s_16bit_buffer = (int16_t*)malloc(currentBufferSize * sizeof(int16_t));
     i2s_16bit_network_buffer = (int16_t*)malloc(currentBufferSize * sizeof(int16_t));
     rtpPacketScratch = (uint8_t*)malloc(16 + (size_t)currentBufferSize * sizeof(int16_t));
