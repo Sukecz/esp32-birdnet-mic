@@ -135,6 +135,10 @@ extern const char* FW_OTA_ARTIFACT_STR;
 extern bool timeSynced;
 extern unsigned long lastTimeSyncSuccess;
 extern int32_t timeOffsetMinutes;
+extern uint8_t timeZoneMode;
+extern String customTimeZoneRule;
+extern bool isValidCustomTimeZoneRule(const String& rule);
+extern int32_t effectiveTimeOffsetMinutes();
 extern bool timeSyncEnabled;
 extern bool mdnsEnabled;
 extern bool mdnsRunning;
@@ -880,6 +884,9 @@ static void httpStatus() {
     json += "\"local_time\":\"" + jsonEscape(localTimeStr) + "\",";
     json += "\"utc_time\":\"" + jsonEscape(utcTimeStr) + "\",";
     json += "\"time_offset_min\":" + String(timeOffsetMinutes) + ",";
+    json += "\"effective_time_offset_min\":" + String(effectiveTimeOffsetMinutes()) + ",";
+    json += "\"time_zone_mode\":" + String((uint32_t)timeZoneMode) + ",";
+    json += "\"time_zone_rule\":\"" + jsonEscape(customTimeZoneRule) + "\",";
     json += "\"mdns_enabled\":" + String(mdnsEnabled?"true":"false") + ",";
     json += "\"mqtt_enabled\":" + String(mqttEnabled?"true":"false") + ",";
     json += "\"mqtt_connected\":" + String(mqttConnected?"true":"false") + ",";
@@ -1350,6 +1357,28 @@ static void httpSet() {
         handled = true;
         int32_t v;
         if (argToInt(v) && v >= -720 && v <= 840) { timeOffsetMinutes = v; configureTimeService(timeSyncEnabled); saveAudioSettings(); applied = true; }
+    }
+    else if (key == "time_zone_mode") {
+        handled = true;
+        int32_t v;
+        if (argToInt(v) && v >= 0 && v <= 9 &&
+            (v != 9 || isValidCustomTimeZoneRule(customTimeZoneRule))) {
+            timeZoneMode = (uint8_t)v;
+            configureTimeService(timeSyncEnabled);
+            saveAudioSettings();
+            applied = true;
+        }
+    }
+    else if (key == "time_zone_rule") {
+        handled = true;
+        String v = web.arg("value");
+        if (!v.length() && timeZoneMode != 9) v = "UTC0";
+        if (isValidCustomTimeZoneRule(v) || (v == "UTC0" && timeZoneMode != 9)) {
+            customTimeZoneRule = v;
+            if (timeZoneMode == 9) configureTimeService(timeSyncEnabled);
+            saveAudioSettings();
+            applied = true;
+        }
     }
     else if (key == "time_sync") {
         handled = true;

@@ -8,10 +8,10 @@ timeouts and write failures were all zero. This is a short device-side smoke tes
 Home Assistant entity inspection, controlled failure recovery and long-run
 streaming validation remain pending.
 
-## Prepared release notes
+## Release notes
 
-The community-facing release notes are in
-[release-notes/1.23.md](release-notes/1.23.md). Update the validation paragraph
+The current community-facing release notes are in
+[release-notes/1.24.md](release-notes/1.24.md). Update the validation paragraph
 with any subsequent test results.
 
 ## Build and local checks
@@ -46,7 +46,7 @@ completed upload was rolled back. Do not repeat uploads blindly. After both
 actions, rerun the read-only check with the intended published version:
 
 ```sh
-python3 tools/verify_published_release.py 1.23
+python3 tools/verify_published_release.py 1.24
 ```
 
 The check downloads public artifacts over the actual HTTP OTA route and compares all

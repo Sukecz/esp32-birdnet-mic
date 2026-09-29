@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.24 - 2026-09-29
+- Time zones: add automatic daylight-saving rules for Central Europe, New Zealand mainland, UK, major US zones, and Sydney/Melbourne. Manual UTC offsets remain available, including quarter-hour zones, along with a custom annual POSIX rule for other regions.
+- Scheduling: local stream times and deep-sleep wake calculations follow the selected zone across daylight-saving transitions. Existing installations keep their previous manual offset until a location is selected.
+- Web UI: replace the technical time-zone controls with a simple location selector; show manual offset or custom rule fields only when chosen.
+- Validation: local C3/S3/C5/C6 builds and schedule/UI tests passed. A C6 test device synchronized time and streamed with Prague selected; physical transition-day validation and long-run testing remain pending.
+
 ## 1.23 - 2026-09-17
 - Microphones: add a persisted Web UI/API choice between the legacy ICS-43434/INMP441 Philips I2S
   alignment and Adafruit SPH0645 MSB/left-justified alignment. Invalid stored/API values are

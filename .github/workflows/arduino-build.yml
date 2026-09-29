@@ -20,6 +20,8 @@ jobs:
           /tmp/discovery-test
           g++ -std=c++11 -Wall -Wextra -Werror -Itests/stubs tests/discovery_client_test.cpp -o /tmp/discovery-client-test
           /tmp/discovery-client-test
+          g++ -std=c++11 -Wall -Wextra -Werror tests/time_zone_schedule_test.cpp -o /tmp/time-zone-schedule-test
+          /tmp/time-zone-schedule-test
 
   compile:
     needs: ota-contract

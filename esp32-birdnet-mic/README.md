@@ -8,7 +8,7 @@ Arduino firmware for Seeed XIAO ESP32 I2S microphones that serve **mono 16-bit P
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Latest firmware: **v1.23** (2026-09-17; C6 OTA smoke test passed, extended validation pending)
+- Latest firmware: **v1.24** (2026-09-29; C6 OTA smoke test passed, extended validation pending)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Runtime-tested board: Seeed Studio **XIAO ESP32-C6**
 - Recommended microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
@@ -272,7 +272,7 @@ The Web UI runs on port **80** and includes:
 - Audio: microphone format, sample rate, gain, buffer size, I2S shift, high-pass filter, signal level.
 - Audio API diagnostics: producer state, ring-buffer capacity/chunks/drops/flushes, I2S errors,
   and RTSP write stalls/timeouts.
-- Time & Network: NTP state, time offset, mDNS, stream schedule, optional deep sleep, Wi-Fi actions.
+- Time & Network: NTP state, microphone location/time zone, mDNS, stream schedule, optional deep sleep, Wi-Fi actions.
 - Reliability: auto-recovery, threshold mode, check interval, scheduled reset.
 - Thermal: current/peak temperature, shutdown limit, protection latch, acknowledgement.
 - MQTT & Home Assistant: broker settings, publish interval, discovery republish.
@@ -338,6 +338,12 @@ BirdNET-Go or BirdNET-Pi.
 - Hostname can be changed via API: `key=mdns_hostname&value=esp32mic-garden`.
 - mDNS often fails on isolated/guest Wi-Fi or inside Docker containers; use device IP in those cases.
 - NTP sync runs on boot, retries every hour until synced, then refreshes every 6 hours.
+- Time zone can use a manual UTC offset (including 15-minute increments), automatic presets for Central Europe, New Zealand mainland, UK, US daylight-saving zones, and Sydney/Melbourne, or a custom POSIX daylight-saving rule. Existing settings stay on manual offset after an update.
+- In the Web UI, choose the microphone's location. The manual UTC offset or advanced custom rule appears only when that option is selected.
+- NTP sets the clock; the selected time zone controls local timestamps and schedule windows. The API uses `time_zone_mode=0..9`, `time_zone_rule=<POSIX rule>` for mode 9, and reports `effective_time_offset_min`. For example, US Eastern is `EST5EDT,M3.2.0/2,M11.1.0/2`.
+- Save a valid custom rule before selecting mode 9. Custom rules use recurring `Mmonth.week.weekday` start/end dates.
+- After leaving mode 9, clearing the custom rule field restores the default `UTC0` value.
+- POSIX rules cover recurring annual transitions. Some regions have irregular or changing rules; check the displayed local time after selection and update the rule if local law changes.
 - If time is unavailable, logs fall back to uptime timestamps.
 
 ### Stream Schedule And Deep Sleep
@@ -348,6 +354,7 @@ Stream schedule is configured in Time & Network.
 - If time is invalid, schedule policy is fail-open: streaming stays allowed.
 - If start and stop are equal, the window is explicitly empty and streaming is blocked.
 - Optional deep sleep can run outside the stream window only when time is valid.
+- Deep-sleep wake timing uses the next local schedule start across daylight-saving changes; the clock may still need NTP after waking.
 - Deep sleep is blocked during startup grace, with active clients, or without valid time.
 
 API keys:
@@ -517,6 +524,10 @@ wifiTxDbm        Wi-Fi TX power
 mdnsEn           mDNS enable
 timeSyncEn       NTP enable
 timeOffset       Local offset in minutes
+timeZone         0 = fixed offset, 1 = Central Europe, 2 = New Zealand,
+                 3 = UK, 4..7 = US Eastern/Central/Mountain/Pacific,
+                 8 = Australia Eastern, 9 = custom POSIX rule
+timeZoneRule     Custom POSIX daylight-saving rule (mode 9)
 strSchedEn       Stream schedule enable
 strSchStart      Stream window start minute
 strSchStop       Stream window stop minute

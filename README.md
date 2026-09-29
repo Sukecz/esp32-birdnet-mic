@@ -7,7 +7,7 @@
 Seeed XIAO ESP32 network microphone for **BirdNET-Go** and **BirdNET-Pi**. It reads an I2S MEMS
 microphone and serves mono **16-bit PCM/L16** audio over **RTSP**.
 
-- Latest firmware: **v1.23** (2026-09-17; C6 OTA smoke test passed, extended validation pending)
+- Latest firmware: **v1.24** (2026-09-29; C6 OTA smoke test passed, extended validation pending)
 - Target sketch: `esp32-birdnet-mic`
 - Web flasher: **https://esp32mic.msmeteo.cz** (Chrome/Edge desktop, USB-C data cable)
 - Manual OTA firmware: `manual-ota-firmware/firmware-app-<board>.bin` (`firmware-app.bin` remains the C6 alias)
@@ -142,6 +142,7 @@ If VLC/ffplay works, use the same RTSP URL in BirdNET-Go or BirdNET-Pi.
 - Audio/API diagnostics for I2S errors, ring-buffer drops, and RTSP write stalls/timeouts.
 - MQTT telemetry and Home Assistant MQTT Discovery.
 - Stream schedule by local time, including overnight windows.
+- Manual UTC offset or automatic daylight-saving rules for common regions, plus a custom POSIX rule.
 - Optional deep sleep outside the stream schedule window.
 - Auto-recovery, scheduled reset, CPU frequency control.
 - Thermal protection with persistent latch and manual acknowledgement.

@@ -3,7 +3,7 @@
 Static page for flashing the birdnet-esp32-rtsp-mic firmware (BirdNET-Go / BirdNET-Pi, Seeed XIAO
 ESP32-C3/S3/C5/C6) directly from the browser with ESP Web Tools.
 
-Current images: **firmware 1.23** (2026-09-17; C6 OTA smoke test passed, extended validation pending).
+Current images: **firmware 1.24** (2026-09-29; C6 OTA smoke test passed, extended validation pending).
 
 For new builds, the recommended microphone is **Adafruit SPH0645LM4H** with the selectable
 MSB/left-justified format. Legacy ICS-43434/INMP441 microphones remain supported in the default

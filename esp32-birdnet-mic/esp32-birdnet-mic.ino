@@ -7,6 +7,7 @@
 #include <ESPmDNS.h>
 #include <PubSubClient.h>
 #include <time.h>
+#include <stdlib.h>
 #include <math.h>
 #include <esp_mac.h>
 #include <esp_sleep.h>
@@ -18,11 +19,12 @@
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
 #include "WebUI.h"
+#include "TimeZoneSchedule.h"
 #include "DiscoveryProgress.h"
 #include "DiscoveryClient.h"
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi) ==================
-#define FW_VERSION "1.23"
+#define FW_VERSION "1.24"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 // Build timestamp for diagnostics (compile time)
@@ -75,6 +77,8 @@ bool timeSynced = false;                 // true after the first successful NTP 
 unsigned long lastTimeSyncAttempt = 0;   // millis() of last attempt
 unsigned long lastTimeSyncSuccess = 0;   // millis() of last success
 int32_t timeOffsetMinutes = 0;           // user-set offset applied to displayed time
+uint8_t timeZoneMode = TIME_ZONE_FIXED;
+String customTimeZoneRule = "UTC0";
 
 // mDNS
 String mdnsHostname = "esp32mic"; // results in <hostname>.local
@@ -1439,10 +1443,42 @@ static bool hasValidTime() {
 // With enableNtp=false we keep local offset handling, but no network sync is configured.
 void configureTimeService(bool enableNtp) {
     if (enableNtp) {
-        configTime(timeOffsetMinutes * 60, 0, NTP_SERVER_1, NTP_SERVER_2);
+        configTime(0, 0, NTP_SERVER_1, NTP_SERVER_2);
     } else {
-        configTime(timeOffsetMinutes * 60, 0, nullptr, nullptr);
+        configTime(0, 0, nullptr, nullptr);
     }
+    const char* rule = timeZoneRule(timeZoneMode);
+    if (timeZoneMode == TIME_ZONE_CUSTOM) rule = customTimeZoneRule.c_str();
+    char fixedRule[24];
+    if (!rule) {
+        // POSIX TZ signs are opposite to UTC offsets. Keep minute precision
+        // for existing API users and the Web UI's 15-minute increments.
+        int32_t absolute = timeOffsetMinutes < 0 ? -timeOffsetMinutes : timeOffsetMinutes;
+        snprintf(fixedRule, sizeof(fixedRule), "UTC%c%ld:%02ld",
+                 timeOffsetMinutes >= 0 ? '-' : '+',
+                 (long)(absolute / 60), (long)(absolute % 60));
+        rule = fixedRule;
+    }
+    setenv("TZ", rule, 1);
+    tzset();
+}
+
+bool isValidCustomTimeZoneRule(const String& rule) {
+    return validCustomTimeZoneRule(rule.c_str());
+}
+
+int32_t effectiveTimeOffsetMinutes() {
+    if (timeZoneMode == TIME_ZONE_FIXED || !hasValidTime()) return timeOffsetMinutes;
+    time_t now = time(nullptr);
+    struct tm local;
+    struct tm utc;
+    if (!localtime_r(&now, &local)) return timeOffsetMinutes;
+    if (!gmtime_r(&now, &utc)) return timeOffsetMinutes;
+    int dayDelta = local.tm_year == utc.tm_year
+                       ? local.tm_yday - utc.tm_yday
+                       : (local.tm_year > utc.tm_year ? 1 : -1);
+    return dayDelta * 1440 + (local.tm_hour - utc.tm_hour) * 60 +
+           local.tm_min - utc.tm_min;
 }
 
 static String formatClockHHMM(uint16_t mins) {
@@ -1479,25 +1515,13 @@ bool isStreamScheduleAllowedNow(bool* timeValidOut = nullptr) {
     return isScheduleWindowActive(nowMin, streamScheduleStartMin, streamScheduleStopMin);
 }
 
-static uint32_t secondsUntilScheduleStart(const struct tm& tmNow, uint16_t startMin) {
-    uint16_t nowMin = (uint16_t)(tmNow.tm_hour * 60 + tmNow.tm_min);
-    uint16_t deltaMin = (uint16_t)((startMin + 1440 - nowMin) % 1440);
-    uint32_t sec = (uint32_t)deltaMin * 60UL;
-    if (sec == 0) return 1; // schedule start is essentially now
-    if (tmNow.tm_sec > 0) {
-        uint32_t used = (uint32_t)tmNow.tm_sec;
-        sec = (sec > used) ? (sec - used) : 1;
-    }
-    return sec;
-}
-
 static void recordDeepSleepSnapshot(uint32_t sleepSec, uint32_t untilStartSec, const struct tm& tmNow) {
     rtcSleepPlannedSec = sleepSec;
     rtcSleepUntilStartSec = untilStartSec;
     rtcSleepStartMin = streamScheduleStartMin;
     rtcSleepStopMin = streamScheduleStopMin;
     rtcSleepEnteredMin = (uint16_t)(tmNow.tm_hour * 60 + tmNow.tm_min);
-    rtcSleepOffsetMin = timeOffsetMinutes;
+    rtcSleepOffsetMin = effectiveTimeOffsetMinutes();
     rtcSleepCycleCount++;
     rtcSleepSnapshotMagic = DEEP_SLEEP_SNAPSHOT_MAGIC;
 }
@@ -1640,7 +1664,11 @@ void checkDeepSleepSchedule() {
         return;
     }
 
-    uint32_t untilStartSec = secondsUntilScheduleStart(tmNow, streamScheduleStartMin);
+    uint32_t untilStartSec = secondsUntilNextLocalMinute(now, streamScheduleStartMin);
+    if (untilStartSec == 0) {
+        deepSleepStatusCode = "time_invalid";
+        return;
+    }
     deepSleepNextSleepSec = untilStartSec;
     // If the next stream window is soon, stay awake and avoid edge flapping near boundary.
     if (untilStartSec <= (DEEP_SLEEP_MIN_SEC + DEEP_SLEEP_DRIFT_GUARD_SEC + 15UL)) {
@@ -1951,6 +1979,11 @@ static void preloadTimeSettingsForEarlyLogs() {
     if (bootPrefs.begin("audio", true)) {
         timeOffsetMinutes = bootPrefs.getInt("timeOffset", 0);
         if (timeOffsetMinutes < -720 || timeOffsetMinutes > 840) timeOffsetMinutes = 0;
+        timeZoneMode = bootPrefs.getUChar("timeZone", TIME_ZONE_FIXED);
+        customTimeZoneRule = bootPrefs.getString("timeZoneRule", "UTC0");
+        if (timeZoneMode > TIME_ZONE_CUSTOM ||
+            (timeZoneMode == TIME_ZONE_CUSTOM && !isValidCustomTimeZoneRule(customTimeZoneRule)))
+            timeZoneMode = TIME_ZONE_FIXED;
         timeSyncEnabled = bootPrefs.getBool("timeSyncEn", true);
         bootPrefs.end();
     }
@@ -1979,6 +2012,8 @@ void loadAudioSettings() {
     highpassCutoffHz = (uint16_t)audioPrefs.getUInt("hpCutoff", DEFAULT_HPF_CUTOFF_HZ);
     overheatProtectionEnabled = audioPrefs.getBool("ohEnable", DEFAULT_OVERHEAT_PROTECTION);
     timeOffsetMinutes = audioPrefs.getInt("timeOffset", 0);
+    timeZoneMode = audioPrefs.getUChar("timeZone", TIME_ZONE_FIXED);
+    customTimeZoneRule = audioPrefs.getString("timeZoneRule", "UTC0");
     timeSyncEnabled = audioPrefs.getBool("timeSyncEn", true);
     mdnsEnabled = audioPrefs.getBool("mdnsEn", true);
     mdnsHostname = sanitizeMdnsHostname(audioPrefs.getString("mdnsHost", defaultMdnsHostname()), defaultMdnsHostname());
@@ -2075,6 +2110,11 @@ void loadAudioSettings() {
         timeOffsetMinutes = 0;
         settingsRepaired = true;
     }
+    if (timeZoneMode > TIME_ZONE_CUSTOM ||
+        (timeZoneMode == TIME_ZONE_CUSTOM && !isValidCustomTimeZoneRule(customTimeZoneRule))) {
+        timeZoneMode = TIME_ZONE_FIXED;
+        settingsRepaired = true;
+    }
     if (streamProfiles[0].target > STREAM_TARGET_BIRDNET_PI) { streamProfiles[0].target = STREAM_TARGET_BIRDNET_GO; settingsRepaired = true; }
     if (streamProfiles[1].target > STREAM_TARGET_BIRDNET_PI) { streamProfiles[1].target = STREAM_TARGET_BIRDNET_PI; settingsRepaired = true; }
     if (maxActiveClients < 1 || maxActiveClients > MAX_CLIENTS) { maxActiveClients = 2; settingsRepaired = true; }
@@ -2136,6 +2176,8 @@ void saveAudioSettings() {
     audioPrefs.putFloat("ohTripC", overheatTripTemp);
     audioPrefs.putBool("ohLatched", overheatLatched);
     audioPrefs.putInt("timeOffset", timeOffsetMinutes);
+    audioPrefs.putUChar("timeZone", timeZoneMode);
+    audioPrefs.putString("timeZoneRule", customTimeZoneRule);
     audioPrefs.putBool("timeSyncEn", timeSyncEnabled);
     audioPrefs.putBool("mdnsEn", mdnsEnabled);
     audioPrefs.putString("mdnsHost", mdnsHostname);
@@ -2249,6 +2291,8 @@ void resetToDefaultSettings() {
     lastTemperatureC = 0.0f;
     lastTemperatureValid = false;
     timeOffsetMinutes = 0;
+    timeZoneMode = TIME_ZONE_FIXED;
+    customTimeZoneRule = "UTC0";
     timeSyncEnabled = true;
     mdnsEnabled = true;
     mdnsHostname = defaultMdnsHostname();
