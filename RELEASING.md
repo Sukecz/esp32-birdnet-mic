@@ -37,13 +37,15 @@ using `esp32-birdnet-mic/tools/gen_webui_gzip_header.sh` before building.
 
 ## Publication acceptance check
 
-Publishing GitHub assets and deploying the public web/OTA feed are separate actions.
-Only perform each when authorized. A release is not complete until both agree.
-Both local publishing/deployment helpers finish with this acceptance check.
-The first action in a staged release can therefore report a mismatch until the
-second destination is updated; that means verification failed, not that the
-completed upload was rolled back. Do not repeat uploads blindly. After both
-actions, rerun the read-only check with the intended published version:
+After committing the reviewed release files, run `scripts/publish_release.sh`.
+A firmware release request authorizes this project's complete release workflow:
+the script pushes the GitHub commit and tag, publishes all four board asset sets,
+deploys the public web/OTA feed, and verifies that both destinations agree.
+The deployment helper checks the public web and performs the final acceptance
+check. If a step fails, inspect which destinations were already updated before
+retrying; uploads and deployments are not rolled back automatically.
+
+The read-only acceptance check can also be rerun independently:
 
 ```sh
 python3 tools/verify_published_release.py 1.24
