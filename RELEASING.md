@@ -38,8 +38,9 @@ using `esp32-birdnet-mic/tools/gen_webui_gzip_header.sh` before building.
 ## Publication acceptance check
 
 After committing the reviewed release files, run `scripts/publish_release.sh`.
-A firmware release request authorizes this project's complete release workflow:
-the script pushes the GitHub commit and tag, publishes all four board asset sets,
+The maintainer authorizes this complete workflow for requested firmware changes
+after validation, unless a task explicitly stops at review, testing, or preparation.
+The script pushes the GitHub commit and tag, publishes all four board asset sets,
 deploys the public web/OTA feed, and verifies that both destinations agree.
 The deployment helper checks the public web and performs the final acceptance
 check. If a step fails, inspect which destinations were already updated before
