@@ -4,4 +4,5 @@ espota.exe
 AGENTS.md
 web-flasher/
 .pio/
+__pycache__/
 birdnet_Stream_s3/

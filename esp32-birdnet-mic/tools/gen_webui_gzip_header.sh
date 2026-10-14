@@ -22,7 +22,7 @@ GZ_LEN="$(wc -c < "${TMP_GZ}")"
   echo "#include <pgmspace.h>"
   echo
   echo "static const uint8_t WEBUI_INDEX_GZ[] PROGMEM = {"
-  xxd -i "${TMP_GZ}" | sed '1d' | head -n -2
+  xxd -i "${TMP_GZ}" | sed '1d; /^};/,$d'
   echo "};"
   echo
   echo "static const size_t WEBUI_INDEX_GZ_LEN = ${GZ_LEN};"

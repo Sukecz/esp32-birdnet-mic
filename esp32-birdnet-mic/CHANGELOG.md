@@ -1,5 +1,192 @@
 # Changelog
 
+## 1.26 - 2026-10-11
+
+- Streaming: more efficient RTSP/TCP sending keeps the Web UI and other connected clients responsive.
+- Audio: improved handling of queued samples and a larger 64 KiB internal reserve for packet sizes up to 2048 samples, while retaining the existing RTP packet sizes.
+- Recovery: microphone auto-recovery follows capture activity, with a cooldown between recovery attempts.
+- Status: packet rates in the Web UI, API and MQTT reflect the most recent ten seconds.
+- MQTT: bounded socket writes and coalesced state updates prioritize audio processing.
+- Build: update the Arduino ESP32 core from 3.3.8 to 3.3.12.
+- Logs: disable WiFiManager debug output for quieter logs and a smaller firmware image.
+- Web UI: rename the default access-point option to "Default connection" for clearer wording; connection behavior is unchanged.
+
+## 1.25 - 2026-10-04
+- Wi-Fi: optional persistent access-point selection, with on-demand same-network scanning and signal ordering in Time & Network. Automatic selection remains the default.
+- Connection recovery: keep the selected BSSID across reconnects and reboots; expose the local settings UI on ESP32-RTSP-Mic-AP after one minute offline so the selection can be changed without USB. Wi-Fi reset and factory reset clear the selection.
+- Validation: C3/S3/C5/C6 builds passed. C6 local OTA, same-network scan, saved lock, manual reconnect, reboot persistence, unlock and a 12-second RTSP receive test passed. Recovery timeout was tested with simulated Wi-Fi state; physical AP-outage recovery and multi-AP behavior remain to be field-tested.
+
+## 1.24 - 2026-09-29
+- Time zones: add automatic daylight-saving rules for Central Europe, New Zealand mainland, UK, major US zones, and Sydney/Melbourne. Manual UTC offsets remain available, including quarter-hour zones, along with a custom annual POSIX rule for other regions.
+- Scheduling: local stream times and deep-sleep wake calculations follow the selected zone across daylight-saving transitions. Existing installations keep their previous manual offset until a location is selected.
+- Web UI: replace the technical time-zone controls with a simple location selector; show manual offset or custom rule fields only when chosen.
+- Validation: local C3/S3/C5/C6 builds and schedule/UI tests passed. A C6 test device synchronized time and streamed with Prague selected; physical transition-day validation and long-run testing remain pending.
+
+## 1.23 - 2026-09-17
+- Microphones: add a persisted Web UI/API choice between the legacy ICS-43434/INMP441 Philips I2S
+  alignment and Adafruit SPH0645 MSB/left-justified alignment. Invalid stored/API values are
+  rejected or repaired, format changes restart I2S transactionally, and a failed restart rolls back.
+- Hardware safety: document that choosing the wrong format cannot damage the microphone because it
+  changes only receive-side bit alignment; incorrect wiring or voltage remains unsafe. SPH0645 was
+  tested by a contributor, but has not yet been physically verified by the maintainer.
+- Lifecycle documentation: identify the historical INMP441 EOL notice and the current TDK NRND
+  status of both legacy families, and recommend the available Adafruit SPH0645 path for new builds.
+- Stream health: retain the last stop across reconnects, with timestamp, stream and reason; show separate TCP stall, write failure/timeout and client disconnect/TEARDOWN counters in the Web UI. Counters cover all clients since boot.
+- RTSP cleanup: detect disconnected sessions without the contradictory WiFiClient boolean check, release their sockets, and count actual disconnects.
+- MQTT discovery: publish one retained message per second, retry a failed step after 60 seconds, and allow completion during continuous audio streaming. Discovery socket writes have a 20 ms budget; incomplete packets close the MQTT connection before retry.
+- MQTT status: clear recovered discovery/state errors and expose discovery completion separately from broker connectivity.
+- Release checks: pin build dependencies and provide a read-only GitHub/public OTA artifact equality check.
+- Validation: local checks and C3/S3/C5/C6 builds passed. Local C6 OTA tests on 2026-09-08 and 2026-09-17 passed; the earlier first-minute check reached 93 pkt/s and completed discovery with zero I2S/buffer/RTSP errors. Extended runtime and failure-recovery validation remain pending.
+
+## 1.22 - 2026-08-01
+- RTSP/TCP stability: RTP writes now use a genuinely non-blocking socket send with an explicit
+  ten-second recovery window. Live testing showed that shorter limits converted temporary
+  Wi-Fi/TCP interruptions into much longer FFmpeg reconnects; the restored tolerance minimizes
+  complete stream drops while retaining controlled error handling. The socket
+  stall is treated as the consequence of the transport interruption, not as its initiating cause.
+- Live-audio recovery: after a recovered stall longer than 250 ms, or after a failed client, queued
+  stale audio is flushed so the stream resumes at the live edge instead of retaining latency.
+- Thermal stability: restore the default Wi-Fi TX power to 15 dBm after C6 testing at 19.5 dBm
+  raised normal afternoon die temperature by roughly 8–11 C without eliminating transport stalls.
+- Thermal protection: reject isolated internal-sensor spikes by requiring three consecutive
+  five-second samples at the configured shutdown limit, while an excursion 10 C above the limit
+  still stops the stream immediately.
+
+## 1.21 - 2026-07-22
+- PCM1808 preparation: I2S now outputs a 256-fs master clock on physical XIAO pin D7 while
+  continuing to capture the left slot as mono audio. Existing ICS-43434 and INMP441 wiring remains
+  unchanged because those microphones do not connect to D7.
+- Board compatibility: MCLK uses the symbolic D7 mapping for every supported XIAO C3/S3/C5/C6
+  target instead of assuming a shared GPIO number.
+- Contribution: PCM1808/MCLK support was proposed by
+  [@dalogue1](https://github.com/dalogue1); the complete analog microphone path remains pending
+  hardware validation.
+- MQTT resilience: an interrupted broker connection now retries every five minutes even during an
+  active RTSP stream, using a cached broker address and a 500 ms TCP connection limit.
+- Streaming safety: reconnect restores availability, commands, and current state immediately, while
+  the larger Home Assistant discovery refresh remains deferred until streaming stops.
+
+## 1.20 - 2026-07-21
+- Version-only test build for validating the improved OTA installation progress and automatic
+  browser reconnection workflow from v1.18. There are no functional changes compared with v1.18.
+
+## 1.18 - 2026-07-21
+- OTA UI: installation now immediately shows a blocking progress overlay, warns before leaving the
+  page, reports the reboot stage, and automatically reconnects when the device returns.
+- RTSP diagnostics: client-requested TEARDOWN events now include client, slot, stream, transport,
+  CSeq, session and stream age, packet count, last RTP age, Wi-Fi RSSI, and client User-Agent.
+
+## 1.17 - 2026-07-21
+- Version-only test build for validating the complete Web UI automatic OTA workflow from v1.16.
+  There are no functional firmware changes compared with v1.16.
+
+## 1.16 - 2026-07-21
+- Audio safety: configuration changes now stop the producer before publishing new producer-visible
+  values, preventing a larger requested block from using the previous smaller allocation.
+- Offline resilience: automatic firmware checks run outside the RTSP loop, and MQTT reconnects are
+  deferred while streaming so unavailable network services cannot block audio delivery.
+- HPF validation: cutoff is limited to 45% of the active sample rate and stored consistently, avoiding
+  coefficient recalculation and filter-state resets on every audio block.
+- Boot safety: persisted settings are validated and repaired before buffers, I2S, CPU, schedules, or
+  MQTT are initialized. Factory defaults now explicitly restore Time Sync to enabled.
+- Defaults: gain is now 1.5 while the 512-sample buffer remains unchanged.
+- Web flasher: ESP Web Tools 10.4.0 is self-hosted, unique mDNS wording is corrected, and the public
+  site gains HTTPS redirect and browser security headers without redirecting HTTP OTA artifacts.
+
+## 1.15 - 2026-07-21
+- OTA safety: automatic installation now fetches and validates `ota-version.txt`, compares strict
+  `major.minor` versions, and downloads the board-specific image only when the published version is
+  newer than the installed firmware.
+- OTA UI: added explicit update-available, up-to-date, and check-failed states. The main Web UI shows
+  a prominent update banner and highlighted firmware link when a newer version is confirmed.
+- Offline behavior: version checks use bounded network timeouts, failures are cached for one hour,
+  the main page checks only once per page session, and manual app-only upload remains usable.
+
+## 1.14 - 2026-07-21
+- Diagnostics: fixed 32-bit overflow in global, per-stream, and MQTT packet-rate calculations. At
+  48 kHz with 512-sample packets the old expression overflowed after about 12.7 hours, falsely
+  triggering daily I2S auto-recovery despite zero I2S read errors.
+- Audio buffering: increased the internal ring-buffer minimum from 8 KiB to 32 KiB for packet sizes
+  up to 2048 samples. The public/default RTP packet remains 512 samples for BirdNET-Pi/UDP safety.
+- RTSP/TCP resilience: extended the bounded write retry window from 30 ms to 100 ms.
+- RTSP diagnostics: write failures now log partial byte progress, elapsed time, retry count, TCP
+  write availability, ring-buffer use, connection state, and Wi-Fi RSSI.
+
+## 1.13 - 2026-07-19
+- I2S: migrated microphone capture from the deprecated legacy driver to the current channel-based
+  `i2s_std` API while preserving the existing BCLK/WS/SD wiring and leaving MCLK unused.
+- RTSP/TCP: combined the interleaved framing header, RTP header, and PCM payload into one application
+  buffer before writing to reduce TCP-stack calls per RTP packet.
+- Web UI: limited synchronous client handling to 50 Hz so an open browser connection cannot dominate
+  the main streaming loop.
+- Compatibility: retained the 512-sample default packet buffer validated with BirdNET-Pi/UDP.
+
+## 1.12 - 2026-07-10
+- OTA discovery: automatic update now downloads the board-specific stable latest alias instead of
+  constructing a versioned URL from the currently installed `FW_VERSION`.
+- OTA board safety: the pull URL is compiled into each supported C3/S3/C5/C6 profile, is no longer
+  editable in the Web UI, and must match exactly. Generic builds no longer fall back to a C6 image.
+- OTA download safety: validates HTTP 200, binary content type, positive content length, app
+  partition capacity, exact byte count, timeout, premature disconnect, and Update completion.
+- OTA diagnostics: `/api/status` exposes the compiled OTA artifact and automatic-update support.
+- Release validation: added an OTA contract test plus local/public equality and checksum checks for
+  stable, versioned, manual, and C6 compatibility artifacts.
+
+## 1.11 - 2026-07-10
+- I2S wiring: fixed XIAO ESP32-C3/S3/C5 builds to use their documented `D3`/`D1`/`D2` GPIO
+  mappings. Arduino defines these pin labels as C++ constants, so the previous `defined(D1)`
+  preprocessor check always selected the C6 fallback GPIOs (`21/1/2`).
+- Diagnostics: I2S startup logs now report the active BCLK/WS/SD GPIO numbers.
+- Web flasher and OTA: regenerated all C3/S3/C5/C6 images with the corrected pin selection.
+
+## 1.10.1 - 2026-06-25
+- OTA security: `/ota/install` and `/ota/upload` now require the same mutation header as other
+  state-changing Web UI/API endpoints.
+- OTA safety: automatic pull updates are limited to official `firmware-app*.bin` URLs, and OTA now
+  rejects oversized or merged USB firmware images for 4 MB and 8 MB targets.
+- OTA maintenance: board-specific automatic update URLs are generated from the compiled
+  `FW_VERSION` instead of hard-coded release strings.
+- CI: GitHub Actions now compile-checks all supported XIAO ESP32-C3/S3/C5/C6 firmware targets.
+
+## 1.10.0 — 2026-06-11
+- Board support: added compile-time profiles for Seeed Studio XIAO ESP32-C3, XIAO ESP32-S3,
+  XIAO ESP32-C5, and XIAO ESP32-C6.
+- I2S wiring: switched the default microphone pins to XIAO physical labels `D3`/`D1`/`D2`, keeping
+  the same physical wiring across supported XIAO boards while allowing each Arduino variant to map
+  to its own GPIO numbers.
+- Antenna handling: kept GPIO3/GPIO14 external antenna RF-switch control only for XIAO ESP32-C6.
+  C3/S3/C5 builds do not drive antenna-control GPIOs.
+- Metadata: `/api/status`, MQTT device metadata, and the OTA page now expose board id, board name,
+  and chip family.
+- OTA: automatic update URL is selected by compiled board profile; `firmware-app.bin` remains the
+  compatibility alias for the XIAO ESP32-C6 app image.
+- Web flasher: manifest now contains separate ESP32-C3, ESP32-S3, ESP32-C5, and ESP32-C6 builds so
+  ESP Web Tools can auto-select firmware by connected chip family.
+- Web flasher artifacts: generated `firmware-app-*.bin`, `firmware-*.bin`, `bootloader-*.bin`,
+  `partitions-*.bin`, and `boot_app0-*.bin` for C3/S3/C5/C6.
+- Validation: compile-verified with Arduino ESP32 core 3.3.8 on
+  `esp32:esp32:XIAO_ESP32C3`, `esp32:esp32:XIAO_ESP32S3`, `esp32:esp32:XIAO_ESP32C5`, and
+  `esp32:esp32:XIAO_ESP32C6`. Runtime hardware validation remains primarily on XIAO ESP32-C6.
+
+## 1.9.3 — 2026-06-11
+- Defaults: changed the packet buffer default from 1024 to 512 samples after BirdNET-Pi UDP testing
+  showed stutter with 1024-sample packets.
+- RTSP/UDP compatibility: opened the advertised RTCP server port, drained incoming RTCP packets,
+  and added `source`, `ssrc`, and `RTP-Info` metadata so ffmpeg/BirdNET-Pi handles UDP RTP streams
+  more reliably.
+- Validation: clean Nachtzuster/BirdNET-Pi host install tested with `rtsp://192.168.1.80:8554/audio2`
+  in BirdNET-Pi/UDP mode; ffmpeg produced full 15-second WAV files and BirdNET-Pi analysis read
+  5 audio chunks per segment.
+- Audio settings: sample rate validation now accepts up to 192000 Hz in both Web UI and API.
+- Audio settings: gain, sample rate, buffer, and I2S shift are now persisted only after the I2S
+  pipeline restarts successfully; failed audio changes roll back instead of rebooting or silently
+  reverting later.
+- Web UI: fixed dirty-field highlighting so saved stream/client/CPU/auto-recovery fields clear
+  correctly after polling or a successful save, and failed saves remain marked as unsaved.
+- Web flasher artifacts: version bumped to 1.9.3; `firmware.bin`, `firmware-app.bin`, and
+  `ota-version.txt` are regenerated for publishing.
+- Docs: refreshed default audio settings and public firmware artifact notes.
+
 ## 1.9.2 — 2026-05-16
 - Web UI: added `/ota` firmware update page.
 - OTA page: added automatic update from `http://esp32mic.msmeteo.cz/firmware-app.bin`.

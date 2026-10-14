@@ -7,7 +7,7 @@
 ESP32-C6 network microphone for **BirdNET-Go** and **BirdNET-Pi**. It reads an I2S MEMS microphone
 and serves mono **16-bit PCM/L16** audio over **RTSP**.
 
-- Latest firmware: **v1.9.2** (2026-05-16)
+- Firmware sources: **upstream v1.26**, commit `85094d7` (2026-10-11)
 - Target sketch: `esp32-birdnet-mic`
 - Web flasher: **https://esp32mic.msmeteo.cz** (Chrome/Edge desktop, USB-C data cable)
 - Manual OTA firmware: `manual-ota-firmware/firmware-app.bin`
@@ -17,19 +17,22 @@ and serves mono **16-bit PCM/L16** audio over **RTSP**.
 
 ## Community board ports
 
-This fork adds a board abstraction layer (`esp32-birdnet-mic/board_profile.h`) that makes it easy
-to run the firmware on boards other than the upstream XIAO ESP32-C6. Each board gets its own
-profile header and documentation file. Two boards are currently supported:
+The firmware follows upstream v1.26. Local adaptations select the C3 Super Mini identity and
+microphone pins, disable incompatible official XIAO OTA binaries, and apply the saved Wi-Fi
+power before connecting. PlatformIO pins Arduino ESP32 3.3.12 and uses two larger OTA partitions.
+The Web UI generator has a macOS-compatible fix; the upstream regression tests are retained.
 
 ### ESP32-C3 Super Mini
 
 - Wiring, build, and flash: **[BOARD-ESP32-C3-SUPERMINI.md](BOARD-ESP32-C3-SUPERMINI.md)**
 - I2S pins: BCLK → GPIO 10, WS → GPIO 4, DATA → GPIO 5
-- PlatformIO: `pio run -e esp32-c3-super-mini`
-- Default Wi-Fi TX power: 11 dBm (C3 is sensitive to high TX power)
-- Do **not** use GPIO 3 as an I2S pin on C3 — it is a strapping pin that can prevent boot.
+- PlatformIO: `~/.platformio/penv/bin/pio run -e esp32-c3-super-mini` (Python 3.10-3.14)
+- Network defaults follow upstream: 15 dBm TX power, Wi-Fi sleep disabled. Monitor board heat.
 
 ### ESP32-S3 Super Mini
+
+The following are historical port notes. The current v1.26 PlatformIO configuration and build
+have been validated for C3 only; the S3 adaptation needs updating before use.
 
 - Wiring, build, and flash: **[BOARD-ESP32-S3-SUPERMINI.md](BOARD-ESP32-S3-SUPERMINI.md)**
 - I2S pins: BCLK → GPIO 4, WS → GPIO 5, DATA → GPIO 6
