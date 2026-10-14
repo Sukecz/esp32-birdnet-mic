@@ -26,7 +26,7 @@ The Web UI generator has a macOS-compatible fix; the upstream regression tests a
 
 - Wiring, build, and flash: **[BOARD-ESP32-C3-SUPERMINI.md](BOARD-ESP32-C3-SUPERMINI.md)**
 - I2S pins: BCLK → GPIO 10, WS → GPIO 4, DATA → GPIO 5
-- PlatformIO: `~/.platformio/penv/bin/pio run -e esp32-c3-super-mini` (Python 3.10-3.14)
+- PlatformIO: `.venv/bin/pio run -e esp32-c3-super-mini` (Python 3.10-3.14; local environment setup in the board guide)
 - Network defaults follow upstream: 15 dBm TX power, Wi-Fi sleep disabled. Monitor board heat.
 
 ### ESP32-S3 Super Mini

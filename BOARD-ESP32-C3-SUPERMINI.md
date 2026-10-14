@@ -41,14 +41,16 @@ See also [`esp32-birdnet-mic/arduino-libs.txt`](esp32-birdnet-mic/arduino-libs.t
 
 ### PlatformIO
 
-The pinned pioarduino platform supplies Arduino ESP32 3.3.12. It requires Python 3.10-3.14; Python 3.15 is not supported. On the current macOS setup, use the existing Python 3.11 PlatformIO environment:
+The pinned pioarduino platform supplies Arduino ESP32 3.3.12. It requires Python 3.10-3.14; Python 3.15 is not supported. From the repository root, create a local Python 3.11 environment:
 
 ```bash
-~/.platformio/penv/bin/pio run -e esp32-c3-super-mini
-~/.platformio/penv/bin/pio run -e esp32-c3-super-mini -t upload
+python3.11 -m venv .venv
+.venv/bin/python -m pip install platformio
+.venv/bin/pio run -e esp32-c3-super-mini
+.venv/bin/pio run -e esp32-c3-super-mini -t upload
 ```
 
-Packages are isolated in `~/.platformio-birdnet-mic`. The release build uses approximately **1.34 MB** of the **1.97 MB** app partition (68%). The first upgrade from the old partition layout must use USB, not OTA. NVS stays at the same offset, preserving Wi-Fi credentials and settings; the SPIFFS layout changes.
+PlatformIO packages are isolated in `.platformio/`, Python dependencies in `.venv/`, and build outputs in `.pio/`. All three directories are local to this repository and ignored by Git. The release build uses approximately **1.34 MB** of the **1.97 MB** app partition (68%). The first upgrade from the old partition layout must use USB, not OTA. NVS stays at the same offset, preserving Wi-Fi credentials and settings; the SPIFFS layout changes.
 
 ## First boot
 
