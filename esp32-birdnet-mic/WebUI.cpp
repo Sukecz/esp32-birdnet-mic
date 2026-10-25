@@ -1,3 +1,4 @@
+#include "Recording.h"
 #include <Arduino.h>
 #include <math.h>
 #include <time.h>
@@ -155,6 +156,9 @@ extern float wifiPowerLevelToDbm(wifi_power_t lvl);
 extern String formatUptime(unsigned long seconds);
 extern String formatSince(unsigned long eventMs);
 extern bool restartI2S();
+extern bool recordingHardwareSupported();
+extern bool startRecording();
+extern bool setDeviceMode(bool recordingMode);
 extern bool applyAudioConfig(uint32_t newRate, float newGain, uint16_t newBuffer, uint8_t newShift);
 extern bool applyMicFormatConfig(uint8_t newFormat);
 extern bool applyMicProfileConfig(uint8_t newFormat, bool recommended);
@@ -291,6 +295,10 @@ static bool hasMutationAuth() {
 
 static bool requireMutationAuth(bool preparation = false) {
     if (hasMutationAuth()) {
+        if (recording::busy() && web.uri() != "/api/recording/action" && web.uri() != "/api/device/mode") {
+            web.send(409, "application/json", "{\"ok\":false,\"error\":\"Stop and save recording before changing settings or updating firmware.\"}");
+            return false;
+        }
         if (!preparation && flashlayout::busy()) {
             web.send(409, "application/json", "{\"ok\":false,\"error\":\"Update preparation is in progress. Please wait.\"}");
             return false;
@@ -862,6 +870,11 @@ static void httpOtaUploadChunk() {
             Update.abort();
             return;
         }
+        if (recording::busy()) {
+            otaUploadError = F("Stop and save recording before updating firmware.");
+            otaUploadBlocked = true;
+            return;
+        }
         if (flashlayout::busy()) {
             otaUploadError = F("Update preparation is in progress. Please wait.");
             return;
@@ -920,6 +933,7 @@ static void httpStatus() {
     uint32_t currentRate = getCurrentPacketRate(255);
     String json = "{";
     json.reserve(1800);
+    json += "\"recording\":" + recording::statusJson(recordingHardwareSupported()) + ",";
     json += "\"fw_version\":\"" + String(FW_VERSION_STR) + "\",";
     json += "\"board_id\":\"" + jsonEscape(String(FW_BOARD_ID_STR)) + "\",";
     json += "\"board_name\":\"" + jsonEscape(String(FW_BOARD_NAME_STR)) + "\",";
@@ -1169,6 +1183,10 @@ static void httpLogs() {
 static void httpActionServerStart(){
     if (!requireMutationAuth()) return;
 
+    if (recording::mode()) {
+        apiSendJSON(F("{\"ok\":false,\"error\":\"Switch to Streaming mode to start RTSP\"}"));
+        return;
+    }
     if (overheatLatched) {
         webui_pushLog(F("Server start blocked: thermal protection latched"));
         apiSendJSON(F("{\"ok\":false,\"error\":\"thermal_latched\"}"));
@@ -1918,6 +1936,43 @@ static void httpActionFactoryReset(){
     scheduleReboot(true, 600);
 }
 
+static void httpDeviceMode() {
+    if (!requireMutationAuth()) return;
+    const String requested = web.arg("mode");
+    if (requested != "streaming" && requested != "recording") {
+        web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid device mode\"}"); return;
+    }
+    if (recording::busy() && web.arg("stop_confirmed") != "1") {
+        web.send(409, "application/json", "{\"ok\":false,\"error\":\"Confirm Stop and save before switching mode\"}"); return;
+    }
+    bool ok = setDeviceMode(requested == "recording");
+    apiSendJSON(ok ? F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"Mode change failed; check recording status\"}"));
+}
+static void httpRecordingAction() {
+    if (!requireMutationAuth()) return;
+    const String action = web.arg("action");
+    bool ok = false;
+    if (action == "start") ok = startRecording();
+    else if (action == "stop") {
+        ok = recording::stop() && recording::status().state != recording::State::Error;
+    } else { web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid recording action\"}"); return; }
+    apiSendJSON(ok ? F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"Recording action failed; check recording status\"}"));
+}
+static void httpRecordingSettings() {
+    if (!requireMutationAuth()) return;
+    uint32_t duration = 0, segment = 0;
+    const String autoStart = web.arg("auto_start");
+    if (!parseUInt32Strict(web.arg("duration_minutes"), duration) || duration > 10080 ||
+        !parseUInt32Strict(web.arg("segment_minutes"), segment) || segment < 1 || segment > 120 ||
+        (autoStart != "0" && autoStart != "1")) {
+        web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid recording settings\"}"); return;
+    }
+    auto config = recording::settings();
+    config.durationMinutes = duration; config.segmentMinutes = segment; config.autoStart = autoStart == "1";
+    bool ok = recording::saveSettings(config);
+    apiSendJSON(ok ? F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"Recording settings could not be saved\"}"));
+}
+
 #if FLASH_LAYOUT_TOOL
 static void httpUpdateSpaceStatus() { apiSendJSON(flashlayout::statusJson()); }
 static void httpUpdateSpacePrepare() {
@@ -1943,6 +1998,9 @@ void webui_begin() {
     web.on("/api/update_space", HTTP_GET, httpUpdateSpaceStatus);
     web.on("/api/update_space/prepare", HTTP_POST, httpUpdateSpacePrepare);
 #endif
+    web.on("/api/device/mode", HTTP_POST, httpDeviceMode);
+    web.on("/api/recording/action", HTTP_POST, httpRecordingAction);
+    web.on("/api/recording/settings", HTTP_POST, httpRecordingSettings);
     web.on("/api/status", httpStatus);
     web.on("/api/audio_status", httpAudioStatus);
     web.on("/api/microphone_profile", HTTP_GET, httpMicProfile);

@@ -41,6 +41,7 @@ uint16_t normalizeHighpassCutoff(uint32_t rate, uint16_t cutoff) {
  return std::min<uint32_t>(rate*45/100, std::max<uint16_t>(10,cutoff));
 }
 ''' + helper + r'''
+namespace recording { inline void push(const int16_t*, size_t) {} }
 std::vector<int16_t> preview;
 void browserAudioPush(const int16_t* data, size_t count) { preview.assign(data, data + count); }
 void process() {

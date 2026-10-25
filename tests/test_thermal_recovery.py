@@ -22,7 +22,7 @@ class ThermalRecoveryTests(unittest.TestCase):
     def compile_run(self, code):
         with tempfile.TemporaryDirectory() as temp:
             cpp, binary = pathlib.Path(temp) / 'test.cpp', pathlib.Path(temp) / 'test'
-            cpp.write_text(code)
+            cpp.write_text('namespace recording { inline bool mode(){return false;} }\n' + code)
             subprocess.run(['g++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                             '-I', str(ROOT / 'esp32-birdnet-mic'), str(cpp), '-o', str(binary)], check=True)
             subprocess.run([str(binary)], check=True, timeout=10)

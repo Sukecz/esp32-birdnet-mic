@@ -23,7 +23,7 @@ class S3BoardsTests(unittest.TestCase):
     def native(self, code):
         with tempfile.TemporaryDirectory() as temp:
             cpp, binary = Path(temp) / 'test.cpp', Path(temp) / 'test'
-            cpp.write_text(code)
+            cpp.write_text('namespace recording { inline bool mode(){return false;} }\n'+code)
             subprocess.run(['g++', '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
                             '-fsanitize=undefined', '-fno-sanitize-recover=all',
                             '-I', str(ROOT / 'esp32-birdnet-mic'), str(cpp), '-o', str(binary)], check=True)

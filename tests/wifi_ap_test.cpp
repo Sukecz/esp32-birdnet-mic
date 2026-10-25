@@ -41,5 +41,12 @@ int main() {
   WiFi.state = 0; testNow += 1; wifiApRecoveryLoop(); testNow += 60000; wifiApRecoveryLoop();
   assert(!wifiApRecoveryActive()); // Automatic mode retains original recovery behavior.
   testSaved = {1, 2}; wifiApLoad(); assert(!wifiApPinned()); // Malformed storage is ignored.
-  puts("WiFi AP persistence, credentials and recovery checks passed");
+  wifiApEnableFieldControl();
+  wifiApRecoveryLoop(); assert(wifiApRecoveryActive());
+  const int starts = WiFi.apStarts, stops = WiFi.apStops;
+  WiFi.state = WL_CONNECTED; wifiApRecoveryLoop();
+  assert(wifiApRecoveryActive() && WiFi.apStops == stops); // Phone/UI survives STA recovery.
+  WiFi.state = 0; wifiApRecoveryLoop();
+  assert(WiFi.apStarts == starts); // No repeated AP startup or timeout.
+  puts("WiFi AP persistence, credentials, recovery and persistent field control checks passed");
 }

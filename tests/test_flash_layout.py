@@ -76,6 +76,7 @@ int main() {
         prefix = source[source.index('void loop() {'):source.index('    if (millis() - lastTempCheck >', source.index('void loop() {'))]
         self.native(r'''
 #include "Platform.h"
+namespace recording { bool busy(){return false;} bool stop(){return true;} }
 namespace flashlayout { bool pending=false; void loop(){} bool busy(){return pending;} }
 int otaCalls=0, wifiCalls=0, webCalls=0, thermalCalls=0;
 bool otaInProgress=false;
@@ -102,9 +103,10 @@ int main(){
         self.native(r'''
 #include "Platform.h"
 bool auth=false;
+namespace recording { bool active=false; bool busy(){return active;} bool stop(){return true;} }
 namespace flashlayout { bool active=false; bool busy(){return active;} }
 bool hasMutationAuth(){return auth;}
-struct { int code=0; void sendHeader(const char*,const char*){} void send(int c,const char*,const char*){code=c;} } web;
+struct { String route="/api/set"; String uri(){return route;} int code=0; void sendHeader(const char*,const char*){} void send(int c,const char*,const char*){code=c;} } web;
 ''' + gate + r'''
 int main(){
     assert(!requireMutationAuth() && web.code==403);
@@ -113,5 +115,9 @@ int main(){
     flashlayout::active=true;
     assert(!requireMutationAuth() && web.code==409);
     assert(requireMutationAuth(true)); // Recovery retry only; still checks auth.
+    flashlayout::active=false; recording::active=true;
+    assert(!requireMutationAuth() && web.code==409);
+    web.route="/api/recording/action"; assert(requireMutationAuth());
+    web.route="/api/device/mode"; assert(requireMutationAuth());
 }
 ''')

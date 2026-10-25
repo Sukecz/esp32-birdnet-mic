@@ -6,6 +6,8 @@
 static uint8_t pinned[6] = {};
 static bool locked = false;
 static bool recovery = false;
+static bool fieldControl = false;
+void wifiApEnableFieldControl() { fieldControl = true; }
 static unsigned long disconnectedAt = 0;
 
 void wifiApLoad() {
@@ -68,7 +70,7 @@ bool wifiApRecoveryActive() { return recovery; }
 void wifiApRecoveryLoop() {
     if (WiFi.status() == WL_CONNECTED) {
         disconnectedAt = 0;
-        if (recovery) {
+        if (recovery && !fieldControl) {
             WiFi.softAPdisconnect(true);
             recovery = false;
         }
@@ -76,7 +78,7 @@ void wifiApRecoveryLoop() {
     }
     if (!disconnectedAt) disconnectedAt = millis();
     // Keep the recovery network until connected, including after the user unlocks.
-    if (locked && !recovery && millis() - disconnectedAt >= 60000UL) {
+    if ((locked || fieldControl) && !recovery && (fieldControl || millis() - disconnectedAt >= 60000UL)) {
         recovery = WiFi.softAP("ESP32-RTSP-Mic-AP");
     }
 }

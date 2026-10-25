@@ -81,6 +81,11 @@
 </select>
 </div>
 </div>
+<div class='actions' aria-label='Device mode'>
+<label for='device_mode'>Mode</label>
+<select id='device_mode' onchange='changeDeviceMode(this.value)'><option value='streaming'>Streaming</option><option value='recording'>Recording</option></select>
+<span id='device_mode_status' role='status' aria-live='polite'>Checking…</span><span id='device_mode_feedback' role='status' aria-live='polite'></span>
+</div>
 <div class='playback'>
 <button id='listen_button' onclick='toggleListen()' aria-pressed='false'>Listen</button>
 <label for='listen_volume'>Playback volume</label>
@@ -102,6 +107,28 @@
 <p id='thermal_notice_detail'></p>
 <button id='btn_thermal_notice_ack' class='danger' onclick='clearThermalLatch()'></button>
 <p><a href='#thermalsec' onclick="openSection('thermalsec')">Open Thermal management</a></p></div><div id='microphone_notice' class='thermal-alert' role='alert' hidden><strong>Microphone signal warning</strong><p id='microphone_notice_detail'></p><a href='#audiosec' onclick="openSection('audiosec')">Check Audio settings</a> &middot; <a href='#healthsec' onclick="openSection('healthsec')">Open Stream health</a></div>
+<section id='recording_panel' class='card' hidden>
+<h2 style='margin:0 0 10px'>Recording</h2>
+<p class='muted'>Listen checks the microphone. SD write status is shown separately below.</p>
+<p id='recording_summary' role='status' aria-live='polite'>Checking card…</p>
+<p id='recording_file' class='mono'></p>
+<div class='actions'>
+<button id='recording_start' onclick="recordingAction('start')">Start recording</button>
+<button id='recording_stop' onclick="recordingAction('stop')">Stop &amp; save</button>
+</div>
+<div class='actions'>
+<label for='recording_hours'>Total duration (hours; 0 = continuous)</label>
+<input id='recording_hours' type='number' min='0' max='168' step='0.25' value='0' oninput='recordingDraftChanged()'>
+</div>
+<div class='actions'><label><input id='recording_auto' type='checkbox' onchange='recordingDraftChanged()'> Start recording after power-on</label></div>
+<details class='advanced'><summary>Recording settings</summary>
+<label for='recording_segment'>WAV segment length (minutes)</label>
+<input id='recording_segment' type='number' min='1' max='120' step='1' value='60' oninput='recordingDraftChanged()'>
+<p class='muted'>16-bit mono PCM at the microphone sample rate, with the current gain and high-pass settings. Existing files are never automatically deleted.</p>
+</details>
+<div class='actions'><button id='recording_save' onclick='saveRecordingSettings()' disabled>Save recording settings</button><span id='recording_dirty' class='edit-note'></span></div>
+<p id='recording_feedback' class='feedback' role='status' aria-live='polite'></p>
+</section>
 <details id='streamssec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_streams'>Streams</span><span class='section-note'>Targets, transport, client connections and URLs</span></span><span class='chev' aria-hidden='true'></span></summary>
 <div class='stream-grid' style='margin-top:10px'>
@@ -1234,7 +1261,7 @@ function updateOverview(kind,j){
  if(status.stream_schedule_enabled&&!status.stream_schedule_time_valid)text+=' · schedule waiting for clock';
  put('overview_streams',text,cls);const link=$('overview_streams');link.href='#'+target;link.onclick=()=>openSection(target);
 }
-function loadStatus(){return fetchJSON('/api/status').then(j=>{ updateOverview('status',j); $('ip').textContent=j.ip; $('rssi').textContent=j.wifi_rssi+' dBm'; $('wtx').textContent=j.wifi_tx_dbm.toFixed(1)+' dBm'; $('heap').textContent=j.free_heap_kb+' KB ('+j.min_free_heap_kb+' KB)'; $('uptime').textContent=j.uptime; $('srv').innerHTML=fmtSrv(j.rtsp_server_enabled); setToggleState(j.rtsp_server_enabled); $('s1_client').textContent=(j.s1_clients>0)?j.s1_clients+' client(s)':j.stream1_enabled?'Waiting...':'Disabled'; $('s1_stream').innerHTML=fmtBool(j.s1_streaming); $('s1_rate').textContent=j.s1_pkt_rate+' pkt/s'; $('s1_lplay').textContent=j.s1_last_play||'never'; $('s2_client').textContent=(j.s2_clients>0)?j.s2_clients+' client(s)':(j.stream2_enabled?'Waiting...':'Disabled'); $('s2_stream').innerHTML=j.stream2_enabled?fmtBool(j.s2_streaming):'<span class=muted>N/A</span>'; $('s2_rate').textContent=j.stream2_enabled?(j.s2_pkt_rate+' pkt/s'):'—'; $('s2_lplay').textContent=j.stream2_enabled?(j.s2_last_play||'never'):'—'; $('time_sync').innerHTML=fmtBool(j.time_synced); $('last_sync').textContent=j.last_time_sync; renderTimeRows(j); const now=Date.now(); const stx=$('sel_tx'); syncInput(stx,'wifi_tx',j.wifi_tx_dbm.toFixed(1)); const md=$('sel_mdns'); syncInput(md,'mdns_enable',j.mdns_enabled?'on':'off'); const mh=$('in_mdns_host'); syncInput(mh,'mdns_hostname',j.mdns_hostname||''); const tse=$('sel_time_sync'); syncInput(tse,'time_sync',j.time_sync_enabled?'on':'off'); const zoneSel=$('sel_time_zone_mode'); syncInput(zoneSel,'time_zone_mode',String(j.time_zone_mode||0)); updateTimeZoneVisibility(); const ruleInput=$('in_time_zone_rule'); syncInput(ruleInput,'time_zone_rule',j.time_zone_rule||''); const offSel=$('sel_offset'); if(offSel)syncInput(offSel,'time_offset',String((j.time_offset_min||0)/60)); const fv=$('fwv'); if(fv && j.fw_version){ fv.textContent='v'+j.fw_version; } const ui=$('url_ip'); if(ui){ ui.textContent=j.stream1_url_ip; ui.href=j.stream1_url_ip; } const um=$('url_mdns'); const umw=$('url_mdns_wrap'); if(um){ if(j.mdns_enabled){ um.textContent=j.stream1_url_mdns; um.href=j.stream1_url_mdns; um.style.opacity='1'; if(umw) umw.style.display=''; } else { um.textContent='—'; um.removeAttribute('href'); um.style.opacity='0.6'; if(umw) umw.style.display='none'; } } const u2=$('url2_ip'); if(u2){ u2.textContent=j.stream2_url_ip; u2.href=j.stream2_url_ip; } const u2m=$('url2_mdns'); const u2mw=$('url2_mdns_wrap'); if(u2m){ if(j.mdns_enabled){ u2m.textContent=j.stream2_url_mdns; u2m.href=j.stream2_url_mdns; u2m.style.opacity='1'; if(u2mw) u2mw.style.display=''; } else { u2m.textContent='—'; u2m.removeAttribute('href'); u2m.style.opacity='0.6'; if(u2mw) u2mw.style.display='none'; } } const s1t=$('sel_stream1_target'); syncInput(s1t,'stream1_target',String(j.stream1_target||0)); const s2t=$('sel_stream2_target'); syncInput(s2t,'stream2_target',String(j.stream2_target||0)); const s1e=$('sel_stream1_enabled'); syncInput(s1e,'stream1_enabled',j.stream1_enabled?'on':'off'); const s2e=$('sel_stream2_enabled'); syncInput(s2e,'stream2_enabled',j.stream2_enabled?'on':'off'); const s1tp=$('s1_transport'); if(s1tp) s1tp.textContent=(j.stream1_target===0)?'TCP':'UDP'; const s2tp=$('s2_transport'); if(s2tp) s2tp.textContent=(j.stream2_target===0)?'TCP':'UDP'; const mc=$('sel_max_clients'); syncInput(mc,'max_clients',String(j.max_clients||2)); loadStreamSchedule(j); loadMqtt(j); })}function renderAudioLevel(j){
+function loadStatus(){return fetchJSON('/api/status').then(j=>{ renderRecording(j); updateOverview('status',j); $('ip').textContent=j.ip; $('rssi').textContent=j.wifi_rssi+' dBm'; $('wtx').textContent=j.wifi_tx_dbm.toFixed(1)+' dBm'; $('heap').textContent=j.free_heap_kb+' KB ('+j.min_free_heap_kb+' KB)'; $('uptime').textContent=j.uptime; $('srv').innerHTML=fmtSrv(j.rtsp_server_enabled); setToggleState(j.rtsp_server_enabled); $('s1_client').textContent=(j.s1_clients>0)?j.s1_clients+' client(s)':j.stream1_enabled?'Waiting...':'Disabled'; $('s1_stream').innerHTML=fmtBool(j.s1_streaming); $('s1_rate').textContent=j.s1_pkt_rate+' pkt/s'; $('s1_lplay').textContent=j.s1_last_play||'never'; $('s2_client').textContent=(j.s2_clients>0)?j.s2_clients+' client(s)':(j.stream2_enabled?'Waiting...':'Disabled'); $('s2_stream').innerHTML=j.stream2_enabled?fmtBool(j.s2_streaming):'<span class=muted>N/A</span>'; $('s2_rate').textContent=j.stream2_enabled?(j.s2_pkt_rate+' pkt/s'):'—'; $('s2_lplay').textContent=j.stream2_enabled?(j.s2_last_play||'never'):'—'; $('time_sync').innerHTML=fmtBool(j.time_synced); $('last_sync').textContent=j.last_time_sync; renderTimeRows(j); const now=Date.now(); const stx=$('sel_tx'); syncInput(stx,'wifi_tx',j.wifi_tx_dbm.toFixed(1)); const md=$('sel_mdns'); syncInput(md,'mdns_enable',j.mdns_enabled?'on':'off'); const mh=$('in_mdns_host'); syncInput(mh,'mdns_hostname',j.mdns_hostname||''); const tse=$('sel_time_sync'); syncInput(tse,'time_sync',j.time_sync_enabled?'on':'off'); const zoneSel=$('sel_time_zone_mode'); syncInput(zoneSel,'time_zone_mode',String(j.time_zone_mode||0)); updateTimeZoneVisibility(); const ruleInput=$('in_time_zone_rule'); syncInput(ruleInput,'time_zone_rule',j.time_zone_rule||''); const offSel=$('sel_offset'); if(offSel)syncInput(offSel,'time_offset',String((j.time_offset_min||0)/60)); const fv=$('fwv'); if(fv && j.fw_version){ fv.textContent='v'+j.fw_version; } const ui=$('url_ip'); if(ui){ ui.textContent=j.stream1_url_ip; ui.href=j.stream1_url_ip; } const um=$('url_mdns'); const umw=$('url_mdns_wrap'); if(um){ if(j.mdns_enabled){ um.textContent=j.stream1_url_mdns; um.href=j.stream1_url_mdns; um.style.opacity='1'; if(umw) umw.style.display=''; } else { um.textContent='—'; um.removeAttribute('href'); um.style.opacity='0.6'; if(umw) umw.style.display='none'; } } const u2=$('url2_ip'); if(u2){ u2.textContent=j.stream2_url_ip; u2.href=j.stream2_url_ip; } const u2m=$('url2_mdns'); const u2mw=$('url2_mdns_wrap'); if(u2m){ if(j.mdns_enabled){ u2m.textContent=j.stream2_url_mdns; u2m.href=j.stream2_url_mdns; u2m.style.opacity='1'; if(u2mw) u2mw.style.display=''; } else { u2m.textContent='—'; u2m.removeAttribute('href'); u2m.style.opacity='0.6'; if(u2mw) u2mw.style.display='none'; } } const s1t=$('sel_stream1_target'); syncInput(s1t,'stream1_target',String(j.stream1_target||0)); const s2t=$('sel_stream2_target'); syncInput(s2t,'stream2_target',String(j.stream2_target||0)); const s1e=$('sel_stream1_enabled'); syncInput(s1e,'stream1_enabled',j.stream1_enabled?'on':'off'); const s2e=$('sel_stream2_enabled'); syncInput(s2e,'stream2_enabled',j.stream2_enabled?'on':'off'); const s1tp=$('s1_transport'); if(s1tp) s1tp.textContent=(j.stream1_target===0)?'TCP':'UDP'; const s2tp=$('s2_transport'); if(s2tp) s2tp.textContent=(j.stream2_target===0)?'TCP':'UDP'; const mc=$('sel_max_clients'); syncInput(mc,'max_clients',String(j.max_clients||2)); loadStreamSchedule(j); loadMqtt(j); })}function renderAudioLevel(j){
  const lvl=$('level'); if(!lvl) return;
  const L=T[lang]||T.en;
  const pct=typeof j.peak_pct==='number'&&Number.isFinite(j.peak_pct)?j.peak_pct:0;
@@ -1457,6 +1484,67 @@ window.addEventListener('beforeunload',event=>{if(Object.keys(edits).length||wif
 })();
 </script>
 
+<script id='recording_script'>
+let recordingState=null, recordingPending=false, recordingDirty=false;
+const recordingNode=id=>document.getElementById(id);
+function recordingDraftChanged(){
+ if(!recordingState)return;
+ recordingDirty=Number(recordingNode('recording_hours').value)*60!==recordingState.duration_minutes||Number(recordingNode('recording_segment').value)!==recordingState.segment_minutes||recordingNode('recording_auto').checked!==recordingState.auto_start;
+ recordingNode('recording_dirty').textContent=recordingDirty?'Unsaved':'';
+ recordingNode('recording_save').disabled=!recordingDirty||recordingPending||recordingState.busy;
+ recordingNode('recording_start').disabled=recordingDirty||recordingPending||recordingState.busy||!recordingState.supported;
+}
+function recordingTime(seconds){return Math.floor(seconds/3600)+'h '+Math.floor(seconds%3600/60)+'m '+Math.floor(seconds%60)+'s';}
+function renderRecording(j){
+ const r=j.recording;if(!r)return;
+ const first=!recordingState;recordingState=r;
+ recordingNode('recording_panel').hidden=r.mode!=='recording';
+ recordingNode('device_mode').value=r.mode;
+ recordingNode('device_mode').disabled=recordingPending;
+ let text='Ready',color='muted';
+ if(r.mode==='recording'){
+   const names={ready:'Ready',starting:'Preparing SD…',recording:'Recording',saving:'Saving…',saved:'Saved',error:'Error'};
+   text=names[r.state]||r.state;color=r.state==='recording'?'bad':r.state==='error'?'bad':'muted';
+ }else if(j.s1_streaming||j.s2_streaming){text='Streaming';color='ok';}
+ recordingNode('device_mode_status').textContent='● '+text;
+ recordingNode('device_mode_status').className=color;
+ const remaining=r.duration_minutes?'; remaining '+recordingTime(Math.max(0,r.duration_minutes*60-r.elapsed_seconds)):'';
+ recordingNode('recording_summary').textContent=(r.supported?(r.error||text):'SD recording currently supports base XIAO ESP32-S3 only.')+' · '+recordingTime(r.elapsed_seconds)+remaining+' · '+r.written_kib+' KiB written · '+(r.card_ready?r.free_mib+' MiB free':'Card not checked')+(r.dropped_samples?' · '+r.dropped_samples+' samples lost':'');
+ recordingNode('recording_file').textContent=r.file||'';
+ if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes/60;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').checked=r.auto_start;}
+ for(const id of ['recording_hours','recording_segment','recording_auto'])recordingNode(id).disabled=r.busy||recordingPending;
+ recordingNode('recording_stop').disabled=!r.busy||recordingPending;
+ recordingDraftChanged();
+}
+async function recordingPost(path,values){
+ if(recordingPending)return false;
+ recordingPending=true;
+ recordingNode('recording_feedback').textContent='Working…';
+ recordingNode('device_mode_feedback').textContent='';
+ try{
+  const response=await fetch(path,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-ESP32MIC-CSRF':'1'},body:new URLSearchParams(values),signal:AbortSignal.timeout(15000)});
+  const result=await response.json();
+  if(!response.ok||!result.ok)throw new Error(result.error||'Action failed');
+  recordingNode('recording_feedback').textContent='';return true;
+ }catch(e){recordingNode('recording_feedback').textContent=e.message;recordingNode('device_mode_feedback').textContent=e.message;return false;}
+ finally{recordingPending=false;}
+}
+async function changeDeviceMode(mode){
+ const current=recordingState;
+ if(current&&current.busy&&!confirm('Stop and save the recording before switching mode?')){recordingNode('device_mode').value=current.mode;return;}
+ await recordingPost('/api/device/mode',{mode,stop_confirmed:current&&current.busy?'1':'0'});
+ await loadStatus();
+}
+async function recordingAction(action){
+ await recordingPost('/api/recording/action',{action});await loadStatus();
+}
+async function saveRecordingSettings(){
+ const minutes=Number(recordingNode('recording_hours').value)*60;
+ if(!Number.isInteger(minutes)||minutes<0||minutes>10080){recordingNode('recording_feedback').textContent='Choose a duration from 0 to 168 hours.';return;}
+ if(await recordingPost('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').checked?'1':'0'}))recordingDirty=false;
+ await loadStatus();
+}
+</script>
 <script id='browser_audio_script'>
 let listenSession=null;
 function listenMessage(text){ document.getElementById('listen_status').textContent=text; }

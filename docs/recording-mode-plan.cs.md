@@ -2,8 +2,10 @@
 
 Sepsáno: **2026-10-25** podle domluvy s uživatelem.
 
-**Stav: návrh pro pozdější realizaci. Implementace čeká na další pokyn uživatele.**
-Tento dokument nepopisuje hotovou funkci a sám nezahajuje vývoj, OTA ani vydání.
+**Stav: lokální implementace zahájena 2026-10-25 na pokyn uživatele.**
+Hardware ještě není k dispozici. Uživatel následně povolil OTA na konfigurované
+C6 pro prohlédnutí UI; veřejné vydání zůstává odložené.
+Aktuální rozsah a zbývající ověření: [stav implementace](recording-mode-development.cs.md).
 
 ## 1. Cíl a rozsah první verze
 
@@ -17,7 +19,7 @@ První verze bude mít dva oddělené režimy:
 | Režim | Chování |
 | --- | --- |
 | **Streaming** | Současné RTSP a živý poslech v prohlížeči; bez zápisu na SD. |
-| **Recording** | Samostatný zápis WAV na SD; RTSP a živý poslech jsou vypnuté. Webové ovládání zůstává dostupné. |
+| **Recording** | Samostatný zápis WAV na SD; RTSP je vypnuté. Webové ovládání a tlačítko Listen zůstávají dostupné i během záznamu pro kontrolu mikrofonu (doplnění uživatele 2026-10-25). |
 
 Výchozí režim po aktualizaci bude **Streaming**, aby se zachovalo dnešní chování.
 Souběžný **Streaming + Recording** je možnost do budoucna, až bude samostatné
@@ -72,7 +74,7 @@ připojení nebo přidělená IP.
 Příklad s adresou `http://192.168.1.80/`:
 
 1. Otevřít současné UI a přepnout Streaming → Recording.
-2. Zařízení ukončí RTSP a živý poslech, ale zůstane na domácí Wi-Fi.
+2. Zařízení ukončí RTSP, ale zůstane na domácí Wi-Fi. Listen lze znovu spustit i během nahrávání.
 3. Na stejné stránce nastavit délku a stisknout **Start recording**.
 4. Záznam ukončit přes **Stop & save**; pak lze přepnout zpět na Streaming.
 
@@ -138,8 +140,8 @@ předčasnému zastavení. Automatický start musí ověřit připravenost karty
 
 ## 7. Spolehlivost a technický základ
 
-- Oddělit snímání mikrofonu od výstupu do sítě či na kartu. V první fázi bude
-  aktivní jen jedna výstupní cesta; návrh má umožnit pozdější souběh.
+- Oddělit snímání mikrofonu od výstupu do sítě či na kartu. SD je hlavní výstup Recording; volitelný kontrolní Listen má vlastní omezenou frontu
+  a nesmí brzdit SD. RTSP + Recording zůstává mimo první fázi.
 - Použít vyhrazený buffer a obsluhu zápisu; čekání na SD nesmí blokovat snímání.
 - Ze samostatného recorderu posoudit převzetí WAV zápisu, dělení souborů,
   checkpointů, práce s rozpracovanými soubory a jejich obnovy.
@@ -173,11 +175,12 @@ Prohlížeč souborů, stahování nahrávek, automatické mazání, fyzické tl
 nízkobateriové vypnutí a vzdálený přístup přes internet nejsou v domluveném
 rozsahu první fáze. Lze je posoudit samostatně.
 
-## 9. Další krok až po pokynu uživatele
+## 9. Navazující práce
 
-Nejprve ověřit fyzický hardware a pinout, vyřešit otevřené detaily nutné pro první
-verzi a navrhnout konkrétní UI. Potom realizovat oddělené režimy a SD nahrávání,
-otestovat první S3 sestavu a postupně kvalifikovat další desky.
+Nejprve lokálně připravit oddělené režimy, UI a SD pipeline. Po doručení modulu
+ověřit skutečný hardware a pinout, otestovat první S3 sestavu a podle výsledků
+doladit otevřené detaily. Další desky kvalifikovat postupně.
 
-Do té doby zůstává tento dokument uloženým podkladem; firmware se kvůli tomuto
-návrhu nemění, nenahrává na zařízení ani nevydává.
+Lokální implementace a OTA na konfigurované C6 pro kontrolu UI jsou povolené.
+Fyzický SD test a veřejné vydání jsou odložené;
+uživatel očekává doručení hardware přibližně za dva dny.

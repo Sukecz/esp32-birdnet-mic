@@ -35,6 +35,8 @@
 #include "AudioDiagnostics.h"
 #include "MicrophoneSignal.h"
 #include "BrowserAudio.h"
+#include "Recording.h"
+static uint32_t recordingDmaBaseline = 0;
 #include "ThermalRecovery.h"
 #include "ChipTemperature.h"
 #include "FlashLayout.h"
@@ -1173,8 +1175,8 @@ static void mqttMessageCallback(char* topic, byte* payload, unsigned int length)
 
     if (t == mqttCmdRtspTopic()) {
         if (up == "ON") {
-            if (overheatLatched) {
-                simplePrintln("MQTT command ignored: RTSP ON blocked by thermal latch.");
+            if (overheatLatched || recording::mode()) {
+                simplePrintln("MQTT command ignored: RTSP ON blocked by thermal protection or Recording mode.");
             } else if (!rtspServerEnabled) {
                 rtspServer.begin();
                 rtspServer.setNoDelay(true);
@@ -1592,6 +1594,7 @@ static void logDeepSleepWakeSnapshotIfAny() {
 }
 
 void checkStreamSchedule() {
+    if (recording::mode()) return;
     if (!streamScheduleEnabled) {
         lastScheduleAllow = true;
         lastScheduleTimeValid = hasValidTime();
@@ -1651,6 +1654,7 @@ void checkStreamSchedule() {
 }
 
 void checkDeepSleepSchedule() {
+    if (recording::mode()) { deepSleepStatusCode = "recording_mode"; return; }
     deepSleepNextSleepSec = 0;
 
     if (!deepSleepScheduleEnabled) {
@@ -1883,7 +1887,7 @@ bool acknowledgeThermalShutdown() {
     overheatConsecutiveSamples = 0;
     // Preserve the last shutdown details for diagnosis after acknowledgement.
     persistOverheatNote();
-    if (wasLatched && isStreamScheduleAllowedNow()) {
+    if (wasLatched && !recording::mode() && isStreamScheduleAllowedNow()) {
         rtspServer.begin();
         rtspServer.setNoDelay(true);
         rtspServerEnabled = true;
@@ -1991,10 +1995,12 @@ void checkTemperature() {
         overheatLockoutActive = false;
         overheatConsecutiveSamples = 0;
         persistOverheatNote();
-        rtspServer.begin();
-        rtspServer.setNoDelay(true);
-        rtspServerEnabled = true;
-        simplePrintln("THERMAL RECOVERY: RTSP restored after stable cooling. Warning awaits acknowledgement.");
+        if (!recording::mode()) {
+            rtspServer.begin();
+            rtspServer.setNoDelay(true);
+            rtspServerEnabled = true;
+        }
+        simplePrintln("THERMAL RECOVERY: Audio restored after stable cooling. Warning awaits acknowledgement.");
         mqttPublishState(true);
     }
 
@@ -2027,6 +2033,9 @@ void checkPerformance() {
 }
 
 void checkAudioProducerHealth() {
+    if (recording::busy() && (!audioProducerRunning ||
+        uint32_t(millis() - audioProducerLastReadMs) > 2000 ||
+        getI2sDmaOverrunTotal() != recordingDmaBaseline)) recording::captureFault();
     // Read the cross-task timestamp before the clock to avoid treating a newer
     // producer timestamp as an unsigned negative age.
     uint32_t lastRead = audioProducerLastReadMs;
@@ -2075,7 +2084,7 @@ void checkWiFiHealth() {
 
 // Scheduled reset
 void checkScheduledReset() {
-    if (!scheduledResetEnabled) return;
+    if (!scheduledResetEnabled || recording::mode()) return;
 
     unsigned long uptimeHours = (millis() - bootTime) / 3600000;
     if (uptimeHours >= resetIntervalHours) {
@@ -2367,6 +2376,7 @@ void applyMdnsSetting() {
 
 // Schedule a safe reboot (optionally with factory reset) after delayMs
 void scheduleReboot(bool factoryReset, uint32_t delayMs) {
+    if (!recording::stop()) return;
     scheduledFactoryReset = factoryReset;
     scheduledRebootAt = millis() + delayMs;
 }
@@ -2394,6 +2404,7 @@ uint32_t computeRecommendedMinRate() {
 
 // Restore application settings to safe defaults and persist
 void resetToDefaultSettings() {
+    recording::saveSettings(recording::Settings{});
     simplePrintln("FACTORY RESET: Restoring default settings...");
     wifiApSave(nullptr);
     clearStoredBssidPin();
@@ -2583,6 +2594,7 @@ bool applyMicProfileConfig(uint8_t newFormat, bool recommended) {
 // Persist only after success in the authenticated API handler.
 bool applyS3BoardConfig(uint8_t variant) {
     if (!s3BoardSelectionSupported() || !s3boards::valid(variant)) return false;
+    if (recording::mode() && variant != s3boards::External) return false;
     if (variant == s3BoardVariant) return true;
     const uint8_t oldVariant = s3BoardVariant, oldFormat = micFormat;
     const uint32_t oldRate = currentSampleRate, oldMinRate = minAcceptableRate;
@@ -2618,8 +2630,43 @@ static inline void* audioWorkAlloc(size_t bytes) {
 #endif
 }
 
+bool recordingHardwareSupported() {
+#if defined(ARDUINO_XIAO_ESP32S3)
+    return s3BoardVariant == s3boards::External;
+#else
+    return false;
+#endif
+}
+
+bool startRecording() {
+    if (recording::busy() || otaInProgress || flashlayout::busy() || overheatLatched ||
+        !audioProducerRunning || audioProducerStopRequested || scheduledRebootAt) return false;
+    recordingDmaBaseline = getI2sDmaOverrunTotal();
+    return recording::start(currentSampleRate, recordingHardwareSupported());
+}
+
+bool setDeviceMode(bool recordingMode) {
+    if (recordingMode == recording::mode()) return true;
+    if (otaInProgress || flashlayout::busy()) return false;
+    const bool wasRecording = recording::busy();
+    if (!recording::stop() || (wasRecording && recording::status().state == recording::State::Error)) return false;
+    auto config = recording::settings();
+    config.recordingMode = recordingMode;
+    if (!recording::saveSettings(config)) return false;
+    if (recordingMode) wifiApEnableFieldControl();
+    browserAudioStop();
+    stopAllRtspClients("Device mode changed");
+    rtspServerEnabled = false;
+    rtspServer.stop();
+    if (!recordingMode && !overheatLatched && isStreamScheduleAllowedNow()) {
+        rtspServer.begin(); rtspServer.setNoDelay(true); rtspServerEnabled = true;
+    }
+    return true;
+}
+
 // Restart I2S with new parameters
 bool restartI2S() {
+    if (recording::busy()) return false;
     lastI2SReset = millis();
     simplePrintln("Restarting I2S with new parameters...");
     stopAllRtspClients("I2S restart");
@@ -2894,6 +2941,7 @@ void audioProducerTask(void* /*arg*/) {
             pdm ? 16 : i2sShiftBits, hpfConfigEnabled ? &hpf : nullptr,
             fxaudio::gainToQ(currentGainFactor), &clipped);
         microphoneSignal.observe(rawMinimum, rawMaximum, millis());
+        recording::push(i2s_16bit_buffer, samplesRead);
         browserAudioPush(i2s_16bit_buffer, samplesRead);
         audioClippedLastBlock = clipped;
         if (clipped) audioClipCount++;
@@ -2986,7 +3034,9 @@ void stopAudioProducer() {
 // Stop capture and its clocks as well as network listeners. Leaving the PDM
 // converter running prevents cooling and competes with flash writes during OTA.
 void pauseAudioCapture() {
+    recording::requestStop();
     stopAudioProducer();
+    recording::stop();
     if (i2s_rx_handle) {
         i2s_channel_disable(i2s_rx_handle);
         i2s_del_channel(i2s_rx_handle);
@@ -3018,7 +3068,7 @@ void endOtaUpdate(bool installed) {
         simplePrintln("OTA failed: audio restart failed; reboot required.");
         return;
     }
-    if (otaRestoreRtsp && isStreamScheduleAllowedNow()) {
+    if (otaRestoreRtsp && !recording::mode() && isStreamScheduleAllowedNow()) {
         rtspServer.begin();
         rtspServer.setNoDelay(true);
         rtspServerEnabled = true;
@@ -3891,6 +3941,7 @@ void setup() {
 
     // Load settings from flash
     loadAudioSettings();
+    recording::begin();
 
     // Allocate buffers with current size
     i2s_32bit_buffer = (int32_t*)audioWorkAlloc(currentBufferSize * sizeof(int32_t));
@@ -3906,7 +3957,14 @@ void setup() {
     WiFi.setSleep(false);
 
     wifiApLoad();
-    if (wifiApBeginPinned()) {
+    if (recording::mode()) wifiApEnableFieldControl();
+    if (recording::mode() && !wifiApPinned()) {
+        WiFi.mode(WIFI_STA);
+        WiFi.begin();
+        unsigned long started = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - started < 15000UL) delay(50);
+        wifiApRecoveryLoop();
+    } else if (wifiApBeginPinned()) {
         simplePrintln("WiFi: connecting to saved access point " + wifiApPinnedText());
         unsigned long started = millis();
         while (WiFi.status() != WL_CONNECTED && millis() - started < 15000UL) delay(50);
@@ -3948,7 +4006,7 @@ void setup() {
         simplePrintln("FATAL: I2S setup failed!");
         ESP.restart();
     }
-    if (!overheatLatched && !otaInProgress) {
+    if (!recording::mode() && !overheatLatched && !otaInProgress) {
         rtspServer.begin();
         rtspServer.setNoDelay(true);
         rtspServerEnabled = true;
@@ -4003,9 +4061,12 @@ void setup() {
         simplePrintln("You can stream via IP or mDNS (if enabled).");
     } else if (overheatLatched) {
         simplePrintln("RTSP server paused due to thermal latch. Waiting for cooling/recovery policy.");
+    } else if (recording::mode()) {
+        simplePrintln("Recording mode: RTSP disabled, browser Listen available.");
     } else {
         simplePrintln("RTSP server paused by stream schedule. It will resume in the next allowed window.");
     }
+    if (recording::mode() && recording::settings().autoStart && !overheatLatched) startRecording();
     simplePrintln("Web UI: http://" + WiFi.localIP().toString() + "/");
     if (mqttEnabled) {
         simplePrintln("MQTT: enabled (" + mqttHost + ":" + String(mqttPort) +
@@ -4020,7 +4081,7 @@ void setup() {
 void loop() {
     flashlayout::loop();
     if (!flashlayout::busy()) {
-        ArduinoOTA.handle();
+        if (!recording::busy()) ArduinoOTA.handle();
         wifiApRecoveryLoop();
     }
 
@@ -4033,7 +4094,7 @@ void loop() {
     // and audio health actions throughout preparation and its deferred reboot.
     // Saved thermal protection and any existing shutdown latch stay untouched.
     if (otaInProgress || flashlayout::busy()) {
-        if (scheduledRebootAt != 0 && millis() >= scheduledRebootAt) ESP.restart();
+        if (scheduledRebootAt != 0 && millis() >= scheduledRebootAt && recording::stop()) ESP.restart();
         delay(1);
         return;
     }
@@ -4132,12 +4193,14 @@ void loop() {
             }
         }
         streamAudio();
-    } else {
+    } else if (!recording::mode()) {
+        // Mode entry already disconnected RTSP. Do not repeatedly cancel the
+        // independent browser Listen session while Recording keeps RTSP off.
         stopAllRtspClients("RTSP server disabled");
     }
     refreshLegacyRtspState();
-    browserAudioLoop(rtspServerEnabled && !overheatLatched && audioProducerRunning &&
-                     !audioProducerStopRequested && WiFi.status() == WL_CONNECTED, currentSampleRate);
+    browserAudioLoop((rtspServerEnabled || recording::mode()) && !overheatLatched && audioProducerRunning &&
+                     !audioProducerStopRequested && (WiFi.status() == WL_CONNECTED || wifiApRecoveryActive()), currentSampleRate);
     uint32_t rateNow = millis();
     recentAudioRate.update(rateNow, audioPacketsSent);
     for (uint8_t i = 0; i < 2; ++i) recentStreamRate[i].update(rateNow, streamStats[i].packetsSent);
@@ -4201,7 +4264,7 @@ void loop() {
     }
 
     // Handle deferred reboot/reset safely here
-    if (scheduledRebootAt != 0 && millis() >= scheduledRebootAt) {
+    if (scheduledRebootAt != 0 && millis() >= scheduledRebootAt && recording::stop()) {
         if (scheduledFactoryReset) {
             resetToDefaultSettings();
         }
