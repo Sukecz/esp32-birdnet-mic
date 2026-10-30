@@ -3,7 +3,7 @@
 > **Firmware 2.01:** Streaming and standalone Recording. See the [main guide](../README.md).
 
 
-Firmware **v2.01**. Candidate in preparation. See the [release validation](../release-notes/2.01-validation.md).
+Firmware **v2.01**. See the [release validation](../release-notes/2.01-validation.md).
 
 **Firmware: 2.01** (2026-10-30).
 

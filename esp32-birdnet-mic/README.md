@@ -6,14 +6,14 @@
 
 Two modes: live **RTSP Streaming** or standalone **microSD WAV Recording**.
 Start with the [beginner guide](../README.md) and [field recording guide](../docs/field-recording.md).
-Firmware **2.01 is in preparation**; see the [validation record](../release-notes/2.01-validation.md).
+Current release: **2.01**; see the [validation record](../release-notes/2.01-validation.md).
 For new builds we recommend **XIAO ESP32-C5 + IM73D122 PDM**, with an Adafruit BFF for SD.
 
 Arduino firmware for Seeed Studio XIAO ESP32 and M5Stack AtomS3U, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Firmware candidate: **v2.01** — Recording memory fixes and S3 PSRAM support.
+- Latest firmware: **v2.01** — Recording memory fixes and S3 PSRAM support.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode

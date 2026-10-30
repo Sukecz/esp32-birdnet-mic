@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.01 - unreleased
+## 2.01 - 2026-10-30
 
 - **S3 PSRAM:** enable the XIAO S3 OPI PSRAM in the common build helper and use
   it for Streaming and Listen buffers, sharing the C5 allocation/fallback policy.
@@ -18,7 +18,11 @@
 - **Retries:** a new recording attempt reports its current allocation error,
   instead of keeping an earlier missing-card error.
 - **Diagnostics:** report free, largest and minimum internal heap plus detected
-  PSRAM on every board. See the [validation record](../release-notes/2.01-validation.md).
+  PSRAM on every board.
+- **Validation:** 112 native/Python tests, all four firmware targets and S3/C5
+  builds without PSRAM. Physical checks covered S3/C5/C6, including actual C5
+  SD recording with continuous Listen. C3 and Sense were not physically qualified.
+  See the [validation record](https://github.com/Sukecz/esp32-birdnet-mic/blob/v2.01/release-notes/2.01-validation.md).
 
 ## 2.00 - 2026-10-30
 
