@@ -69,7 +69,11 @@ int main(){
             fake = pathlib.Path(temp) / 'arduino-cli'
             fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
             fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
-            env = dict(os.environ, PATH=temp + os.pathsep + os.environ['PATH'])
+            sd = pathlib.Path(temp) / 'sd-fixture'
+            (sd / 'src').mkdir(parents=True)
+            (sd / 'library.properties').write_text('name=SD test fixture\n')
+            (sd / 'src/SD.h').write_text('// Argument inspection only; no compilation.\n')
+            env = dict(os.environ, PATH=temp + os.pathsep + os.environ['PATH'], BIRDNETMIC_SD_LIBRARY=str(sd))
 
             def run(*args):
                 out = subprocess.run(['bash', str(ROOT / 'tools/compile_firmware.sh'), *args],

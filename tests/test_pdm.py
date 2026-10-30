@@ -90,6 +90,7 @@ PdmReadBuffers storage; PdmReadBuffers* pdmReadBuffers=&storage;
 pdmsw::Decimator filter; pdmsw::Decimator* pdmDecimator=&filter;
 pdmsw::WordFramer pdmFramer;
 pdmsw::WordRateDetector pdmWordRate;
+namespace recording {inline uint32_t faults=0;void captureFault(){++faults;}}
 constexpr uint32_t PDM_SAMPLE_RATE=48000;
 uint32_t getI2sDmaOverrunTotal(){return 0;}
 std::atomic<uint8_t> pdmDetectedStride{0}, pdmDetectedOrder{1}, pdmStrideLogPending{0};

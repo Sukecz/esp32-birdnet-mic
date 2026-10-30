@@ -23,7 +23,7 @@ class S3BoardsTests(unittest.TestCase):
     def native(self, code):
         with tempfile.TemporaryDirectory() as temp:
             cpp, binary = Path(temp) / 'test.cpp', Path(temp) / 'test'
-            cpp.write_text('namespace recording { inline bool mode(){return false;} }\n'+code)
+            cpp.write_text('namespace recording { inline bool active=false,working=false; inline int checks=0,lastVariant=-1; inline bool mode(){return active;} inline bool busy(){return working;} inline bool checkCard(bool supported,unsigned char variant){lastVariant=variant;++checks;return supported;} }\nbool recordingHardwareSupported(){return true;}\n'+code)
             subprocess.run(['g++', '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
                             '-fsanitize=undefined', '-fno-sanitize-recover=all',
                             '-I', str(ROOT / 'esp32-birdnet-mic'), str(cpp), '-o', str(binary)], check=True)
@@ -32,7 +32,8 @@ class S3BoardsTests(unittest.TestCase):
     def test_actual_switch_transaction_routing_and_recovery(self):
         helpers = '\n'.join(function(SKETCH, sig) for sig in (
             'bool builtinMicSelected()', 'bool micBoardFormatAllowed(uint8_t format)',
-            'void updateS3BoardIdentity()', 'bool applyS3BoardConfig(uint8_t variant)',
+            'void updateS3BoardIdentity()', 's3boards::Config getS3BoardConfig()',
+            'bool restoreS3BoardConfig(const s3boards::Config& saved)', 'bool applyS3BoardConfig(uint8_t variant)',
             'bool applyMicFormatConfig(uint8_t newFormat)'))
         self.native(r'''
 #include "S3Boards.h"
@@ -69,7 +70,13 @@ int main(){
  results={false,true};assert(!applyS3BoardConfig(1));
  assert(s3BoardVariant==0&&micFormat==0&&currentSampleRate==96000&&highpassCutoffHz==30000&&minAcceptableRate==33);
  assert(!strcmp(FW_BOARD_ID_STR,"xiao-esp32s3")&&restarts==2);
+ recording::working=true;assert(!applyS3BoardConfig(1)&&s3BoardVariant==0);recording::working=false;
+ const auto original=getS3BoardConfig();
+ recording::active=true;
  results={true};assert(applyS3BoardConfig(1));
+ assert(recording::checks==0); // Hardware switching never starts an SD operation before commit.
+ assert(!applyS3BoardConfig(2)&&recording::checks==0);
+ recording::active=false;
  assert(s3BoardVariant==1&&micFormat==2&&currentSampleRate==48000&&highpassCutoffHz==23999);
  assert(!strcmp(FW_BOARD_ID_STR,"xiao-esp32s3-sense"));
  assert(micBoardFormatAllowed(0)&&micBoardFormatAllowed(1)&&micBoardFormatAllowed(2));
@@ -82,6 +89,11 @@ int main(){
  autoThresholdEnabled=false;minAcceptableRate=77;results={true};assert(applyS3BoardConfig(0));
  assert(micFormat==2&&currentSampleRate==48000&&minAcceptableRate==77&&micBoardFormatAllowed(0));
  assert(!strcmp(FW_BOARD_ID_STR,"xiao-esp32s3"));
+ recording::active=true;results={true};assert(applyS3BoardConfig(1));
+ assert(recording::checks==0);
+ int probes=recording::checks;results={false,true};assert(!applyS3BoardConfig(0));assert(recording::checks==probes&&s3BoardVariant==1);
+ results={true};assert(applyS3BoardConfig(0));assert(recording::checks==0);
+ recording::active=false;
  results={true};assert(applyS3BoardConfig(1));
  results={false,true};assert(!applyMicFormatConfig(0)&&micFormat==2&&s3BoardVariant==1);
  for(uint8_t format:{0,1,2}){
@@ -91,6 +103,10 @@ int main(){
  }
  results={true};assert(applyS3BoardConfig(2));
  count=restarts;assert(!applyMicFormatConfig(0)&&!applyMicFormatConfig(1)&&restarts==count);
+ results={true};assert(restoreS3BoardConfig(original));
+ assert(s3BoardVariant==original.variant&&micFormat==original.format&&currentSampleRate==original.rate);
+ assert(highpassCutoffHz==original.cutoff&&minAcceptableRate==original.minRate&&recording::checks==0);
+ assert(!strcmp(FW_BOARD_ID_STR,"xiao-esp32s3"));
 }
 ''')
 
@@ -130,10 +146,10 @@ int main(){
 struct String:std::string{using std::string::string;};
 #define F(s) s
 struct {String value;String arg(const char*){return value;}} web;
-bool auth=true,supported=true,applyOk=true;int calls=0,saves=0;uint8_t applied=99;
+bool auth=true,supported=true,applyOk=true;int calls=0,saves=0;uint8_t applied=99,s3BoardVariant=0;
 bool requireMutationAuth(){return auth;}
 bool s3BoardSelectionSupported(){return supported;}
-bool applyS3BoardConfig(uint8_t v){++calls;applied=v;return applyOk;}
+bool applyS3BoardConfig(uint8_t v){++calls;applied=v;if(applyOk)s3BoardVariant=v;return applyOk;}
 void saveAudioSettings(){++saves;}
 void apiSendJSON(const char*){}
 ''' + parser + function(WEB, 'static void httpSaveS3Board()') + r'''
@@ -143,6 +159,8 @@ int main(){
  for(const char* bad:{"3","-1","256","1x","","999999999999999999999"}){web.value=bad;httpSaveS3Board();assert(!calls&&!saves);}
  web.value="2";applyOk=false;httpSaveS3Board();assert(calls==1&&!saves);
  applyOk=true;httpSaveS3Board();assert(calls==2&&saves==1&&applied==2);
+ recording::active=true;web.value="1";httpSaveS3Board();
+ assert(saves==2&&recording::checks==1&&recording::lastVariant==1);
 }
 ''')
 

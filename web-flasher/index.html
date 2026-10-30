@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Install BirdNETMic on your Seeed XIAO ESP32. One-click USB flashing, wireless updates, and firmware download statistics by release and board.">
+  <meta name="description" content="BirdNETMic: live RTSP streaming and standalone microSD field recording. Install ESP32 firmware, configure your recorder and update over Wi-Fi.">
   <meta name="color-scheme" content="light dark">
   <title>BirdNETMic · Install & download statistics</title>
   <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96x96.png?v=20260722">
@@ -33,22 +33,22 @@
         <div class="hero-copy">
           <p class="eyebrow"><span class="live-dot"></span> ESP32 MICROPHONE FIRMWARE</p>
           <h1 id="hero-title">Install <span>BirdNETMic</span></h1>
-          <p class="lede">ESP32 microphone firmware for BirdNET-Go and BirdNET-Pi. Install it from your browser or update an existing device over Wi-Fi.</p>
+          <p class="lede">Stream live audio to BirdNET-Go or BirdNET-Pi, or record wildlife sounds to microSD without a router or computer. Install BirdNETMic 2.00 from your browser.</p>
           <div class="install-action"><esp-web-install-button manifest="manifest.json"><button type="button" slot="activate" class="flash-button">Connect &amp; flash <span aria-hidden="true">↗</span></button><span slot="unsupported" class="install-note">USB installation needs Chrome or Edge on desktop. <a href="https://github.com/Sukecz/esp32-birdnet-mic/releases">Download firmware ↗</a></span></esp-web-install-button><a class="guide-button" href="https://github.com/Sukecz/esp32-birdnet-mic#quick-start" target="_blank" rel="noreferrer">Setup guide <span aria-hidden="true">↗</span></a><span class="release-badge" id="fw-version-chip">Loading release…</span></div>
           <p class="install-note">Chrome or Edge on desktop · USB data connection<br>Updating? Choose the option that keeps existing data.</p>
           <div class="chips" aria-label="Supported boards"><span>XIAO ESP32-C3</span><span>XIAO ESP32-S3 / Plus</span><span>XIAO ESP32-C5</span><span>XIAO ESP32-C6</span><span>M5Stack AtomS3U</span><span>XIAO ESP32-S3 Sense (experimental)</span></div>
-          <p class="board-note">AtomS3U and Sense use the S3 firmware. After Wi-Fi setup, open <strong>Audio → S3 board</strong>, select your board and click <strong>Apply board</strong>. AtomS3U has a built-in microphone; Sense support has not been tested on physical hardware.</p>
+          <p class="board-note"><strong>New build? Choose XIAO ESP32-C5 + PDM:</strong> PSRAM buffers and built-in battery voltage measurement. Add an Adafruit microSD BFF #5683 for Recording. Sense has its own microphone and SD slot (experimental); AtomS3U supports Streaming. Both use S3 firmware: choose your board in <strong>Device configuration</strong>.</p>
         </div>
         <div class="hero-art"><div class="art-orbit"></div><img src="assets/bird.png?v=20260722" alt="A green bird singing into a microphone" width="320" height="320"></div>
       </section>
       <section class="steps" aria-label="Installation steps">
         <div><span class="step-number">01</span><div><h2>Connect</h2><p>Connect via USB. AtomS3U plugs directly into USB-A. For XIAO, use a USB-C data cable.</p></div></div>
         <div><span class="step-number">02</span><div><h2>Flash</h2><p>Select the USB serial device. The browser picks the firmware for your ESP32 chip.</p></div></div>
-        <div><span class="step-number">03</span><div><h2>Go wireless</h2><p>Connect to ESP32-RTSP-Mic-AP and enter your Wi-Fi details.</p></div></div>
+        <div><span class="step-number">03</span><div><h2>Go wireless</h2><p>Join BirdNETMic-XXXXXX, choose your board and select Streaming or Recording.</p></div></div>
       </section>
       <section class="setup-grid" aria-label="Device setup">
-        <section class="panel setup-card" aria-labelledby="wifi-setup-title"><h2 id="wifi-setup-title">First boot &amp; Wi-Fi setup</h2><div class="details-body"><p>The device starts an open access point named <strong>ESP32-RTSP-Mic-AP</strong>. Connect to it and enter your Wi-Fi SSID and password in the captive portal. The board saves your settings and rejoins your network.</p><p>If the portal does not open, visit <code>http://192.168.4.1</code>. Then reconnect to your normal network. Find the board’s IP in your router, or use its unique mDNS name, such as <code>esp32mic-a1b2c3.local</code>, shown in its Web UI.</p></div></section>
-        <section class="panel setup-card" aria-labelledby="birdnet-setup-title"><h2 id="birdnet-setup-title">Connect to BirdNET</h2><div class="details-body"><p>After Wi-Fi setup, add the device’s RTSP stream to BirdNET-Go or BirdNET-Pi.</p><p><code>rtsp://&lt;device-ip&gt;:8554/audio1</code><br><code>rtsp://&lt;device-ip&gt;:8554/audio2</code></p><p>These paths also work with the device’s unique mDNS hostname when mDNS is available.</p></div></section>
+        <section class="panel setup-card" aria-labelledby="wifi-setup-title"><h2 id="wifi-setup-title">First boot &amp; Wi-Fi setup</h2><div class="details-body"><p>Join the open <strong>BirdNETMic-XXXXXX</strong> setup network. Choose your board and default mode. Streaming connects to home Wi-Fi; Recording can also use standalone Device Wi-Fi. Save the direct-access password shown by the wizard before finishing.</p><p>If the portal does not open, visit <code>http://192.168.4.1</code>. After setup, reconnect to your home network, or rejoin Device Wi-Fi with the saved password for standalone use. Find the board’s IP in your router, or use its unique mDNS name, such as <code>esp32mic-a1b2c3.local</code>, shown in its Web UI.</p></div></section>
+        <section class="panel setup-card" aria-labelledby="birdnet-setup-title"><h2 id="birdnet-setup-title">Connect to BirdNET</h2><div class="details-body"><p>Choose Streaming after setup, then add the device’s RTSP stream to BirdNET-Go or BirdNET-Pi.</p><p><code>rtsp://&lt;device-ip&gt;:8554/audio1</code><br><code>rtsp://&lt;device-ip&gt;:8554/audio2</code></p><p><strong>Recording instead?</strong> Select Recording, check the SD card, use Listen for a sound check and press Start recording. Standalone Device Wi-Fi works without a router. Turning Wi-Fi off saves power but requires reset or power cycling to reconnect; the device sleeps when the offline session ends. <a href="https://github.com/Sukecz/esp32-birdnet-mic/blob/main/docs/field-recording.md">Read the field recording guide</a>.</p><p>These paths also work with the device’s unique mDNS hostname when mDNS is available.</p></div></section>
       </section>
       <section class="ota-panel panel" aria-labelledby="ota-title">
         <div><p class="eyebrow">ALREADY CONNECTED?</p><h2 id="ota-title">Update over Wi-Fi</h2><p>Open your device’s update page for an automatic update or a manual firmware upload.</p></div>
@@ -72,7 +72,7 @@
         <noscript><p>Enable JavaScript to view download statistics. Firmware and source code are also available on <a href="https://github.com/Sukecz/esp32-birdnet-mic/releases">GitHub Releases</a>.</p></noscript>
       </section>
     </main>
-    <footer><a class="brand" href="#">BirdNET<span>Mic</span></a><p>ESP32 RTSP microphone firmware</p><a href="https://github.com/Sukecz" target="_blank" rel="noreferrer">Built by Sukecz ↗</a></footer>
+    <footer><a class="brand" href="#">BirdNET<span>Mic</span></a><p>ESP32 audio streaming and standalone field recording</p><a href="https://github.com/Sukecz" target="_blank" rel="noreferrer">Built by Sukecz ↗</a></footer>
   </div>
 </body>
 </html>

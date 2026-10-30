@@ -33,6 +33,7 @@ class OtaPreparationTests(unittest.TestCase):
     def test_initial_old_upgrade_then_new_gate_and_both_http_endpoints(self):
         prefix = r'''
 #include "Platform.h"
+namespace recording {bool busy(){return false;}}
 bool auth=true,allowed=false;
 int starts=0,writes=0,installs=0,checks=0,pauses=0,reboots=0,httpCode=0;
 String message;

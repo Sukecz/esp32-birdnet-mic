@@ -9,6 +9,3 @@ String wifiApSsid();
 bool wifiApBeginPinned();
 void wifiApRecoveryLoop();
 bool wifiApRecoveryActive();
-
-// Once field recovery is enabled, keep the AP available until power-off.
-void wifiApEnableFieldControl();

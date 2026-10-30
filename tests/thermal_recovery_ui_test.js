@@ -5,6 +5,8 @@ const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '../esp32-birdnet-mic/webui/index.html'), 'utf8');
 assert(html.includes('Recovery requires 5 minutes at least 10 C below the limit.'));
 assert(!html.includes('at least 15 C below the limit'));
+assert(!html.includes('15 &deg;C below'));
+assert(html.includes('10 &deg;C below'));
 const ids = ['sel_oh_auto', 'therm_trip_count', 'thermal_notice', 'thermal_notice_title',
   'thermal_notice_detail', 'row_therm_latch', 'txt_therm_latch', 'therm_status',
   'btn_therm_clear', 'btn_thermal_notice_ack', 'b_srv_on', 'b_srv_off'];
@@ -32,6 +34,9 @@ assert(nodes.thermal_notice_detail.textContent.includes('70 °C'));
 assert(nodes.thermal_notice_detail.textContent.includes('5:00'));
 context.setToggleState(false);
 assert.equal(nodes.b_srv_off.disabled, false); // User can cancel pending recovery.
+context.renderThermalRecovery({...state,recording_mode:true,recording_resume_pending:true,schedule_allowed:false});
+assert(nodes.thermal_notice_detail.textContent.includes('Recording will continue in a new file'));
+assert(!nodes.thermal_notice_detail.textContent.includes('allowed schedule'));
 context.renderThermalRecovery({...state, trips_24h: 3, manual_blocked: true,
   auto_resume_pending: false, cool_remaining_sec: 0, can_acknowledge: true});
 assert(nodes.thermal_notice_title.textContent.includes('Repeated overheating'));

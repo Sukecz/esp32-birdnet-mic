@@ -2,18 +2,21 @@
   <img src="../assets/birdlogo.png" alt="ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi" width="240" />
 </p>
 
-# BirdNETMic Firmware — ESP32 RTSP Audio for BirdNET-Go and BirdNET-Pi
+# BirdNETMic Firmware — Streaming and standalone Recording
+
+Two modes: live **RTSP Streaming** or standalone **microSD WAV Recording**.
+Start with the [beginner guide](../README.md) and [field recording guide](../docs/field-recording.md).
+Current release: **2.00**.
+For new builds we recommend **XIAO ESP32-C5 + IM73D122 PDM**, with an Adafruit BFF for SD.
 
 Arduino firmware for Seeed Studio XIAO ESP32 and M5Stack AtomS3U, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Latest firmware: **v1.36** (2026-10-25) — [release validation](../release-notes/1.36-validation.md)
-- C5 PSRAM: retain audio capture when changing settings with a streaming client connected.
+- Latest firmware: **v2.00** — Streaming and standalone Recording.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
-- Maintainer runtime reference: **XIAO ESP32-C6 + ICS-43434**; contributor-tested PDM setups include **M5Stack AtomS3U**, **C5 + IM73D122** and **C3 + Adafruit-compatible PDM**
-- Recommended microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
+- Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
 - Legacy microphones: **ICS-43434/INMP441** in default Philips I2S mode
 - User-facing overview and wiring: `../README.md`
 - Changelog: `CHANGELOG.md`
@@ -39,12 +42,9 @@ the [main guide](../README.md) for hardware choices, quick start and wiring.
 
 [M5Stack AtomS3U](https://docs.m5stack.com/en/core/AtomS3U) and
 [XIAO ESP32-S3 Sense](https://www.seeedstudio.com/XIAO-ESP32S3-Sense-p-5639.html)
-use the shared **S3 firmware**. **AtomS3U is tested and working with BirdNET-Go**
-([contributor test on v1.33](https://github.com/Sukecz/esp32-birdnet-mic/pull/62#issuecomment-6326944252));
-it is the easiest setup without soldering or external microphone wiring.
-**Sense remains experimental and has not been tested on physical hardware.**
-Open **Audio → S3 board** in the device Web UI,
-select the board, and click **Apply board**. Its built-in PDM microphone runs at
+use the shared **S3 firmware**. **AtomS3U** has a built-in PDM microphone. **Sense remains experimental.**
+Open **Device configuration → Board** in the device Web UI,
+select the board, and save the configuration. Its built-in PDM microphone runs at
 48 kHz; the selection is saved across restarts and OTA updates. Adjust Gain using
 the signal meter and Listen; **Gain 24** is a starting point for AtomS3U.
 
@@ -53,6 +53,50 @@ and microphone-format selection. The selector is shown only in S3 firmware.
 The Sense profile also accepts external I2S microphones using the normal S3 wiring.
 PDM in that profile uses the built-in microphone. For an external PDM microphone,
 use the default board option.
+
+In Recording mode, selecting **Sense** also selects its
+built-in microSD slot: **CS GPIO21, SCK GPIO7, MISO GPIO8, MOSI GPIO9**. Use the
+Sense expansion board with its factory SD connection enabled and a **FAT32 card
+up to 32 GB**. Other XIAO profiles retain external SPI SD on D6/D8/D9/D10;
+AtomS3U has no supported SD interface. Switching the S3 board while idle in
+Recording rechecks the selected slot. Active recording blocks a board change.
+See [Seeed's SD guide](https://wiki.seeedstudio.com/xiao_esp32s3_sense_filesystem/)
+and the [field recording guide](../docs/field-recording.md).
+See the main guide for setup.
+
+## Battery
+
+The main UI's **Battery** section provides **Enable battery monitoring**, wiring
+information and voltage calibration. Save the monitoring switch to show
+**Battery: ~65% · 3.85 V** in the top overview in both modes. Device configuration
+uses the same saved switch; monitoring is off by default.
+
+Use a protected **4.2 V maximum Li-ion/LiPo 1S pack**, including matched parallel
+cells. The updated [connection diagram and recommendations](../README.md#battery)
+show a **1S BMS**, a fuse in the positive output lead and the external divider
+on C6. The illustrated assembly uses a **3 A BMS / 3.5 A fuse**; component values
+must be checked against the actual pack, wiring and protection specifications.
+All device connections and divider returns belong on the protected **P+/P−**
+side, with XIAO BAT+ fed through the fuse.
+
+C5 has a built-in **100 kΩ + 100 kΩ** divider (GPIO6, enable GPIO26); no external
+measurement resistors are needed. C3/S3/C6 use an external **100 kΩ + 100 kΩ**
+divider to **D0/A0**, leaving microphone and SD pins available.
+**M5Stack AtomS3U battery monitoring is unsupported.**
+
+Enter a simultaneous multimeter reading across XIAO BAT+/BAT− and press
+**Calibrate** to save a voltage correction within **±10%**. The corrected voltage
+also drives the estimated percentage. **Reset calibration** restores 0%.
+Calibration survives restart/OTA and is cleared by factory reset.
+
+Voltage-only percentages are approximate; battery/USB/charging detection is
+not automatic. Optional **Low-battery protection** stops and saves Recording,
+then stays awake or enters deep sleep. Stop voltage, confirmation, recovery
+margin and the action are configurable. **Turn Wi-Fi off until restart** in
+Recording keeps recording and monitoring active; its delay is configurable.
+Reads are staged in the app loop and reported in `/api/status`, independently
+of the browser. See the
+[battery guide](../docs/battery-monitoring.md) for GPIOs, APIs and validation limits.
 
 ## C5 PSRAM audio buffers (v1.34)
 
@@ -67,12 +111,14 @@ available. Internal Wi-Fi and producer-stack headroom is checked before capture.
 `psram_total_kb` and `psram_free_kb` in `/api/status`. The true internal-heap
 minimum captures brief memory dips that the sampled UI minimum can miss.
 
-Contributor testing of the patch on v1.33 ran for 9.2 hours with C5/IM73D122,
-with 0.09% ring drops and no DMA overruns or I2S errors. Internal heap briefly
-reached 11 KiB; this is useful hardware evidence, not a guarantee for every
-network or the final v1.34 integration. Maintainer C5 hardware validation is pending.
-
 ## Important URLs
+
+Firmware 2.00 confirms time synchronization from the SNTP callback,
+tracks the first Wi-Fi connection and retries unanswered NTP requests after
+30 seconds. `/api/status` separates `time_valid` from `time_synced`; valid clock
+values remain visible while synchronization is pending. Post-OTA checks now
+include NTP, UTC accuracy and local offset, in addition to microphone capture:
+[time-sync validation](../docs/time-sync-validation.md).
 
 Web UI:
 
@@ -107,10 +153,11 @@ can also be selected without scanning. Scanning may briefly affect streaming; ch
 selection disconnects existing streams while Wi-Fi reconnects.
 
 The selected BSSID is saved across reconnects, restarts and OTA updates. The device does not
-fall back to another access point while locked. If the selected AP is unavailable for one minute,
-the device starts **ESP32-RTSP-Mic-AP**. Join that recovery Wi-Fi and open **http://192.168.4.1**
-to select **Default connection** or another AP. Recovery Wi-Fi closes after the device reconnects.
-This is a local recovery network without a Wi-Fi password, like the initial setup network.
+fall back to another access point while locked. In the current firmware, after
+15 seconds offline the device creates **BirdNETMic-XXXXXX**. Use the password from
+**Network → Direct Wi-Fi access**, then open **http://192.168.4.1** to change the selection.
+Recovery Wi-Fi stays available while a client is connected. With no clients, it closes after
+home Wi-Fi has been connected for at least 60 seconds. Standalone Recording keeps its AP.
 Reset Wi-Fi and factory reset also clear the saved AP selection.
 
 API: `GET /api/wifi/ap` returns the saved/current AP and connection status.
@@ -121,10 +168,31 @@ POST requests require the existing `X-ESP32MIC-CSRF: 1` header. Saving reconnect
 ## First Boot
 
 1. Flash with the web flasher or build manually.
-2. The device starts WiFiManager AP **ESP32-RTSP-Mic-AP**.
+2. Firmware 2.00 starts the open setup AP **BirdNETMic-XXXXXX**.
 3. Connect to the AP and open `192.168.4.1` if the captive portal does not open automatically.
-4. Save Wi-Fi credentials.
-5. After reboot, open `http://<device-ip>/`.
+4. Choose the board variant, default startup mode and connection. C6 also offers antenna selection.
+   Streaming uses home Wi-Fi; Recording can use home Wi-Fi or standalone device Wi-Fi.
+   Save the randomly generated eight-character device Wi-Fi password shown on the page.
+5. Finish setup and open the controls. The device AP then requires the displayed password.
+   Microphone, SD and recording options are configured in the main UI.
+
+Existing configured devices retain their credentials and settings and skip the welcome page.
+After updating, save the recovery password from **Network → Direct Wi-Fi access**.
+**Device configuration** changes the default startup mode and connection later; the main
+mode switch changes only the current mode. Recording auto-start remains a separate option.
+An unavailable home network automatically enables the control AP in both modes without
+erasing credentials or rebooting. Recording does not depend on a network connection.
+Older published firmware still uses the original WiFiManager portal.
+
+Setup API: `GET /api/setup` reports public setup/connection state without passwords.
+Protected POST actions use `X-ESP32MIC-CSRF: 1`: `/api/setup/scan` starts an asynchronous
+all-network scan (poll its GET endpoint); `/api/setup/connect` tests `ssid` and `password`
+without saving them; `/api/setup` saves `mode`, `connection=home|direct`, S3 `variant`,
+and C6 `antenna=external|internal`. `allow_offline=1` finishes without requiring a connection.
+`POST /api/setup/access` returns the device AP password for display to the user.
+New setup uses eight readable characters. Existing configured passwords are retained;
+`shorten=1` explicitly replaces a longer password while no AP clients or recording are active.
+Only successfully tested new credentials are committed when setup is saved.
 
 Default hostname is unique per device, for example `esp32mic-a1b2c3`.
 
@@ -156,12 +224,12 @@ Use the same physical wiring for the I2S microphones listed here and power them 
 `L/R` or `SEL` to **GND** because the firmware reads the left channel. Then select the matching
 format:
 
-- **Adafruit SPH0645LM4H (recommended for new builds):** MSB / left-justified; select it in
+- **Adafruit SPH0645LM4H (I2S alternative):** MSB / left-justified; select it in
   **Audio -> Microphone format** or set
   API key `mic_format` to `1`.
 - **ICS-43434 / INMP441 (legacy):** standard Philips I2S; firmware default.
 
-SPH0645 support was tested on contributor hardware. ICS-43434 and INMP441 remain supported for
+SPH0645 is supported. ICS-43434 and INMP441 remain supported for
 existing builds.
 
 The wrong format only produces incorrectly decoded audio; it does not change the wiring or damage
@@ -182,12 +250,11 @@ I2S Shift, analog gain and noise performance need further investigation on the c
 *IM73D122 breakout shown: CLK → D3, DATA → D2, L/R → GND; leave NC disconnected.
 Power the microphone from 3V3 and the XIAO from USB-C or a regulated 5 V supply.*
 
-**Supported, with contributor hardware tests.** See the [microphone comparison](../README.md#microphones)
-for the recommended I2S option and the **Best quality** IM73D122 PDM option.
+**Supported.** See the [microphone comparison](../README.md#microphones)
+for the supported I2S options and the **Best quality** IM73D122 PDM option.
 
 PDM choices include **IM73D122**, **Adafruit PDM MEMS Microphone Breakout #3492 (MP34DT01-M)**
-and generic **MP34DT01 PDM modules**. Adafruit/MP34DT01 compatibility is contributor-reported;
-maintainer hardware validation is pending. These are different chips using the same PDM mode,
+and generic **MP34DT01 PDM modules**. Select PDM mode for these modules. These are different chips using the same PDM mode,
 not alternative names for IM73D122. Other PDM models require checking their supply rating,
 3.072 MHz clock support, left-slot output and actual hardware operation.
 
@@ -212,7 +279,7 @@ pin orders require checking their labels; the mechanical adapter is optional. Ch
 format briefly interrupts RTSP. If setup fails, format, rate and related settings roll back.
 Selecting PDM sets 48 kHz; switching back to I2S retains that rate, which can then be changed.
 
-Software conversion uses the contributor's v15.6 integer filter as its starting point, with streaming
+Software conversion uses the v15.6 integer filter as its starting point, with streaming
 framing and capture integration maintained here. Its useful passband is approximately 0–16 kHz
 at 48 kHz output; this is not a claim of flat response across the entire Nyquist band.
 The API reports `pdm_supported`, `pdm_decoder`, `pdm_clock_hz`, `pdm_word_stride` and
@@ -236,26 +303,9 @@ its actual size as `rb_capacity_bytes` and recommends 512 on C3/C5 via
 
 All microphone paths now use integer gain and high-pass processing (`audio_dsp: "integer"`).
 PDM retains 48 kHz and a fixed PCM scale; adjust Gain for PDM, while I2S Shift remains I2S-only.
-When upgrading from the contributor's v15 PDM firmware, use **new Gain = old Gain × 2^(16 − old Shift)**
+When upgrading from the v15 PDM firmware, use **new Gain = old Gain × 2^(16 − old Shift)**
 as a starting point and check clipping: Shift 12 / Gain 1.5 becomes Gain 24. Saved Gain is
 not changed automatically.
-Contributor reports now include physical tests of this project's firmware:
-
-| Tested configuration | Hardware evidence |
-|---|---|
-| M5Stack AtomS3U, built-in PDM | Working audio into BirdNET-Go on v1.33; [public test report](https://github.com/Sukecz/esp32-birdnet-mic/pull/62#issuecomment-6326944252) |
-| XIAO ESP32-C3 + Adafruit-compatible PDM breakout | Contributor's v1.33 setup, included in a 9–10-hour comparison run |
-| XIAO ESP32-C5 + IM73D122 | 9.2-hour run with the C5 PSRAM patch against v1.33, later integrated into v1.34; 0.09% ring drops, no DMA overruns or I2S errors |
-| XIAO ESP32-S3 Sense | Experimental; not tested on physical Sense hardware |
-
-Earlier contributor tests also covered all four XIAO boards using the v15.6 reference
-firmware. The reports above establish specific working configurations; they do not
-qualify every board/microphone combination or the final v1.34 image on each device.
-Maintainer runtime checks primarily use C6 with I2S. Host tests and successful builds
-are separate from physical microphone tests.
-
-Reference designs: the contributed PDM proposal and
-[PR #64](https://github.com/Sukecz/esp32-birdnet-mic/pull/64) (S3 hardware path).
 ESP-IDF documents [raw PDM capture](https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32c6/api-reference/peripherals/i2s.html)
 and its MHz clock-rate configuration separately from PCM output sample rates.
 
@@ -283,7 +333,7 @@ The firmware owns one profile list used by both the preview and the save operati
 | PDM IM73D122 | S3 | 48 kHz | 24 | 512 | Unused; stored I2S value retained | On, 500 Hz | Keep current |
 
 512 samples is a common starting point compatible with BirdNET-Pi UDP, and is especially
-important on C3/C5. The contributed v15.6 guidance recommends 48 kHz and 160 MHz for software PDM.
+important on C3/C5. The v15.6 reference recommends 48 kHz and 160 MHz for software PDM.
 A later integrated-firmware report supplies the Gain 24 starting value (old Shift 12 /
 Gain 1.5). Adjust Gain using Listen and the level/clipping indicator for the actual microphone
 and location; it is not an automatic level calibration. HPF 500 Hz and I2S values use this
@@ -303,18 +353,26 @@ Higher frequency can increase heat; thermal-protection settings are preserved.
 
 ### XIAO Antenna Paths
 
-The firmware selects the external antenna path on XIAO ESP32-C6:
+XIAO ESP32-C6 provides a GPIO-controlled RF switch. Open **Network → Wi-Fi antenna**
+in the device UI to select **External (default)** or **Internal (built-in)** and
+choose **Save & restart**. The setting is stored separately in NVS and applied
+before Wi-Fi starts. Missing settings preserve the previous external-antenna
+default; the firmware does not automatically detect an attached antenna.
+Changing the antenna may interrupt Wi-Fi access if the selected path has weak signal.
+
+The switch uses:
 
 ```text
 GPIO3  -> LOW
-GPIO14 -> HIGH
+GPIO14 -> HIGH for external, LOW for internal
 ```
 
-Use an external 2.4 GHz antenna for reliable streaming. Weak Wi-Fi increases retries, heat, and the
-chance of audio dropouts. XIAO ESP32-C3 and XIAO ESP32-S3 expose a U.FL antenna connector without a
+For the external setting, attach a suitable 2.4 GHz antenna. For the internal setting,
+keep the built-in ceramic antenna clear of obstructions. Weak Wi-Fi increases retries,
+heat, and the chance of audio dropouts. XIAO ESP32-C3 and XIAO ESP32-S3 expose a U.FL antenna connector without a
 documented firmware GPIO switch. XIAO ESP32-C5 has a dedicated Wi-Fi/BT antenna connector; attach
-the included antenna before use. If your C6 hardware uses the internal antenna path, adjust the
-GPIO3/GPIO14 block in `setup()`.
+the included antenna before use. The UI selector is shown only on XIAO ESP32-C6;
+C3/S3/C5 builds neither expose this control nor drive GPIO3/GPIO14 for antenna selection.
 
 ## Runtime Defaults
 
@@ -331,7 +389,7 @@ GPIO3/GPIO14 block in `setup()`.
 - Max RTSP clients: 2
 - mDNS: ON
 - Time sync: ON
-- XIAO ESP32-C6 antenna path: external antenna ON
+- XIAO ESP32-C6 antenna path: external by default; configurable in Network and stored across restarts
 - XIAO ESP32-C3/S3/C5 antenna path: no firmware GPIO switching
 - OTA password: none in the default public build
 
@@ -449,9 +507,10 @@ BirdNET-Go or BirdNET-Pi.
 ## Network And Time
 
 - Wi-Fi power save is disabled with `WiFi.setSleep(false)` for stable streaming.
-- WiFiManager AP: `ESP32-RTSP-Mic-AP`.
-- WiFiManager connect timeout: 60 s.
-- WiFiManager portal timeout: 180 s.
+- First setup: BirdNETMic welcome page.
+- Initial setup AP is open; completed setup and fallback use a random per-device password.
+- Wi-Fi trials time out after 25 seconds; automatic retries use a 30-second interval.
+- Fallback AP starts after 15 seconds offline. The welcome page has no reboot timeout.
 - mDNS can be enabled/disabled in the Web UI.
 - Hostname can be changed via API: `key=mdns_hostname&value=esp32mic-garden`.
 - mDNS often fails on isolated/guest Wi-Fi or inside Docker containers; use device IP in those cases.
@@ -680,8 +739,8 @@ When changing the embedded Web UI, first regenerate its assets as described unde
    but with the adaptive internal-RAM audio buffer and listening queue (4 KB).
 4. Compile and upload over USB.
 
-Keep `build_opt.h` next to the `.ino`; it reduces the image size by disabling WiFiManager
-serial debug output and unused C++ exception/unwind metadata. Ordinary Arduino IDE or direct
+Keep `build_opt.h` next to the `.ino`; it reduces the image size by disabling
+unused C++ exception/unwind metadata. Ordinary Arduino IDE or direct
 `arduino-cli compile` builds do not apply the additional C3/C6 LTO settings automatically.
 Use the CLI helper above for the same settings as the packaged firmware and CI.
 
@@ -795,14 +854,12 @@ Current validation ranges include `sampleRate=8000..192000`, `bufferSize=256..81
 
 - No TLS or built-in user authentication for the Web UI/API.
 - mDNS depends on multicast support in your LAN and often does not work across VLANs, guest networks, or Docker bridge networks.
-- The firmware is primarily runtime-tested on Seeed Studio XIAO ESP32-C6 with ICS-43434; C3/S3/C5
-  builds are compile-verified in Arduino ESP32 core 3.3.12. SPH0645 support was tested on contributor
-  hardware.
+- Sense support remains experimental.
 
 ## Credits
 
 - Author: **@Sukecz**
-- PDM contribution and hardware testing: **Dan Logue** (v15.6 reference implementation).
+- Thanks to everyone helping improve BirdNETMic.
 
 ## License
 

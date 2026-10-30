@@ -22,7 +22,7 @@ class ThermalRecoveryTests(unittest.TestCase):
     def compile_run(self, code):
         with tempfile.TemporaryDirectory() as temp:
             cpp, binary = pathlib.Path(temp) / 'test.cpp', pathlib.Path(temp) / 'test'
-            cpp.write_text('namespace recording { inline bool mode(){return false;} }\n' + code)
+            cpp.write_text('namespace recording { inline bool enabled=false,active=false,pending=false; inline bool mode(){return enabled;} inline bool resumePending(){return pending;} inline void cancelResume(){pending=false;} inline bool pauseForCooling(){pending=active;active=false;return pending;} }\n' + code)
             subprocess.run(['g++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                             '-I', str(ROOT / 'esp32-birdnet-mic'), str(cpp), '-o', str(binary)], check=True)
             subprocess.run([str(binary)], check=True, timeout=10)
@@ -53,6 +53,9 @@ float readChipTemperature() { return temperature; }
 bool overheatLatched = false, overheatLockoutActive = false, overheatSensorFault = false;
 bool overheatProtectionEnabled = true, overheatAutoResumeEnabled = true;
 bool otaInProgress = false, captureRunning = true, restartOk = true;
+bool &audioProducerRunning=captureRunning;
+int recordingResumes=0;
+bool resumeRecordingAfterCooling(){++recordingResumes;recording::active=true;recording::pending=false;return true;}
 int capturePauses = 0;
 void pauseAudioCapture() { captureRunning = false; ++capturePauses; }
 bool setup_i2s_driver() { captureRunning = restartOk; return restartOk; }
@@ -178,6 +181,25 @@ int main() {
     assert(overheatLatched && !acknowledgeThermalShutdown());
     overheatProtectionEnabled = false; scheduleAllowed = false;
     assert(acknowledgeThermalShutdown() && !rtspServerEnabled);
+    // Recording gets the same trip/cooldown/retry policy without an RTSP server
+    // and without being gated by a Streaming schedule.
+    thermalRecovery = ThermalRecovery{}; overheatLatched=false;
+    overheatProtectionEnabled=overheatAutoResumeEnabled=true;
+    recording::enabled=recording::active=true;captureRunning=true;rtspServerEnabled=false;
+    scheduleAllowed=false;trip();
+    assert(overheatLatched&&recording::pending&&!captureRunning);
+    cooldown();assert(!overheatLatched&&recordingResumes==1&&recording::active&&!rtspServerEnabled);
+    trip();cancelThermalResume();cooldown();
+    assert(overheatLatched&&!recording::pending&&recordingResumes==1);
+    assert(acknowledgeThermalShutdown()&&recordingResumes==1&&!rtspServerEnabled);
+    recording::active=true;trip();cooldown();
+    assert(recordingResumes==2&&!overheatLatched);
+    trip();cooldown();assert(!overheatLatched&&recordingResumes==3);
+    trip();cooldown();assert(overheatLatched&&flash.manualBlocked&&recordingResumes==3);
+    assert(acknowledgeThermalShutdown()&&recordingResumes==4);
+    overheatAutoResumeEnabled=false;trip();cooldown();
+    assert(overheatLatched&&recordingResumes==4);
+    assert(acknowledgeThermalShutdown()&&recordingResumes==5);
 }
 '''
         self.compile_run(code)

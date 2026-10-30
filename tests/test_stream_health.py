@@ -72,10 +72,17 @@ uint32_t maxPacketRate = 0, minPacketRate = UINT32_MAX, minAcceptableRate = 66;
 unsigned long lastStatsReset = 0, lastI2SReset = 0;
 volatile uint32_t audioProducerLastReadMs = 59990;
 volatile bool audioProducerStopRequested = false;
-bool isStreaming = true, autoRecoveryEnabled = true;
+bool isStreaming = true, autoRecoveryEnabled = true, audioProducerRunning = true;
+namespace recording {bool active=false;int faults=0;bool busy(){return active;}void captureFault(){++faults;}}
+uint32_t recordingDmaBaseline=0,dmaTotal=0;
+uint32_t getI2sDmaOverrunTotal(){return dmaTotal;}
+bool advanceProducerDuringClock=false;
 int restarts = 0;
 struct { uint32_t getFreeHeap() { return 200000; } } ESP;
-uint32_t millis() { return nowMs; }
+uint32_t millis() {
+    if (advanceProducerDuringClock) audioProducerLastReadMs=nowMs+1;
+    return nowMs;
+}
 uint32_t getCurrentPacketRate(uint8_t) { return currentRate; }
 void simplePrintln(const String&) {}
 bool restartI2S() { ++restarts; return true; }
@@ -97,6 +104,19 @@ int main() {
     assert(restarts == 1);
     audioProducerStopRequested = false; isStreaming = false; checkAudioProducerHealth();
     assert(restarts == 1);
+    // A producer can advance its timestamp between reading it and the clock.
+    // Healthy recording must survive that interleaving (and millis wrap).
+    recording::active=true;audioProducerLastReadMs=nowMs;
+    advanceProducerDuringClock=true;checkAudioProducerHealth();
+    assert(recording::faults==0);
+    advanceProducerDuringClock=false;nowMs=5;audioProducerLastReadMs=UINT32_MAX-100;
+    checkAudioProducerHealth();assert(recording::faults==0);
+    nowMs=10000;audioProducerLastReadMs=7000;
+    checkAudioProducerHealth();assert(recording::faults==1);
+    audioProducerLastReadMs=nowMs;dmaTotal=1;
+    checkAudioProducerHealth();assert(recording::faults==2);
+    dmaTotal=0;audioProducerRunning=false;
+    checkAudioProducerHealth();assert(recording::faults==3);
 }
 ''')
 

@@ -39,6 +39,8 @@ function stream(rate,pcm){
    assert.deepEqual(buffers.slice(initial).flatMap(b=>Array.from(b.data)),[-1,-1/32768,0,1/32768,32767/32768]);
    c.setListenVolume('20');assert.equal(vm.runInContext('listenSession.gain.gain.value',c),0.2);
    c.setListenVolume('100');assert.equal(vm.runInContext('listenSession.gain.gain.value',c),1);assert.equal(nodes.listen_volume_value.textContent,'100%');
+   c.setListenVolume('150');assert.equal(vm.runInContext('listenSession.gain.gain.value',c),1.5);assert.equal(nodes.listen_volume_value.textContent,'150%');
+   c.setListenVolume('200');assert.equal(vm.runInContext('listenSession.gain.gain.value',c),1.5);
    c.setListenVolume('0');assert.equal(vm.runInContext('listenSession.gain.gain.value',c),0);
    c.stopListening();pendingRead({done:true});await playing;
    assert.equal(nodes.listen_button.textContent,'Listen');assert(contexts.at(-1).closed);

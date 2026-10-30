@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.00 - 2026-10-30
+
+- **Standalone Recording:** save mono 16-bit WAV to microSD, with timed or continuous
+  sessions, automatic file splitting, optional start after power-on, free-space/time
+  estimates and Stop & save. Streaming remains a separate mode; Listen works in both.
+- **SD hardware:** external SPI modules on C3/S3/C5/C6 (Adafruit BFF #5683), plus
+  Sense's built-in slot. AtomS3U remains Streaming-only. Improve SPI ready/busy handling,
+  buffer allocation and WAV finalization; preserve partial files on errors.
+- **Field power:** turn Wi-Fi off while recording, then sleep when the offline session
+  ends. Reconnection requires reset or power cycling. Optional low-battery stop/save
+  and sleep; voltage monitoring and calibration, with C5's built-in divider.
+- **Device configuration:** new setup wizard, board/startup-mode selection, tested
+  home Wi-Fi credentials, protected direct access and offline recovery access point.
+  Add C6 internal/external antenna selection.
+- **Logs:** bounded RAM history, paging/download and optional persistent rotating SD
+  journal; Normal/Detailed levels. PSRAM-aware buffers retain internal audio headroom.
+- **Time and protection:** confirm real SNTP responses and retry pending synchronization;
+  coordinate Recording with thermal shutdown/recovery, OTA and definitive session ends.
+- **Documentation:** beginner-focused two-mode guide, board/storage matrix, field workflow,
+  battery estimates, card capacities and linked parts. Recommend C5 + PDM for new builds.
+- **Validation:** C5 completed a 9 h 6 min SD session with ten finalized WAV files and
+  no observed recording drops or new I2S/DMA errors. This is not multi-day battery
+  qualification. Sense and other boards' SD paths still require physical validation.
+
+See the [release notes](../release-notes/2.00.md).
+
 ## 1.36 - 2026-10-25
 
 - **C5 audio restart:** keep using the PSRAM audio ring when a disconnected streaming client still holds internal TCP buffers. Apply the existing 64 KiB C5 Wi-Fi allowance to the PSRAM path, retaining producer-stack and contiguous-memory checks. Fix rejected gain/settings changes and failed rollback until automatic recovery. Other boards and C5 builds without PSRAM keep their existing allocation rules.

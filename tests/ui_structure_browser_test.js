@@ -24,13 +24,13 @@ const fixture=require('./fixtures/ui-state.json');
   const load=async()=>{await page.goto('http://ui.test/');await page.waitForFunction(()=>document.querySelector('#overview_mic').textContent==='Microphone: OK');};
   await load();
   const sections=page.locator('details.card');
-  assert.equal(await sections.count(),9);
+  assert.equal(await sections.count(),10);
   assert.equal(await page.locator('details.card[open]').count(),0);
   assert(await page.locator('#listen_button').isVisible());
   assert.equal(await page.locator('#listen_volume_value').textContent(),'60%');
   await page.locator('#listen_volume').focus();await page.keyboard.press('End');
-  assert.equal(await page.locator('#listen_volume').inputValue(),'100');
-  assert.equal(await page.locator('#listen_volume_value').textContent(),'100%');
+  assert.equal(await page.locator('#listen_volume').inputValue(),'150');
+  assert.equal(await page.locator('#listen_volume_value').textContent(),'150%');
   await page.keyboard.press('Home');assert.equal(await page.locator('#listen_volume_value').textContent(),'0%');
   for(const [id,section] of Object.entries({sel_max_clients:'streamssec',in_shift:'audiosec',sel_tx:'networksec',sel_cpu:'thermalsec',in_chk:'recoverysec',b_sync_now:'timesec',b_defaults:'recoverysec'}))
    assert.equal(await page.locator('#'+id).evaluate(el=>el.closest('details.card').id),section);
@@ -78,11 +78,11 @@ const fixture=require('./fixtures/ui-state.json');
    await page.locator('#listen_volume').scrollIntoViewIfNeeded();
    const slider=await page.locator('#listen_volume').boundingBox();
    await page.mouse.click(slider.x+slider.width-1,slider.y+slider.height/2);
-   assert.equal(await page.locator('#listen_volume').inputValue(),'100');
+   assert.equal(await page.locator('#listen_volume').inputValue(),'150');
    await page.touchscreen.tap(slider.x+1,slider.y+slider.height/2);
    assert.equal(await page.locator('#listen_volume').inputValue(),'0');
    await page.touchscreen.tap(slider.x+slider.width-1,slider.y+slider.height/2);
-   assert.equal(await page.locator('#listen_volume').inputValue(),'100');
+   assert.equal(await page.locator('#listen_volume').inputValue(),'150');
    await page.screenshot({path:`tmp/ui-${width}-collapsed.png`,fullPage:true});
    if(width===390){
     await page.locator('#audiosec>summary').click();
@@ -92,6 +92,6 @@ const fixture=require('./fixtures/ui-state.json');
   }
   await load();assert.equal(await page.locator('details.card[open]').count(),0);
   assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
-  console.log('UI structure: nine closed sections, relocated controls, 0–100% volume, polling/drafts, PDM, alerts, stale data, themes and 320–1280px layouts passed');
+  console.log('UI structure: ten closed sections, relocated controls, 0–150% volume, polling/drafts, PDM, alerts, stale data, themes and 320–1280px layouts passed');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

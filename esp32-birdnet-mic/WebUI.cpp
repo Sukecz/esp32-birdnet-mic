@@ -1,4 +1,7 @@
 #include "Recording.h"
+#include "DeviceLog.h"
+#include "LogStorage.h"
+#include "Antenna.h"
 #include <Arduino.h>
 #include <math.h>
 #include <time.h>
@@ -9,7 +12,11 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include <WebServer.h>
-#include <WiFiManager.h>
+#include "DeviceSetup.h"
+#include "Battery.h"
+#include "FieldPower.h"
+#include "S3Boards.h"
+#include "RecordingPins.h"
 #include <ESPmDNS.h>
 #include "WebUI.h"
 #include "AudioDiagnostics.h"
@@ -24,6 +31,7 @@
 #include <algorithm>
 #include <vector>
 #include "WebUI_gz.h"
+#include "SetupAssets_gz.h"
 #include "OtaAssets_gz.h"
 #include "FlashLayout.h"
 
@@ -78,6 +86,7 @@ extern uint32_t computeRecommendedMinRate();
 extern bool scheduledResetEnabled;
 extern uint32_t resetIntervalHours;
 extern void scheduleReboot(bool factoryReset, uint32_t delayMs);
+extern bool requestOfflineSleepTest(uint32_t wakeSeconds);
 extern volatile unsigned long wifiReconnectAt;
 extern void scheduleWifiReconnect(const uint8_t *bssid, uint32_t delayMs);
 extern MicrophoneSignal microphoneSignal;
@@ -158,6 +167,10 @@ extern String formatSince(unsigned long eventMs);
 extern bool restartI2S();
 extern bool recordingHardwareSupported();
 extern bool startRecording();
+extern void cancelRecordingAutoStart();
+extern bool requestRecordingWifiOff(uint32_t testSeconds);
+extern bool requestBatterySleepTest(uint32_t wakeSeconds);
+extern String fieldPowerTestJson();
 extern bool setDeviceMode(bool recordingMode);
 extern bool applyAudioConfig(uint32_t newRate, float newGain, uint16_t newBuffer, uint8_t newShift);
 extern bool applyMicFormatConfig(uint8_t newFormat);
@@ -166,6 +179,8 @@ extern uint8_t s3BoardVariant;
 extern bool s3BoardSelectionSupported();
 extern bool builtinMicSelected();
 extern bool applyS3BoardConfig(uint8_t variant);
+extern s3boards::Config getS3BoardConfig();
+extern bool restoreS3BoardConfig(const s3boards::Config& saved);
 extern bool getRecommendedMicSettings(uint8_t format, micprofiles::Settings& out);
 extern bool cpuFrequencySupported(uint32_t mhz);
 extern uint16_t maxSupportedCpuFrequencyMhz();
@@ -185,6 +200,7 @@ extern String customTimeZoneRule;
 extern bool isValidCustomTimeZoneRule(const String& rule);
 extern int32_t effectiveTimeOffsetMinutes();
 extern bool timeSyncEnabled;
+extern const char* timeSyncStatusCode();
 extern bool mdnsEnabled;
 extern bool mdnsRunning;
 extern bool streamScheduleEnabled;
@@ -232,20 +248,23 @@ extern void mqttPublishDiscoverySoon();
 
 // Web server and in-memory log ring buffer
 static WebServer web(80);
-static const size_t LOG_CAP = 120;
-static String logBuffer[LOG_CAP];
-static size_t logHead = 0;
-static size_t logCount = 0;
-
-void webui_pushLog(const String &line) {
-    logBuffer[logHead] = line;
-    logHead = (logHead + 1) % LOG_CAP;
-    if (logCount < LOG_CAP) logCount++;
+static DeviceLog logBuffer;
+bool webui_logModeChanged(bool recordingMode) {
+    const bool ok=logBuffer.configure(recordingMode);
+    return ok || !recordingMode || logBuffer.usesPsram() || logBuffer.capacity()<=DeviceLog::kRecordingBytes;
 }
+static void pushLog(const String& line, bool persist) {
+    logBuffer.configure(recording::mode());
+    logBuffer.append(line.c_str(),line.length());
+    if(persist)recording::queueSystemLog(line.c_str());
+}
+
+void webui_pushLog(const String& line) { pushLog(line, true); }
+void webui_pushRecordingLog(const String& line) { pushLog(line, false); }
 
 static String jsonEscape(const String &s) {
     String o; o.reserve(s.length()+8);
-    for (size_t i=0;i<s.length();++i){char c=s[i]; if(c=='"'||c=='\\'){o+='\\';o+=c;} else if(c=='\n'){o+="\\n";} else {o+=c;}}
+    for (size_t i=0;i<s.length();++i){char c=s[i]; if(c=='"'||c=='\\'){o+='\\';o+=c;} else if((uint8_t)c<32){char escaped[7];snprintf(escaped,sizeof(escaped),"\\u%04x",(unsigned)(uint8_t)c);o+=escaped;} else {o+=c;}}
     return o;
 }
 
@@ -295,7 +314,8 @@ static bool hasMutationAuth() {
 
 static bool requireMutationAuth(bool preparation = false) {
     if (hasMutationAuth()) {
-        if (recording::busy() && web.uri() != "/api/recording/action" && web.uri() != "/api/device/mode") {
+        if (recording::busy() && web.uri() != "/api/recording/action" && web.uri() != "/api/device/mode" &&
+            web.uri() != "/api/setup/access") {
             web.send(409, "application/json", "{\"ok\":false,\"error\":\"Stop and save recording before changing settings or updating firmware.\"}");
             return false;
         }
@@ -320,8 +340,15 @@ static void sendGzipAsset(const char* type, const uint8_t* bytes, size_t length)
 }
 
 static void httpIndex() {
+    if (!devicesetup::complete()) {
+        sendGzipAsset("text/html; charset=utf-8", SETUP_HTML_GZ, SETUP_HTML_GZ_LEN);
+        return;
+    }
     sendGzipAsset("text/html; charset=utf-8", WEBUI_INDEX_GZ, WEBUI_INDEX_GZ_LEN);
 }
+static void httpSetupPage() { sendGzipAsset("text/html; charset=utf-8", SETUP_HTML_GZ, SETUP_HTML_GZ_LEN); }
+static void httpSetupCss() { sendGzipAsset("text/css; charset=utf-8", SETUP_CSS_GZ, SETUP_CSS_GZ_LEN); }
+static void httpSetupJs() { sendGzipAsset("application/javascript; charset=utf-8", SETUP_JS_GZ, SETUP_JS_GZ_LEN); }
 static void httpOtaCss() {
     sendGzipAsset("text/css; charset=utf-8", OTA_CSS_GZ, OTA_CSS_GZ_LEN);
 }
@@ -365,6 +392,7 @@ static void sendOtaPage(const String &message = String(), bool ok = true, int ht
     String html;
     html.reserve(8000);
     html += F("<!doctype html><html><head><meta charset='utf-8'>");
+    html += F("<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22%230ea5e9%22%2F%3E%3Cpath%20d%3D%22M5%2022l5-7v-3a6%206%200%200%201%2012%200v1l5%202-5%202c-1%207-9%2010-17%205Z%22%20fill%3D%22white%22%2F%3E%3Cpath%20d%3D%22M10%2018q5%205%209-2%22%20fill%3D%22none%22%20stroke%3D%22%230284c7%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2218.5%22%20cy%3D%2211.5%22%20r%3D%221.2%22%20fill%3D%22%230f172a%22%2F%3E%3C%2Fsvg%3E\">");
     html += F("<meta name='viewport' content='width=device-width,initial-scale=1'>");
     html += F("<title>Firmware update</title><link rel='stylesheet' href='/ota.css'></head><body data-ota-checking='");
     html += versionChecking ? '1' : '0';
@@ -923,6 +951,41 @@ static void httpOtaUploadChunk() {
     }
 }
 
+static String setupStatusJson() {
+    String json = "{\"ok\":true,\"complete\":" + String(devicesetup::complete() ? "true" : "false");
+    json += ",\"default_mode\":\"" + String(devicesetup::defaultRecording() ? "recording" : "streaming") + "\"";
+    json += ",\"connection\":\"" + String(devicesetup::standalone() ? "direct" : "home") + "\"";
+    json += ",\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false");
+    json += ",\"ssid\":\"" + jsonEscape(devicesetup::savedSsid()) + "\"";
+    json += ",\"ap_name\":\"" + jsonEscape(devicesetup::apName()) + "\"";
+    json += ",\"ap_active\":" + String(devicesetup::apActive() ? "true" : "false");
+    json += ",\"ap_ip\":\"192.168.4.1\",\"ip\":\"" + WiFi.localIP().toString() + "\"";
+    json += ",\"test_state\":\"" + String(devicesetup::connectionState()) + "\"";
+    json += ",\"test_error\":\"" + String(devicesetup::connectionError()) + "\"";
+    json += ",\"chip_family\":\"" + jsonEscape(FW_CHIP_FAMILY_STR) + "\"";
+    json += ",\"board_name\":\"" + jsonEscape(FW_BOARD_NAME_STR) + "\"";
+    json += ",\"s3_board_supported\":" + String(s3BoardSelectionSupported() ? "true" : "false");
+    json += ",\"s3_board\":" + String(s3BoardVariant);
+    json += ",\"battery_enabled\":" + String(devicesetup::batteryMonitoring() ? "true" : "false");
+    json += ",\"battery_supported\":" + String(battery::pins(s3BoardVariant).supported ? "true" : "false");
+    json += ",\"antenna_supported\":" + String(antenna::supported() ? "true" : "false");
+    json += ",\"antenna\":\"" + String(antenna::external() ? "external" : "internal") + "\"}";
+    return json;
+}
+static void httpSetupStatus() { apiSendJSON(setupStatusJson()); }
+static void httpSetupAccess() {
+    if (!requireMutationAuth()) return;
+    if (web.hasArg("shorten")) {
+        if (web.arg("shorten") != "1") {
+            web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid password action.\"}"); return;
+        }
+        if (recording::busy() || recording::resumePending() || !devicesetup::shortenApPassword()) {
+            web.send(409, "application/json", "{\"ok\":false,\"error\":\"Stop recording and disconnect device Wi-Fi clients before changing its password.\"}"); return;
+        }
+    }
+    apiSendJSON("{\"ok\":true,\"password\":\"" + jsonEscape(devicesetup::apPassword()) + "\"}");
+}
+
 static void httpStatus() {
     unsigned long uptimeSeconds = (millis() - bootTime) / 1000;
     String uptimeStr = formatUptime(uptimeSeconds);
@@ -931,20 +994,31 @@ static void httpStatus() {
     uint32_t freeHeap = ESP.getFreeHeap();
     if (freeHeap < minFreeHeap) minFreeHeap = freeHeap;
     uint32_t currentRate = getCurrentPacketRate(255);
+    const String controlIp = (WiFi.status() == WL_CONNECTED ? WiFi.localIP() : WiFi.softAPIP()).toString();
     String json = "{";
     json.reserve(1800);
-    json += "\"recording\":" + recording::statusJson(recordingHardwareSupported()) + ",";
+    json += "\"wifi_antenna_supported\":" + String(antenna::supported() ? "true" : "false") + ",";
+    json += "\"wifi_antenna\":" + (antenna::supported() ? String(antenna::external() ? "\"external\"" : "\"internal\"") : String("null")) + ",";
+    json += "\"device_log\":{\"capacity_bytes\":" + String(logBuffer.capacity()) + ",\"used_bytes\":" + String(logBuffer.size()) + ",\"psram\":" + String(logBuffer.usesPsram()?"true":"false") + "},";
+    json += "\"setup\":" + setupStatusJson() + ",";
+    json += "\"battery\":" + battery::statusJson(devicesetup::batteryMonitoring(), s3BoardVariant) + ",";
+    json += "\"field_power\":" + fieldpower::statusJson(battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant)) + ",";
+    json += "\"wifi_off_pending\":" + String(devicesetup::wifiOffPending() ? "true" : "false") + ",";
+    json += "\"wifi_suspended\":" + String(devicesetup::wifiSuspended() ? "true" : "false") + ",";
+    json += "\"wifi_off_error\":\"" + jsonEscape(devicesetup::wifiOffError()) + "\",";
+    json += "\"last_power_test\":" + fieldPowerTestJson() + ",";
+    json += "\"recording\":" + recording::statusJson(recordingHardwareSupported(), s3BoardVariant, currentSampleRate) + ",";
     json += "\"fw_version\":\"" + String(FW_VERSION_STR) + "\",";
     json += "\"board_id\":\"" + jsonEscape(String(FW_BOARD_ID_STR)) + "\",";
     json += "\"board_name\":\"" + jsonEscape(String(FW_BOARD_NAME_STR)) + "\",";
     json += "\"chip_family\":\"" + jsonEscape(String(FW_CHIP_FAMILY_STR)) + "\",";
     json += "\"ota_artifact\":\"" + jsonEscape(String(FW_OTA_ARTIFACT_STR)) + "\",";
     json += "\"ota_auto_supported\":" + String(FW_OTA_ARTIFACT_STR[0] ? "true" : "false") + ",";
-    json += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
-    json += "\"stream_url_ip\":\"rtsp://" + WiFi.localIP().toString() + ":8554/audio1\",";
+    json += "\"ip\":\"" + controlIp + "\",";
+    json += "\"stream_url_ip\":\"rtsp://" + controlIp + ":8554/audio1\",";
     json += "\"stream_url_mdns\":\"rtsp://" + mdnsHostname + ".local:8554/audio1\",";
-    json += "\"stream1_url_ip\":\"rtsp://" + WiFi.localIP().toString() + ":8554/audio1\",";
-    json += "\"stream2_url_ip\":\"rtsp://" + WiFi.localIP().toString() + ":8554/audio2\",";
+    json += "\"stream1_url_ip\":\"rtsp://" + controlIp + ":8554/audio1\",";
+    json += "\"stream2_url_ip\":\"rtsp://" + controlIp + ":8554/audio2\",";
     json += "\"stream1_url_mdns\":\"rtsp://" + mdnsHostname + ".local:8554/audio1\",";
     json += "\"stream2_url_mdns\":\"rtsp://" + mdnsHostname + ".local:8554/audio2\",";
     json += "\"stream1_target\":" + String((uint32_t)streamProfiles[0].target) + ",";
@@ -976,6 +1050,8 @@ static void httpStatus() {
 #endif
     json += "\"uptime\":\"" + uptimeStr + "\",";
     json += "\"time_synced\":" + String(timeSynced?"true":"false") + ",";
+    json += "\"time_valid\":" + String(localTimeStr != "unavailable" && utcTimeStr != "unavailable" ? "true" : "false") + ",";
+    json += "\"time_sync_status\":\"" + String(timeSyncStatusCode()) + "\",";
     json += "\"time_sync_enabled\":" + String(timeSyncEnabled?"true":"false") + ",";
     json += "\"last_time_sync\":\"" + jsonEscape(timeSynced ? formatSince(lastTimeSyncSuccess) : String("never")) + "\",";
     json += "\"local_time\":\"" + jsonEscape(localTimeStr) + "\",";
@@ -1137,6 +1213,8 @@ static void httpThermal() {
     json += "\"last_trip_since\":\"" + jsonEscape(since) + "\",";
     json += "\"auto_resume_enabled\":" + String(overheatAutoResumeEnabled?"true":"false") + ",";
     json += "\"auto_resume_pending\":" + String(autoPending?"true":"false") + ",";
+    json += "\"recording_mode\":" + String(recording::mode()?"true":"false") + ",";
+    json += "\"recording_resume_pending\":" + String(recording::resumePending()?"true":"false") + ",";
     json += "\"manual_blocked\":" + String(thermalRecovery.state.manualBlocked?"true":"false") + ",";
     json += "\"emergency\":" + String(thermalRecovery.state.emergency?"true":"false") + ",";
     json += "\"notice\":" + String(thermalRecovery.state.notice?"true":"false") + ",";
@@ -1145,7 +1223,7 @@ static void httpThermal() {
     json += "\"cool_limit_c\":" + String(overheatLatched ? thermalRecovery.state.coolLimitC : overheatShutdownC - ThermalRecovery::COOL_MARGIN_C, 1) + ",";
     json += "\"cool_remaining_sec\":" + String(thermalRecovery.remainingSec(millis())) + ",";
     json += "\"can_acknowledge\":" + String((thermalRecovery.state.notice && thermalRecovery.canAcknowledge(millis(), overheatProtectionEnabled))?"true":"false") + ",";
-    json += "\"schedule_allowed\":" + String(isStreamScheduleAllowedNow(nullptr)?"true":"false") + ",";
+    json += "\"schedule_allowed\":" + String((recording::mode() || isStreamScheduleAllowedNow(nullptr))?"true":"false") + ",";
     json += "\"manual_restart\":" + String(manualRequired?"true":"false");
     json += "}";
     apiSendJSON(json);
@@ -1167,17 +1245,35 @@ static void httpThermalClear() {
 }
 
 static void httpLogs() {
-    String out;
-    out.reserve(LOG_CAP * 96);
-    for (size_t i=0;i<logCount;i++){
-        size_t idx = (logHead + LOG_CAP - logCount + i) % LOG_CAP;
-        out += logBuffer[idx]; out += '\n';
+    web.sendHeader("Cache-Control","no-cache");
+    web.sendHeader("X-ESP32MIC-Log-Capacity",String(logBuffer.capacity()));
+    web.sendHeader("X-ESP32MIC-Log-Storage",logBuffer.usesPsram()?"psram":"internal");
+    if(web.hasArg("page")) {
+        uint64_t cursor=0;
+        const bool before=web.hasArg("before"),after=web.hasArg("after");
+        if(web.arg("page")!="1" || (before&&after) || ((before||after)&&!DeviceLog::parseCursor(web.arg(after?"after":"before").c_str(),cursor))) {
+            web.send(400,"text/plain","Invalid log page cursor");return;
+        }
+        char bytes[DeviceLog::kPageBytes+1];
+        const auto page=logBuffer.page(bytes,DeviceLog::kPageBytes,after,before||after,cursor);
+        bytes[page.bytes]=0;
+        web.sendHeader("X-ESP32MIC-Log-First",String((unsigned long long)page.first));
+        web.sendHeader("X-ESP32MIC-Log-Last",String((unsigned long long)page.last));
+        web.sendHeader("X-ESP32MIC-Log-Start",String((unsigned long long)page.start));
+        web.sendHeader("X-ESP32MIC-Log-End",String((unsigned long long)page.end));
+        web.sendHeader("X-ESP32MIC-Log-Moved",page.cursorMoved?"1":"0");
+        web.send(200,"text/plain; charset=utf-8",String(bytes));return;
     }
-    if (web.hasArg("download")) {
-        web.sendHeader("Content-Disposition", "attachment; filename=\"esp32mic-log.txt\"");
+    if(web.hasArg("download"))web.sendHeader("Content-Disposition","attachment; filename=\"esp32mic-log.txt\"");
+    // Legacy read/download serves the whole retained log in bounded chunks.
+    // No temporary 32 KiB String is ever built in internal RAM.
+    web.setContentLength(logBuffer.size());
+    web.send(200,"text/plain; charset=utf-8","");
+    char bytes[1024];
+    for(size_t offset=0;offset<logBuffer.size();) {
+        const size_t count=logBuffer.copy(offset,bytes,sizeof(bytes));
+        web.sendContent(bytes,count);offset+=count;
     }
-    web.sendHeader("Cache-Control", "no-cache");
-    web.send(200, "text/plain; charset=utf-8", out);
 }
 
 static void httpActionServerStart(){
@@ -1219,8 +1315,9 @@ static void httpActionResetI2S(){
 static void httpActionTimeSync(){
     if (!requireMutationAuth()) return;
 
-    bool ok = attemptTimeSync(true, true);
-    apiSendJSON(String("{\"ok\":") + (ok ? "true" : "false") + "}");
+    const bool accepted = attemptTimeSync(true, true);
+    apiSendJSON(accepted ? F("{\"ok\":true,\"pending\":true}") :
+        F("{\"ok\":false,\"error\":\"Enable Time Sync and connect to Wi-Fi first.\"}"));
 }
 
 static bool parseBssidStr(const String &s, uint8_t out[6]) {
@@ -1246,7 +1343,9 @@ static bool parseBssidStr(const String &s, uint8_t out[6]) {
 
 // On-demand asynchronous scan: polling never starts another scan.
 static bool wifiApScanRequested = false;
+static bool wifiApScanQueued = false;
 static unsigned long wifiApScanStarted = 0;
+static bool wifiApScanAll = false;
 
 static void httpWifiApStatus() {
     String json = "{\"ok\":true,\"ssid\":\"" + jsonEscape(wifiApSsid()) +
@@ -1259,29 +1358,48 @@ static void httpWifiApStatus() {
 
 static void httpWifiApScanStart() {
     if (!requireMutationAuth()) return;
-    if (wifiReconnectAt != 0 || WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+    if (wifiApScanQueued || wifiReconnectAt != 0 || devicesetup::connectionBusy() || WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
         apiSendJSON(F("{\"ok\":false,\"error\":\"busy\"}"));
         return;
     }
     String ssid = wifiApSsid();
-    if (!ssid.length()) {
+    wifiApScanAll = web.uri() == "/api/setup/scan";
+    if (!wifiApScanAll && !ssid.length()) {
         apiSendJSON(F("{\"ok\":false,\"error\":\"no_ssid\"}"));
         return;
     }
-    WiFi.scanDelete();
-    int16_t result = WiFi.scanNetworks(true, true, false, 120, 0, ssid.c_str());
-    wifiApScanRequested = result == WIFI_SCAN_RUNNING || result >= 0;
+    // Acknowledge while the radio is still on the AP channel. Scanning can
+    // temporarily interrupt the captive client's connection, especially on C5.
+    wifiApScanRequested = true;
+    wifiApScanQueued = true;
     wifiApScanStarted = millis();
-    apiSendJSON(wifiApScanRequested ? F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"scan_failed\"}"));
+    apiSendJSON(F("{\"ok\":true}"));
+}
+
+static void wifiApScanLoop() {
+    if (!wifiApScanQueued || millis() - wifiApScanStarted < 300UL) return;
+    wifiApScanQueued = false;
+    WiFi.scanDelete();
+    String ssid = wifiApSsid();
+    if (wifiApScanAll) {
+        // Match WiFiManager's default portal scan: synchronous, visible SSIDs,
+        // Arduino defaults. Do not interleave connection management or HTTP
+        // requests while the single radio is scanning both C5 bands.
+        WiFi.scanNetworks(false, false);
+        if (devicesetup::apActive() && WiFi.status() != WL_CONNECTED &&
+            !devicesetup::connectionBusy()) WiFi.enableSTA(false);
+    } else {
+        WiFi.scanNetworks(true, true, false, 120, 0, ssid.c_str());
+    }
 }
 
 static void httpWifiApScanResults() {
-    if (!wifiApScanRequested || millis() - wifiApScanStarted > 30000UL) {
+    if (!wifiApScanRequested || millis() - wifiApScanStarted > 60000UL) {
         apiSendJSON(F("{\"ok\":false,\"error\":\"scan_expired\"}"));
         return;
     }
     int16_t count = WiFi.scanComplete();
-    if (count == WIFI_SCAN_RUNNING) {
+    if (wifiApScanQueued || count == WIFI_SCAN_RUNNING) {
         apiSendJSON(F("{\"ok\":true,\"scanning\":true}"));
         return;
     }
@@ -1292,7 +1410,7 @@ static void httpWifiApScanResults() {
     std::vector<int> matches;
     String ssid = wifiApSsid();
     for (int i = 0; i < count && i < 256; ++i) {
-        if (WiFi.SSID(i) == ssid) matches.push_back(i);
+        if (wifiApScanAll || WiFi.SSID(i) == ssid) matches.push_back(i);
     }
     std::sort(matches.begin(), matches.end(), [](int a, int b) { return WiFi.RSSI(a) > WiFi.RSSI(b); });
     String json = "{\"ok\":true,\"scanning\":false,\"aps\":[";
@@ -1300,7 +1418,9 @@ static void httpWifiApScanResults() {
     for (size_t j = 0; j < limit; ++j) {
         int i = matches[j];
         if (j) json += ',';
-        json += "{\"bssid\":\"" + WiFi.BSSIDstr(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
+        json += "{\"ssid\":\"" + jsonEscape(WiFi.SSID(i)) + "\",\"secure\":" +
+            String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true") +
+            ",\"bssid\":\"" + WiFi.BSSIDstr(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
     }
     json += "]}";
     apiSendJSON(json);
@@ -1366,8 +1486,10 @@ static void httpActionNetworkReset(){
         apiSendJSON(F("{\"ok\":false,\"error\":\"save_failed\"}"));
         return;
     }
-    WiFiManager wm;
-    wm.resetSettings();
+    if (!devicesetup::reset(false)) {
+        apiSendJSON(F("{\"ok\":false,\"error\":\"save_failed\"}"));
+        return;
+    }
     apiSendJSON(F("{\"ok\":true}"));
     scheduleReboot(false, 800);
 }
@@ -1524,6 +1646,7 @@ static void httpSaveS3Board() {
         return;
     }
     saveAudioSettings();
+    if (recording::mode()) recording::checkCard(recordingHardwareSupported(), s3BoardVariant);
     apiSendJSON(F("{\"ok\":true}"));
 }
 
@@ -1936,6 +2059,122 @@ static void httpActionFactoryReset(){
     scheduleReboot(true, 600);
 }
 
+static void httpBatterySettings() {
+    if (!requireMutationAuth()) return;
+    if (!battery::pins(s3BoardVariant).supported) {
+        apiSendJSON(F("{\"ok\":false,\"error\":\"Battery monitoring is unsupported on this board.\"}")); return;
+    }
+    const String action = web.arg("action");
+    bool ok = false;
+    if (action == "enable" && (web.arg("enabled") == "0" || web.arg("enabled") == "1")) {
+        if (web.arg("enabled") == "0" && fieldpower::settings().guardEnabled) {
+            web.send(409, "application/json", "{\"ok\":false,\"error\":\"Disable low-battery protection before disabling monitoring.\"}"); return;
+        }
+        ok = devicesetup::setBatteryMonitoring(web.arg("enabled") == "1");
+    } else if (action == "calibrate" && devicesetup::batteryMonitoring()) {
+        float reference;
+        if (parseFloatStrict(web.arg("reference"), reference) && reference >= 2.5f && reference <= 4.3f)
+            ok = battery::calibrate(uint32_t(reference * 1000.0f + 0.5f), s3BoardVariant);
+    } else if (action == "reset") ok = battery::resetCalibration();
+    if (!ok) {
+        apiSendJSON(F("{\"ok\":false,\"error\":\"Could not save. Calibration needs a fresh voltage reading and a correction within +/-10%.\"}")); return;
+    }
+    apiSendJSON("{\"ok\":true,\"battery\":" + battery::statusJson(devicesetup::batteryMonitoring(), s3BoardVariant) + "}");
+}
+
+static void httpSaveAntenna() {
+    if (!requireMutationAuth()) return;
+    if (!antenna::supported()) {
+        web.send(400, "application/json", "{\"ok\":false,\"error\":\"unsupported_board\"}"); return;
+    }
+    const String value = web.arg("antenna");
+    if (value != "external" && value != "internal") {
+        web.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_antenna\"}"); return;
+    }
+    const bool useExternal = value == "external";
+    if (!antenna::save(useExternal)) {
+        apiSendJSON(F("{\"ok\":false,\"error\":\"antenna_save_failed\"}")); return;
+    }
+    const bool restart = useExternal != antenna::external();
+    apiSendJSON(String("{\"ok\":true,\"reboot_required\":") + (restart ? "true" : "false") + "}");
+    if (restart) scheduleReboot(false, 800);
+}
+
+static void httpSetupConnect() {
+    if (!requireMutationAuth()) return;
+    const String ssid = web.arg("ssid"), password = web.arg("password");
+    if (ssid.length() != strlen(ssid.c_str()) || password.length() != strlen(password.c_str()) ||
+        !devicesetup::testCredentials(ssid, password)) {
+        web.send(400, "application/json", "{\"ok\":false,\"error\":\"Check Wi-Fi name and password, or wait for the current operation.\"}");
+        return;
+    }
+    apiSendJSON(F("{\"ok\":true}"));
+}
+
+static void httpSetupSave() {
+    if (!requireMutationAuth()) return;
+    const String mode = web.arg("mode"), connection = web.arg("connection");
+    const String batteryChoice = web.arg("battery");
+    uint32_t variant = s3BoardVariant;
+    if ((mode != "streaming" && mode != "recording") ||
+        (connection != "home" && connection != "direct") ||
+        (mode == "streaming" && connection == "direct") ||
+        (s3BoardSelectionSupported() && (!parseUInt32Strict(web.arg("variant"), variant) || variant > s3boards::AtomS3U)) ||
+        (mode == "recording" && !recordingpins::resolve(variant).supported) ||
+        (batteryChoice.length() && batteryChoice != "0" && batteryChoice != "1") ||
+        (batteryChoice == "1" && !battery::pins(variant).supported) ||
+        (antenna::supported() && web.arg("antenna") != "external" && web.arg("antenna") != "internal")) {
+        web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid board, mode or connection choice.\"}");
+        return;
+    }
+    if (devicesetup::connectionBusy() || recording::resumePending()) {
+        web.send(409, "application/json", "{\"ok\":false,\"error\":\"Wait for the current operation.\"}"); return;
+    }
+    if (connection == "home" && !devicesetup::savedSsid().length() &&
+        String(devicesetup::connectionState()) != "connected" && web.arg("allow_offline") != "1") {
+        web.send(409, "application/json", "{\"ok\":false,\"error\":\"Connect to Wi-Fi first, or choose Finish later.\"}"); return;
+    }
+    if (fieldpower::settings().guardEnabled && (batteryChoice == "0" || !battery::pins(variant).supported)) {
+        web.send(409, "application/json", "{\"ok\":false,\"error\":\"Disable low-battery protection before disabling monitoring.\"}"); return;
+    }
+    const bool first = !devicesetup::complete();
+    const auto oldBoard = getS3BoardConfig();
+    if (s3BoardSelectionSupported() && !applyS3BoardConfig(variant)) {
+        apiSendJSON(F("{\"ok\":false,\"error\":\"Could not apply board. Select Streaming before choosing AtomS3U.\"}")); return;
+    }
+    const bool boardChanged = s3BoardSelectionSupported() && oldBoard.variant != variant;
+    const auto rollbackBoard = [&]() {
+        if (!boardChanged) return true;
+        const bool restored = restoreS3BoardConfig(oldBoard);
+        saveAudioSettings();
+        return restored;
+    };
+    if (boardChanged) saveAudioSettings(); // Hardware settings precede the completion marker.
+    const bool useExternal = web.arg("antenna") == "external";
+    if (antenna::supported() && !antenna::save(useExternal)) {
+        const bool restored = rollbackBoard();
+        apiSendJSON(restored ? F("{\"ok\":false,\"error\":\"Could not save antenna.\"}") :
+            F("{\"ok\":false,\"error\":\"Could not restore audio. Restart the device.\"}")); return;
+    }
+    if (!devicesetup::save(mode == "recording", connection == "direct", true,
+                          batteryChoice.length() ? (batteryChoice == "1" ? 1 : 0) : -1)) {
+        const bool restored = rollbackBoard();
+        if (antenna::supported()) antenna::save(antenna::external());
+        apiSendJSON(restored ? F("{\"ok\":false,\"error\":\"Could not save setup. Check Wi-Fi and try again.\"}") :
+            F("{\"ok\":false,\"error\":\"Could not restore audio. Restart the device.\"}")); return;
+    }
+    const bool antennaRestart = antenna::supported() && useExternal != antenna::external();
+    const bool applied = !first || setDeviceMode(mode == "recording");
+    // SD checking is asynchronous and marks recording busy. Start it only
+    // after the setup transaction can no longer need an audio rollback.
+    if (boardChanged && recording::mode() && !recording::busy())
+        recording::checkCard(recordingHardwareSupported(), s3BoardVariant);
+    devicesetup::currentMode(recording::mode());
+    apiSendJSON(String("{\"ok\":true,\"reboot_required\":") + (antennaRestart || !applied ? "true" : "false") +
+        ",\"use_ap\":" + (connection == "direct" && recording::mode() ? "true" : "false") + "}");
+    if (antennaRestart || !applied) scheduleReboot(false, 1500);
+}
+
 static void httpDeviceMode() {
     if (!requireMutationAuth()) return;
     const String requested = web.arg("mode");
@@ -1952,12 +2191,91 @@ static void httpRecordingAction() {
     if (!requireMutationAuth()) return;
     const String action = web.arg("action");
     bool ok = false;
-    if (action == "start") ok = startRecording();
+    if (action == "clock") {
+        uint32_t hz = 0, block = recording::kDefaultWriteBlockBytes;
+        ok = parseUInt32Strict(web.arg("hz"), hz) &&
+             (!web.hasArg("block_bytes") || parseUInt32Strict(web.arg("block_bytes"), block)) &&
+             recording::setStorageClock(hz, block);
+    } else if (action == "diagnose") ok = recording::diagnose(recordingHardwareSupported(), s3BoardVariant);
+    else if (action == "check") ok = recording::checkCard(recordingHardwareSupported(), s3BoardVariant);
+    else if (action == "start") ok = startRecording();
     else if (action == "stop") {
+        cancelThermalResume();
+        cancelRecordingAutoStart();
         ok = recording::stop() && recording::status().state != recording::State::Error;
-    } else { web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid recording action\"}"); return; }
+    } else if (action == "wifi_off") ok = requestRecordingWifiOff(0);
+    else if (action == "wifi_off_test" || action == "battery_sleep_test" || action == "offline_sleep_test") {
+        uint32_t seconds = 0;
+        if (parseUInt32Strict(web.arg("seconds"), seconds))
+            ok = action == "wifi_off_test" ? (seconds >= 30 && seconds <= 300 && requestRecordingWifiOff(seconds)) :
+                 action == "offline_sleep_test" ? requestOfflineSleepTest(seconds) : requestBatterySleepTest(seconds);
+    } else if (action == "battery_acknowledge")
+        ok = !recording::busy() && fieldpower::triggered() && fieldpower::acknowledge(battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant));
+    else { web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid recording action\"}"); return; }
     apiSendJSON(ok ? F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"Recording action failed; check recording status\"}"));
 }
+static void httpRecordingLogSettings() {
+    if(!requireMutationAuth())return;
+    uint32_t enabled,detailed,maxKiB;
+    if(!parseUInt32Strict(web.arg("sd_enabled"),enabled) || enabled>1 ||
+       !parseUInt32Strict(web.arg("detailed"),detailed) || detailed>1 ||
+       !parseUInt32Strict(web.arg("max_kib"),maxKiB) || maxKiB<64 || maxKiB>16384) {
+        web.send(400,"application/json","{\"ok\":false,\"error\":\"Invalid log settings\"}");return;
+    }
+    auto config=recording::logSettings();config.sdEnabled=enabled;config.detailed=detailed;config.maxKiB=maxKiB;
+    const bool ok=recording::saveLogSettings(config);
+    apiSendJSON(ok?F("{\"ok\":true}"):F("{\"ok\":false,\"error\":\"Could not save logging settings\"}"));
+}
+static void httpRecordingLogRead() {
+    if(!requireMutationAuth())return;
+    const String archive=web.arg("archive");
+    if(archive!="0" && archive!="1") {web.send(400,"application/json","{\"ok\":false,\"error\":\"Invalid log selection\"}");return;}
+    const bool ok=recording::requestLogTail(archive=="1",recordingHardwareSupported(),s3BoardVariant);
+    if(ok)apiSendJSON(F("{\"ok\":true}"));
+    else {
+        const String error=recording::logTailError();
+        apiSendJSON(String("{\"ok\":false,\"error\":\"")+jsonEscape(error.length()?error:String("Could not prepare SD log reading"))+"\"}");
+    }
+}
+static void httpRecordingLogTail() {
+    web.sendHeader("Cache-Control","no-cache");
+    if(!recording::logTailReady()) {web.send(202,"text/plain","Reading SD log...");return;}
+    const String error=recording::logTailError();
+    if(error.length()) {web.send(503,"text/plain",error);return;}
+    web.sendHeader("X-ESP32MIC-Log-Bytes",String(recording::logTailFileBytes()));
+    web.send(200,"text/plain; charset=utf-8",recording::logTail());
+}
+static void httpFieldPowerSettings() {
+    if (!requireMutationAuth()) return;
+    auto config = fieldpower::settings();
+    uint32_t value;
+    struct Setting { const char* key; uint32_t limit; };
+    const Setting fields[] = {{"cutoff_mv",4200},{"confirm_seconds",300},{"hysteresis_mv",300},
+        {"wifi_delay_seconds",60},{"enabled",1},{"sleep_after_save",1}};
+    bool found = false;
+    for (const auto& field : fields) {
+        if (!web.hasArg(field.key)) continue;
+        found = true;
+        if (!parseUInt32Strict(web.arg(field.key),value) || value > field.limit) {
+            web.send(400,"application/json","{\"ok\":false,\"error\":\"Invalid field power settings\"}"); return;
+        }
+        if (!strcmp(field.key,"cutoff_mv")) config.cutoffMv=value;
+        else if (!strcmp(field.key,"confirm_seconds")) config.confirmSeconds=value;
+        else if (!strcmp(field.key,"hysteresis_mv")) config.hysteresisMv=value;
+        else if (!strcmp(field.key,"wifi_delay_seconds")) config.wifiDelaySeconds=value;
+        else if (!strcmp(field.key,"enabled")) config.guardEnabled=value;
+        else config.sleepAfterSave=value;
+    }
+    if (!found || !fieldpower::valid(config)) {
+        web.send(400,"application/json","{\"ok\":false,\"error\":\"Invalid field power settings\"}"); return;
+    }
+    if (config.guardEnabled && (!devicesetup::batteryMonitoring() || !battery::pins(s3BoardVariant).supported)) {
+        web.send(409,"application/json","{\"ok\":false,\"error\":\"Enable battery monitoring on a supported board first.\"}"); return;
+    }
+    bool ok=fieldpower::saveSettings(config);
+    apiSendJSON(ok ? F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"Could not save field power settings\"}"));
+}
+
 static void httpRecordingSettings() {
     if (!requireMutationAuth()) return;
     uint32_t duration = 0, segment = 0;
@@ -1987,7 +2305,18 @@ static void httpUpdateSpacePrepare() {
 #endif
 
 void webui_begin() {
-    web.on("/", httpIndex);
+    web.on("/", HTTP_GET, httpIndex);
+    web.on("/setup", HTTP_GET, httpSetupPage);
+    web.on("/setup.css", HTTP_GET, httpSetupCss);
+    web.on("/setup.js", HTTP_GET, httpSetupJs);
+    web.on("/api/battery", HTTP_POST, httpBatterySettings);
+    web.on("/api/field_power", HTTP_POST, httpFieldPowerSettings);
+    web.on("/api/setup", HTTP_GET, httpSetupStatus);
+    web.on("/api/setup", HTTP_POST, httpSetupSave);
+    web.on("/api/setup/connect", HTTP_POST, httpSetupConnect);
+    web.on("/api/setup/access", HTTP_POST, httpSetupAccess);
+    web.on("/api/setup/scan", HTTP_POST, httpWifiApScanStart);
+    web.on("/api/setup/scan", HTTP_GET, httpWifiApScanResults);
     web.on("/ota", HTTP_GET, httpOtaPage);
     web.on("/ota.css", HTTP_GET, httpOtaCss);
     web.on("/ota.js", HTTP_GET, httpOtaJs);
@@ -1998,9 +2327,13 @@ void webui_begin() {
     web.on("/api/update_space", HTTP_GET, httpUpdateSpaceStatus);
     web.on("/api/update_space/prepare", HTTP_POST, httpUpdateSpacePrepare);
 #endif
+    web.on("/api/settings/antenna", HTTP_POST, httpSaveAntenna);
     web.on("/api/device/mode", HTTP_POST, httpDeviceMode);
     web.on("/api/recording/action", HTTP_POST, httpRecordingAction);
     web.on("/api/recording/settings", HTTP_POST, httpRecordingSettings);
+    web.on("/api/recording/log/settings", HTTP_POST, httpRecordingLogSettings);
+    web.on("/api/recording/log/read", HTTP_POST, httpRecordingLogRead);
+    web.on("/api/recording/log", HTTP_GET, httpRecordingLogTail);
     web.on("/api/status", httpStatus);
     web.on("/api/audio_status", httpAudioStatus);
     web.on("/api/microphone_profile", HTTP_GET, httpMicProfile);
@@ -2028,12 +2361,19 @@ void webui_begin() {
     web.on("/api/settings/mqtt", HTTP_POST, httpSaveMqtt);
     static const char* headerKeys[] = { UI_MUTATION_HEADER };
     web.collectHeaders(headerKeys, 1);
+    web.onNotFound([] {
+        if (devicesetup::apActive() && !web.uri().startsWith("/api/")) {
+            web.sendHeader("Location", "http://192.168.4.1/");
+            web.send(302, "text/plain", "Open BirdNETMic");
+        } else web.send(404, "text/plain", "Not found");
+    });
     web.begin();
 }
 
 void webui_handleClient() {
+    wifiApScanLoop();
     // Release scan buffers even when the browser closes before collecting results.
-    if (wifiApScanRequested && millis() - wifiApScanStarted > 30000UL &&
+    if (wifiApScanRequested && millis() - wifiApScanStarted > 60000UL &&
         WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
         WiFi.scanDelete();
         wifiApScanRequested = false;

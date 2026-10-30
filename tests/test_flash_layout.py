@@ -78,7 +78,12 @@ int main() {
 #include "Platform.h"
 namespace recording { bool busy(){return false;} bool stop(){return true;} }
 namespace flashlayout { bool pending=false; void loop(){} bool busy(){return pending;} }
-int otaCalls=0, wifiCalls=0, webCalls=0, thermalCalls=0;
+int otaCalls=0, wifiCalls=0, webCalls=0, thermalCalls=0,batteryCalls=0;
+namespace devicesetup {bool batteryMonitoring(){return true;}bool wifiSuspended(){return false;}}
+void serviceFieldPower(){}
+void flushRecordingLogs(){}
+namespace battery {void loop(bool enabled,uint8_t){assert(enabled);++batteryCalls;}}
+uint8_t s3BoardVariant=0;
 bool otaInProgress=false;
 unsigned long scheduledRebootAt=0,lastWebuiHandleMs=0;
 constexpr unsigned WEBUI_HANDLE_INTERVAL_MS=0;
@@ -91,9 +96,9 @@ void webui_handleClient(){++webCalls;}
 int main(){
     fake::clock=100;
     flashlayout::pending=true; loop();
-    assert(!otaCalls && !wifiCalls && !thermalCalls && webCalls==1);
-    flashlayout::pending=false; otaInProgress=true; loop(); assert(!thermalCalls);
-    otaInProgress=false; loop(); assert(thermalCalls==1);
+    assert(!otaCalls && !wifiCalls && !thermalCalls && !batteryCalls && webCalls==1);
+    flashlayout::pending=false; otaInProgress=true; loop(); assert(!thermalCalls&&!batteryCalls);
+    otaInProgress=false; loop(); assert(thermalCalls==1&&batteryCalls==1);
 }
 ''')
 

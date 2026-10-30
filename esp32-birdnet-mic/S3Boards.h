@@ -4,6 +4,12 @@
 // Stored values are part of the NVS/API contract. External remains the default.
 namespace s3boards {
 enum Variant : uint8_t { External = 0, Sense = 1, AtomS3U = 2 };
+// All settings changed by a board switch must be restored on setup failure.
+struct Config {
+    uint8_t variant, format;
+    uint32_t rate, minRate;
+    uint16_t cutoff;
+};
 inline bool valid(uint8_t value) { return value <= AtomS3U; }
 inline bool builtin(uint8_t value) { return value == Sense || value == AtomS3U; }
 inline int clockPin(uint8_t value, int external) {

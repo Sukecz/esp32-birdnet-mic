@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22%230ea5e9%22%2F%3E%3Cpath%20d%3D%22M5%2022l5-7v-3a6%206%200%200%201%2012%200v1l5%202-5%202c-1%207-9%2010-17%205Z%22%20fill%3D%22white%22%2F%3E%3Cpath%20d%3D%22M10%2018q5%205%209-2%22%20fill%3D%22none%22%20stroke%3D%22%230284c7%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2218.5%22%20cy%3D%2211.5%22%20r%3D%221.2%22%20fill%3D%22%230f172a%22%2F%3E%3C%2Fsvg%3E">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>BirdNETMic · Device configuration</title>
+<link rel="stylesheet" href="/setup.css">
+<script src="/setup.js" defer></script>
+</head>
+<body>
+<main>
+<header><h1>BirdNETMic</h1><p id="intro">Welcome. Set up your device.</p></header>
+<form id="setup_form">
+<fieldset id="choices" disabled>
+<section>
+<h2>1. Board</h2>
+<p id="board_name">Loading…</p>
+<label id="variant_field" hidden>Board variant
+<select id="variant"><option value="0">XIAO ESP32-S3</option><option value="1">XIAO ESP32-S3 Sense</option><option value="2">M5Stack AtomS3U</option></select></label>
+<label id="antenna_field" hidden>Wi-Fi antenna
+<select id="antenna"><option value="external">External</option><option value="internal">Internal (built-in)</option></select>
+<small>External antenna must be connected. Changing antennas restarts the device.</small></label>
+</section>
+<section>
+<h2>2. Default mode</h2>
+<label class="sr-only" for="mode">Default mode</label>
+<select id="mode"><option value="streaming">Streaming</option><option value="recording">Recording</option></select>
+<p class="note">Mode after power-on. Switch modes anytime in the main UI.</p>
+<p id="mode_note" class="note" hidden>SD recording is not supported on AtomS3U.</p>
+</section>
+<section>
+<h2>3. Connection &amp; control</h2>
+<label id="connection_field" hidden>Control connection
+<select id="connection"><option value="home">Home Wi-Fi</option><option value="direct">Device Wi-Fi — standalone</option></select></label>
+<p id="connection_note" class="note"></p>
+<div id="home_fields">
+<label for="ssid">Wi-Fi network</label>
+<div class="scan"><input id="ssid" maxlength="32" autocomplete="off" placeholder="Wi-Fi name"><button id="scan" type="button">Find Wi-Fi</button></div>
+<div id="networks" class="network-results" aria-label="Available Wi-Fi networks" hidden></div>
+<label for="password">Wi-Fi password</label>
+<div class="password"><input id="password" type="password" maxlength="64" autocomplete="new-password" placeholder="Password"><button id="show_password" type="button" aria-pressed="false">Show</button></div>
+<small>Leave blank for open Wi-Fi.</small>
+<button id="connect" type="button">Connect</button>
+<p id="wifi_status" class="status" role="status" aria-live="polite"></p>
+</div>
+<p id="fallback" class="note"></p>
+<details id="access_details"><summary>Direct Wi-Fi access</summary>
+<p class="note">Save these details for standalone use or Wi-Fi outages.</p>
+<dl><dt>Network</dt><dd id="ap_name"></dd><dt>Password</dt><dd id="ap_password"></dd><dt>Control page</dt><dd>http://192.168.4.1</dd></dl>
+<button id="copy_access" type="button">Copy details</button><p id="copy_status" class="status" role="status"></p>
+</details>
+</section>
+<section id="battery_section">
+<h2>4. Battery monitoring</h2>
+<label class="check"><input id="battery_enabled" type="checkbox"> Enable battery monitoring</label>
+<p class="note" id="battery_note">Show estimated charge and voltage at the top of the main UI in both modes.</p>
+<button id="battery_help" type="button" aria-haspopup="dialog">Battery wiring</button>
+</section>
+<div class="actions"><button id="finish" type="submit">Finish setup</button><button id="later" type="button">Finish later</button><a id="cancel" href="/" hidden>Back to controls</a></div>
+</fieldset>
+<p id="feedback" class="status" role="status" aria-live="polite">Loading settings…</p>
+</form>
+<section id="done" hidden>
+<h2>Settings saved</h2><p id="done_note"></p>
+<p id="done_access" class="note"></p>
+<a id="open_controls" class="button" href="/">Open controls</a>
+</section>
+</main>
+<dialog id="battery_dialog" aria-labelledby="battery_dialog_title">
+<h2 id="battery_dialog_title">Battery wiring</h2>
+<p id="battery_board"></p>
+<p id="battery_wiring"></p>
+<pre id="battery_diagram">BAT+ ── 100 kΩ ──┬── D0 / A0
+                 │
+               100 kΩ
+                 │
+BAT− / GND ──────┘</pre>
+<p>One Li-ion/LiPo cell or several in parallel (1S, 4.2 V max). Series packs are not supported.</p>
+<p class="note">Percentage is an estimate. This does not detect USB power, battery presence or charging.</p>
+<button id="battery_close" type="button">Close</button>
+</dialog>
+</body>
+</html>

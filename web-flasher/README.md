@@ -1,8 +1,11 @@
 # BirdNETMic Web Flasher — ESP32 Microphone USB Installation and OTA Updates
 
-Firmware **v1.36**. See the [release validation](../release-notes/1.36-validation.md).
+> **Firmware 2.00:** Streaming and standalone Recording. See the [main guide](../README.md).
 
-**Firmware: 1.36** (2026-10-25).
+
+Firmware **v2.00**. See the [release validation](../release-notes/2.00-validation.md).
+
+**Firmware: 2.00** (2026-10-30).
 
 Install using [esp32mic.msmeteo.cz](https://esp32mic.msmeteo.cz) in desktop **Chrome or Edge**
 with a USB **data** connection (AtomS3U plugs directly into USB-A). The flasher detects the ESP chip family and chooses the image for
@@ -10,18 +13,13 @@ XIAO ESP32-C3/S3/C5/C6. AtomS3U and Sense also use the S3 image; chip detection
 cannot distinguish these board designs, so select the matching profile after installation.
 
 **XIAO ESP32-S3 Sense / M5Stack AtomS3U:** use the S3 image, then open
-**Audio → S3 board** in the device Web UI, select your board and click **Apply board**.
-**[M5Stack AtomS3U](https://docs.m5stack.com/en/core/AtomS3U) is tested and working**
-with BirdNET-Go (contributor, v1.33). It is the easiest setup without soldering:
-plug into USB-A, install S3 firmware, configure Wi-Fi and apply the AtomS3U profile.
-Its microphone is built in; start with Gain 24 and check Listen.
+**Device configuration → Board** in the device Web UI, select your board and save the configuration.
+**AtomS3U** has a built-in microphone; start with Gain 24 and check Listen.
 **[XIAO ESP32-S3 Sense](https://www.seeedstudio.com/XIAO-ESP32S3-Sense-p-5639.html)
-is experimental and hardware-untested**; its profile also accepts external I2S microphones.
+is experimental**; its profile also accepts external I2S microphones.
 
 For wiring, microphone selection and feature status, see the [main guide](../README.md).
-PDM is supported, with contributor hardware tests on AtomS3U, C5 + IM73D122 and
-C3 + an Adafruit-compatible PDM breakout. See the [PDM test coverage](../esp32-birdnet-mic/README.md#pdm-microphones)
-for tested versions and limits. C3/C5 should use **512 samples per packet** and **160 MHz**.
+PDM is supported. C3/C5 should use **512 samples per packet** and **160 MHz**.
 Keeping saved values preserves the packet size; **Recommended settings** applies 512.
 
 ## Choose the right file
@@ -29,7 +27,7 @@ Keeping saved values preserves the packet size; **Recommended settings** applies
 | Purpose | File | Notes |
 |---|---|---|
 | Update through the device's OTA page | `firmware-app-<board>.bin` | App-only; choose c3, s3, c5 or c6 |
-| Exact 1.36 OTA image | `firmware-app-<board>-1.36.bin` | Current versioned app-only image |
+| Exact 2.00 OTA image | `firmware-app-<board>-2.00.bin` | Current versioned app-only image |
 | USB web installation | `manifest.json` and its referenced parts | Let the web flasher handle offsets |
 | Manual full USB flash | `firmware-<board>.bin` | Merged image; can overwrite settings; never upload through OTA |
 | Legacy unsuffixed files | `firmware-app.bin`, `firmware.bin` | **C6 only** |

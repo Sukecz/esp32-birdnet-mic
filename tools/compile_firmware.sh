@@ -42,11 +42,25 @@ case "$fqbn" in
       --build-property compiler.c.extra_flags=-flto
       --build-property compiler.cpp.extra_flags=-flto
       --build-property 'compiler.c.elf.extra_flags=-flto -Werror=lto-type-mismatch'
-      # USB installs start with larger slots. App-only OTA keeps the existing
-      # table until its owner confirms preparation in the Web UI. Keep the
-      # original upload.maximum_size so this bridge build fits both layouts.
+      # Match the app capacity in birdnet_4mb.csv (0x1F0000). The immutable
+      # v1.35 bridge remains available for devices with the original layout;
+      # the OTA handler rejects a larger app until preparation is complete.
+      --build-property upload.maximum_size=2031616
       --build-property "recipe.hooks.prebuild.99.pattern=cp -f \"$ROOT_DIR/tools/partitions/birdnet_4mb.csv\" \"{build.path}/partitions.csv\""
     )
+    ;;
+esac
+# Use the same stable-ready SD protocol on every supported board. The optional
+# override is only for explicit A/B work; normal builds generate a private copy
+# from the pinned core and never patch its installed files.
+case "$fqbn" in
+  esp32:esp32:XIAO_ESP32C3*|esp32:esp32:XIAO_ESP32S3*|esp32:esp32:XIAO_ESP32C5*|esp32:esp32:XIAO_ESP32C6*)
+    sd_library="${BIRDNETMIC_SD_LIBRARY:-}"
+    if [[ -z "$sd_library" ]]; then
+      sd_library="$(python3 "$ROOT_DIR/tools/prepare_sd_library.py")"
+    fi
+    [[ -f "$sd_library/library.properties" && -f "$sd_library/src/SD.h" ]] || exit 2
+    properties+=(--library "$sd_library")
     ;;
 esac
 exec arduino-cli compile "${properties[@]}" "$@" "$ROOT_DIR/esp32-birdnet-mic"

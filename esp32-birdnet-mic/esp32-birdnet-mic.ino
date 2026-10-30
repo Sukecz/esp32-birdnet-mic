@@ -1,7 +1,10 @@
 #include "WifiAp.h"
+#include "Antenna.h"
 #include <WiFi.h>
 #include <esp_wifi.h>
-#include <WiFiManager.h>
+#include "DeviceSetup.h"
+#include "Battery.h"
+#include "FieldPower.h"
 #include "driver/i2s_std.h"
 #include "driver/i2s_pdm.h"
 #include <ArduinoOTA.h>
@@ -9,6 +12,7 @@
 #include <ESPmDNS.h>
 #include <PubSubClient.h>
 #include <time.h>
+#include <esp_sntp.h>
 #include <stdlib.h>
 #include <math.h>
 #include <esp_mac.h>
@@ -36,7 +40,9 @@
 #include "MicrophoneSignal.h"
 #include "BrowserAudio.h"
 #include "Recording.h"
+#include "RecordingPins.h"
 static uint32_t recordingDmaBaseline = 0;
+static bool recordingAutoStartPending = false;
 #include "ThermalRecovery.h"
 #include "ChipTemperature.h"
 #include "FlashLayout.h"
@@ -89,7 +95,7 @@ static constexpr uint32_t PDM_SAMPLE_RATE = 48000;
 static constexpr uint32_t PDM_CLOCK_HZ = PDM_SAMPLE_RATE * 64;
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi) ==================
-#define FW_VERSION "1.36"
+#define FW_VERSION "2.00"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 // Build timestamp for diagnostics (compile time)
@@ -136,11 +142,16 @@ const char* FW_OTA_ARTIFACT_STR = XIAO_OTA_ARTIFACT;
 const char* NTP_SERVER_1 = "pool.ntp.org";
 const char* NTP_SERVER_2 = "time.nist.gov";
 static const unsigned long NTP_SYNC_INTERVAL_SYNCED_MS = 6UL * 60UL * 60UL * 1000UL;   // 6 hours
-static const unsigned long NTP_SYNC_INTERVAL_UNSYNCED_MS = 60UL * 60UL * 1000UL;        // 1 hour
+static const unsigned long NTP_SYNC_INTERVAL_UNSYNCED_MS = 30000UL;
+static const unsigned long NTP_MIN_REQUEST_INTERVAL_MS = 15000UL;
 bool timeSyncEnabled = true;
 bool timeSynced = false;                 // true after the first successful NTP sync
 unsigned long lastTimeSyncAttempt = 0;   // millis() of last attempt
 unsigned long lastTimeSyncSuccess = 0;   // millis() of last success
+// The lwIP callback only queues an event. All application state/logging is loop-owned.
+static std::atomic<uint32_t> ntpSyncEvents{0};
+static bool ntpConfigured = false, ntpServiceEnabled = false;
+static bool ntpAttempted = false, ntpWasConnected = false, ntpReconnectPending = false;
 int32_t timeOffsetMinutes = 0;           // user-set offset applied to displayed time
 uint8_t timeZoneMode = TIME_ZONE_FIXED;
 String customTimeZoneRule = "UTC0";
@@ -1341,6 +1352,7 @@ void mqttPublishDiscoverySoon() {
 }
 
 void checkMqtt() {
+    if (devicesetup::wifiSuspended()) return;
     if (!mqttEnabled) {
         if (mqttClient.connected()) {
             String availTopic = mqttAvailabilityTopic();
@@ -1490,13 +1502,27 @@ static bool hasValidTime() {
     return now > 1672531200; // 2023-01-01 00:00:00 UTC
 }
 
+static void onNtpTimeSync(struct timeval* value) {
+    if (value && value->tv_sec > 1672531200) ntpSyncEvents.fetch_add(1);
+}
+
 // Apply local time offset and optionally enable/disable NTP source servers.
 // With enableNtp=false we keep local offset handling, but no network sync is configured.
 void configureTimeService(bool enableNtp) {
-    if (enableNtp) {
-        configTime(0, 0, NTP_SERVER_1, NTP_SERVER_2);
-    } else {
-        configTime(0, 0, nullptr, nullptr);
+    if (!ntpConfigured || ntpServiceEnabled != enableNtp) {
+        esp_sntp_set_time_sync_notification_cb(onNtpTimeSync);
+        if (enableNtp) {
+            ntpSyncEvents.store(0);
+            configTime(0, 0, NTP_SERVER_1, NTP_SERVER_2);
+            esp_sntp_set_sync_interval(NTP_SYNC_INTERVAL_SYNCED_MS);
+        } else {
+            // At an Off boot, configTime has not initialized the TCP/IP service yet.
+            if (ntpServiceEnabled && esp_sntp_enabled()) esp_sntp_stop();
+            ntpSyncEvents.store(0);
+        }
+        ntpConfigured = true;
+        ntpServiceEnabled = enableNtp;
+        ntpAttempted = ntpWasConnected = ntpReconnectPending = false;
     }
     const char* rule = timeZoneRule(timeZoneMode);
     if (timeZoneMode == TIME_ZONE_CUSTOM) rule = customTimeZoneRule.c_str();
@@ -1798,49 +1824,51 @@ String formatLogTimestamp() {
     return String("uptime ") + formatUptime(uptimeSeconds);
 }
 
-// Attempt NTP sync if Wi-Fi is up; returns success
+// Queue an NTP request. Accepted does not mean synchronized: only the callback
+// confirms that a server replied. Keep this signature for existing UI callers.
 bool attemptTimeSync(bool logResult, bool quickMode /*prefer short, single shot*/ = false) {
-    lastTimeSyncAttempt = millis();
-    bool wasUnsynced = !timeSynced;
-    if (WiFi.status() != WL_CONNECTED) {
-        if (logResult) simplePrintln("NTP skipped: WiFi not connected");
+    (void)quickMode;
+    if (!timeSyncEnabled || WiFi.status() != WL_CONNECTED) {
+        if (logResult) simplePrintln("NTP waiting for enabled Time Sync and WiFi connection");
         return false;
     }
     configureTimeService(true);
-    struct tm tmNow;
-    bool ok = false;
-    // Keep attempts very short when quickMode (during streaming).
-    int tries = quickMode ? 1 : 3;
-    int perTryTimeoutMs = quickMode ? 150 : 200;
-    for (int i = 0; i < tries; ++i) {
-        if (getLocalTime(&tmNow, perTryTimeoutMs)) { ok = true; break; }
-        if (!quickMode) delay(60);
-    }
-    if (ok) {
-        timeSynced = true;
-        lastTimeSyncSuccess = millis();
-        if (logResult || wasUnsynced) {
-            char buf[32];
-            strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tmNow);
-            simplePrintln(String("Time synchronized via NTP: ") + String(buf));
-        }
-    } else {
-        if (!hasValidTime()) timeSynced = false;
-        if (logResult) simplePrintln("NTP sync failed (no response)");
-    }
-    return ok;
+    const uint32_t now = millis();
+    if (ntpAttempted && uint32_t(now-lastTimeSyncAttempt) < NTP_MIN_REQUEST_INTERVAL_MS) return true;
+    const bool accepted = esp_sntp_restart();
+    lastTimeSyncAttempt = now;
+    ntpAttempted = true;
+    ntpWasConnected = true;
+    ntpReconnectPending = false;
+    if (logResult) simplePrintln(accepted ? "NTP synchronization requested" : "NTP request failed; retry scheduled");
+    return accepted;
 }
 
-// Periodic NTP sync scheduler
+const char* timeSyncStatusCode() {
+    if (!timeSyncEnabled) return "disabled";
+    if (timeSynced) return "synced";
+    if (WiFi.status() != WL_CONNECTED) return "waiting_wifi";
+    return "syncing";
+}
+
+// Run every application-loop pass: asynchronous responses can arrive after any
+// request, including while streaming or before the first 30-second WiFi check.
 void checkTimeSync() {
-    if (!timeSyncEnabled) return;
-    unsigned long now = millis();
-    bool dueUnsynced = (!timeSynced && (now - lastTimeSyncAttempt) > NTP_SYNC_INTERVAL_UNSYNCED_MS);
-    bool dueSynced = (timeSynced && (now - lastTimeSyncAttempt) > NTP_SYNC_INTERVAL_SYNCED_MS);
-    if (dueUnsynced || dueSynced) {
-        bool quick = isStreaming; // během streamu jen krátce
-        attemptTimeSync(false, quick);
+    if (devicesetup::wifiSuspended()) return;
+    if (ntpSyncEvents.exchange(0) && timeSyncEnabled && hasValidTime()) {
+        timeSynced = true;
+        lastTimeSyncSuccess = millis();
+        simplePrintln("Time synchronized via NTP");
     }
+    if (!hasValidTime()) timeSynced = false;
+    const bool connected = timeSyncEnabled && WiFi.status() == WL_CONNECTED;
+    if (connected && !ntpWasConnected) ntpReconnectPending = true;
+    ntpWasConnected = connected;
+    if (!connected) return;
+    const uint32_t elapsed = uint32_t(millis()-lastTimeSyncAttempt);
+    const uint32_t interval = timeSynced ? NTP_SYNC_INTERVAL_SYNCED_MS : NTP_SYNC_INTERVAL_UNSYNCED_MS;
+    if (!ntpAttempted || (ntpReconnectPending && elapsed >= NTP_MIN_REQUEST_INTERVAL_MS) || elapsed >= interval)
+        attemptTimeSync(false, true);
 }
 
 static bool isTemperatureValid(float temp) {
@@ -1866,6 +1894,7 @@ static uint32_t thermalEpochNow() {
 }
 
 void cancelThermalResume() {
+    recording::cancelResume();
     if (!thermalRecovery.state.resumePending) return;
     thermalRecovery.state.resumePending = 0;
     persistOverheatNote();
@@ -1892,6 +1921,7 @@ bool acknowledgeThermalShutdown() {
         rtspServer.setNoDelay(true);
         rtspServerEnabled = true;
     }
+    if (wasLatched && recording::mode() && recording::resumePending()) resumeRecordingAfterCooling();
     mqttPublishState(true);
     return true;
 }
@@ -1905,7 +1935,7 @@ void recordOverheatTrip(float temp) {
                          String(overheatShutdownC, 1) + " C).";
     thermalRecovery.trip(thermalEpochNow(), esp_timer_get_time() / 1000000ULL,
                          overheatShutdownC, temp >= overheatShutdownC + OVERHEAT_EMERGENCY_MARGIN_C,
-                         rtspServerEnabled);
+                         rtspServerEnabled || (recording::mode() && audioProducerRunning));
     overheatLatched = true;
     simplePrintln("THERMAL PROTECTION: " + overheatLastReason);
     simplePrintln(thermalRecovery.autoPending(overheatAutoResumeEnabled, overheatProtectionEnabled)
@@ -1953,7 +1983,7 @@ void checkTemperature() {
     }
     bool protectionActive = overheatProtectionEnabled && !overheatSensorFault;
     if (protectionActive) {
-        if (!overheatLatched && rtspServerEnabled) {
+        if (!overheatLatched && (rtspServerEnabled || (recording::mode() && audioProducerRunning))) {
             bool confirmedTrip = false;
             if (temp >= (overheatShutdownC + OVERHEAT_EMERGENCY_MARGIN_C)) {
                 // A clearly dangerous excursion still shuts down immediately.
@@ -1975,6 +2005,7 @@ void checkTemperature() {
                 stopAllRtspClients("Thermal protection");
                 rtspServerEnabled = false;
                 rtspServer.stop();
+                recording::pauseForCooling();
                 pauseAudioCapture();
                 mqttPublishState(true);
             }
@@ -1983,7 +2014,7 @@ void checkTemperature() {
         overheatConsecutiveSamples = 0;
     }
     if (thermalRecovery.canResume(millis(), overheatAutoResumeEnabled,
-                                  overheatProtectionEnabled, isStreamScheduleAllowedNow())) {
+                                  overheatProtectionEnabled, recording::mode() || isStreamScheduleAllowedNow())) {
         overheatLatched = false;
         if (!setup_i2s_driver()) {
             overheatLatched = true;
@@ -1999,6 +2030,8 @@ void checkTemperature() {
             rtspServer.begin();
             rtspServer.setNoDelay(true);
             rtspServerEnabled = true;
+        } else if (recording::resumePending()) {
+            resumeRecordingAfterCooling();
         }
         simplePrintln("THERMAL RECOVERY: Audio restored after stable cooling. Warning awaits acknowledgement.");
         mqttPublishState(true);
@@ -2033,13 +2066,13 @@ void checkPerformance() {
 }
 
 void checkAudioProducerHealth() {
-    if (recording::busy() && (!audioProducerRunning ||
-        uint32_t(millis() - audioProducerLastReadMs) > 2000 ||
-        getI2sDmaOverrunTotal() != recordingDmaBaseline)) recording::captureFault();
     // Read the cross-task timestamp before the clock to avoid treating a newer
     // producer timestamp as an unsigned negative age.
     uint32_t lastRead = audioProducerLastReadMs;
     uint32_t now = millis();
+    if (recording::busy() && (!audioProducerRunning ||
+        uint32_t(now - lastRead) > 2000 ||
+        getI2sDmaOverrunTotal() != recordingDmaBaseline)) recording::captureFault();
     if (autoRecoveryEnabled && isStreaming &&
         audioProducerNeedsRecovery(now, lastRead, audioProducerStopRequested, lastI2SReset)) {
         lastI2SReset = now;
@@ -2050,6 +2083,7 @@ void checkAudioProducerHealth() {
 
 // WiFi health check
 void checkWiFiHealth() {
+    if (devicesetup::wifiSuspended()) return;
     static wl_status_t lastStatus = WL_IDLE_STATUS;
     static bool initialized = false;
     wl_status_t cur = WiFi.status();
@@ -2057,10 +2091,7 @@ void checkWiFiHealth() {
         lastStatus = cur;
         initialized = true;
     }
-    if (cur != WL_CONNECTED && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
-        simplePrintln("WiFi disconnected! Reconnecting...");
-        WiFi.reconnect();
-    } else if (cur == WL_CONNECTED && lastStatus != WL_CONNECTED) {
+    if (cur == WL_CONNECTED && lastStatus != WL_CONNECTED) {
         wifiReconnectCount++;
         simplePrintln("WiFi reconnected: " + WiFi.localIP().toString() +
                       " (count " + String(wifiReconnectCount) + ")");
@@ -2377,6 +2408,7 @@ void applyMdnsSetting() {
 // Schedule a safe reboot (optionally with factory reset) after delayMs
 void scheduleReboot(bool factoryReset, uint32_t delayMs) {
     if (!recording::stop()) return;
+    recording::cancelResume();
     scheduledFactoryReset = factoryReset;
     scheduledRebootAt = millis() + delayMs;
 }
@@ -2404,7 +2436,12 @@ uint32_t computeRecommendedMinRate() {
 
 // Restore application settings to safe defaults and persist
 void resetToDefaultSettings() {
+    antenna::save(true);
+    devicesetup::reset(true);
+    battery::resetCalibration();
+    fieldpower::saveSettings(fieldpower::Settings{});
     recording::saveSettings(recording::Settings{});
+    recording::saveLogSettings(recording::LogSettings{});
     simplePrintln("FACTORY RESET: Restoring default settings...");
     wifiApSave(nullptr);
     clearStoredBssidPin();
@@ -2592,9 +2629,25 @@ bool applyMicProfileConfig(uint8_t newFormat, bool recommended) {
 
 // Stop capture before changing GPIO routing, even when the format stays PDM.
 // Persist only after success in the authenticated API handler.
+s3boards::Config getS3BoardConfig() {
+    return {s3BoardVariant, micFormat, currentSampleRate, minAcceptableRate, highpassCutoffHz};
+}
+
+bool restoreS3BoardConfig(const s3boards::Config& saved) {
+    if (recording::busy()) return false;
+    stopAudioProducer();
+    s3BoardVariant = saved.variant;
+    micFormat = saved.format;
+    currentSampleRate = saved.rate;
+    minAcceptableRate = saved.minRate;
+    highpassCutoffHz = saved.cutoff;
+    updateS3BoardIdentity();
+    return restartI2S();
+}
+
 bool applyS3BoardConfig(uint8_t variant) {
-    if (!s3BoardSelectionSupported() || !s3boards::valid(variant)) return false;
-    if (recording::mode() && variant != s3boards::External) return false;
+    if (!s3BoardSelectionSupported() || !s3boards::valid(variant) || recording::busy()) return false;
+    if (recording::mode() && variant == s3boards::AtomS3U) return false;
     if (variant == s3BoardVariant) return true;
     const uint8_t oldVariant = s3BoardVariant, oldFormat = micFormat;
     const uint32_t oldRate = currentSampleRate, oldMinRate = minAcceptableRate;
@@ -2631,33 +2684,46 @@ static inline void* audioWorkAlloc(size_t bytes) {
 }
 
 bool recordingHardwareSupported() {
-#if defined(ARDUINO_XIAO_ESP32S3)
-    return s3BoardVariant == s3boards::External;
-#else
-    return false;
-#endif
+    return recordingpins::resolve(s3BoardVariant).supported;
 }
 
 bool startRecording() {
+    if (!fieldpower::canStart(battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant))) return false;
     if (recording::busy() || otaInProgress || flashlayout::busy() || overheatLatched ||
         !audioProducerRunning || audioProducerStopRequested || scheduledRebootAt) return false;
     recordingDmaBaseline = getI2sDmaOverrunTotal();
-    return recording::start(currentSampleRate, recordingHardwareSupported());
+    return recording::start(currentSampleRate, recordingHardwareSupported(), s3BoardVariant);
+}
+
+bool resumeRecordingAfterCooling() {
+    if (!fieldpower::canStart(battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant))) {
+        recording::cancelResume(); return false;
+    }
+    if (recording::busy() || otaInProgress || flashlayout::busy() || overheatLatched ||
+        !audioProducerRunning || audioProducerStopRequested || scheduledRebootAt) {
+        recording::cancelResume();
+        return false;
+    }
+    recordingDmaBaseline = getI2sDmaOverrunTotal();
+    return recording::resume(currentSampleRate, recordingHardwareSupported(), s3BoardVariant);
 }
 
 bool setDeviceMode(bool recordingMode) {
+    if (recordingMode && !recordingHardwareSupported()) return false;
     if (recordingMode == recording::mode()) return true;
     if (otaInProgress || flashlayout::busy()) return false;
     const bool wasRecording = recording::busy();
     if (!recording::stop() || (wasRecording && recording::status().state == recording::State::Error)) return false;
-    auto config = recording::settings();
-    config.recordingMode = recordingMode;
-    if (!recording::saveSettings(config)) return false;
-    if (recordingMode) wifiApEnableFieldControl();
+    recordingAutoStartPending = false;
+    if (!recordingMode) cancelThermalResume();
+    if (!webui_logModeChanged(recordingMode)) return false;
+    recording::setRuntimeMode(recordingMode);
+    devicesetup::currentMode(recordingMode);
     browserAudioStop();
     stopAllRtspClients("Device mode changed");
     rtspServerEnabled = false;
     rtspServer.stop();
+    if (recordingMode) recording::checkCard(recordingHardwareSupported(), s3BoardVariant);
     if (!recordingMode && !overheatLatched && isStreamScheduleAllowedNow()) {
         rtspServer.begin(); rtspServer.setNoDelay(true); rtspServerEnabled = true;
     }
@@ -2852,8 +2918,8 @@ static int readPdmSoftwareBlock(uint64_t& filterUs) {
         if (want > sizeof(pdmReadBuffers->bytes)) want = sizeof(pdmReadBuffers->bytes);
         esp_err_t err = i2s_channel_read(i2s_rx_handle, pdmReadBuffers->bytes, want, &bytesRead, 100);
         if (audioProducerStopRequested) break;
-        if (err != ESP_OK && err != ESP_ERR_TIMEOUT) { audioI2SErrorCount++; break; }
-        if (!bytesRead) { audioI2SErrorCount++; break; }
+        if (err != ESP_OK && err != ESP_ERR_TIMEOUT) { audioI2SErrorCount++; recording::captureFault(); break; }
+        if (!bytesRead) { audioI2SErrorCount++; recording::captureFault(); break; }
         audioProducerLastReadMs = millis();
         uint64_t started = esp_timer_get_time();
         size_t words = pdmFramer.unpack(pdmReadBuffers->bytes, bytesRead, pdmReadBuffers->words);
@@ -2907,9 +2973,9 @@ void audioProducerTask(void* /*arg*/) {
             esp_err_t result = i2s_channel_read(i2s_rx_handle, i2s_32bit_buffer,
                                                 currentBufferSize * sampleBytes, &bytesRead, 100);
             if (audioProducerStopRequested) break;
-            if (result != ESP_OK && result != ESP_ERR_TIMEOUT) { audioI2SErrorCount++; continue; }
+            if (result != ESP_OK && result != ESP_ERR_TIMEOUT) { audioI2SErrorCount++; recording::captureFault(); continue; }
             samplesRead = bytesRead / sampleBytes;
-            if (samplesRead == 0) { audioI2SErrorCount++; vTaskDelay(pdMS_TO_TICKS(1)); continue; }
+            if (samplesRead == 0) { audioI2SErrorCount++; recording::captureFault(); vTaskDelay(pdMS_TO_TICKS(1)); continue; }
             audioProducerLastReadMs = millis();
         }
         if (audioProducerStopRequested) break;
@@ -3924,24 +3990,19 @@ void setup() {
     loadBootMetadata();
     simplePrintln("Boot reason: " + rebootReason + ", restart #" + String(restartCounter));
 
-#if XIAO_HAS_RF_SWITCH
-    // Enable external antenna path on XIAO ESP32-C6.
-    pinMode(3, OUTPUT);
-    digitalWrite(3, LOW);
-    Serial.println("RF switch control enabled (GPIO3 LOW)");
-    pinMode(14, OUTPUT);
-    digitalWrite(14, HIGH);
-    Serial.println("External antenna selected (GPIO14 HIGH)");
-#else
-    Serial.print("Board profile: ");
-    Serial.print(FW_BOARD_NAME_STR);
-    Serial.println(" (no firmware-controlled RF switch)");
-#endif
+    // Load and apply the saved RF path before Wi-Fi starts. Existing devices
+    // keep external; changing the saved choice takes effect only after reboot.
+    antenna::begin();
+    if (antenna::supported()) {
+        simplePrintln(antenna::external() ? "WiFi antenna: external (GPIO14 HIGH)"
+                                         : "WiFi antenna: internal (GPIO14 LOW)");
+    }
     logMemorySnapshot("Boot");
 
     // Load settings from flash
     loadAudioSettings();
     recording::begin();
+    fieldpower::begin();
 
     // Allocate buffers with current size
     i2s_32bit_buffer = (int32_t*)audioWorkAlloc(currentBufferSize * sizeof(int32_t));
@@ -3957,38 +4018,11 @@ void setup() {
     WiFi.setSleep(false);
 
     wifiApLoad();
-    if (recording::mode()) wifiApEnableFieldControl();
-    if (recording::mode() && !wifiApPinned()) {
-        WiFi.mode(WIFI_STA);
-        WiFi.begin();
-        unsigned long started = millis();
-        while (WiFi.status() != WL_CONNECTED && millis() - started < 15000UL) delay(50);
-        wifiApRecoveryLoop();
-    } else if (wifiApBeginPinned()) {
-        simplePrintln("WiFi: connecting to saved access point " + wifiApPinnedText());
-        unsigned long started = millis();
-        while (WiFi.status() != WL_CONNECTED && millis() - started < 15000UL) delay(50);
-        // Continue startup even while offline so the recovery web UI can run.
-    } else {
-        wifiApSave(nullptr);
-        WiFi.mode(WIFI_STA);
-        clearStoredBssidPin();
-        WiFiManager wm;
-        wm.setConnectTimeout(60);
-        wm.setConfigPortalTimeout(180);
-        if (!wm.autoConnect("ESP32-RTSP-Mic-AP")) {
-            simplePrintln("WiFi failed, restarting...");
-            ESP.restart();
-        }
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-        simplePrintln("WiFi connected: " + WiFi.localIP().toString());
-        logConnectedAp("initial");
-    } else {
-        simplePrintln("Selected WiFi AP unavailable; recovery WiFi starts after 60 seconds offline.");
-    }
-    clearStoredBssidPin();
+    devicesetup::begin(recording::mode());
+    recording::setRuntimeMode(devicesetup::defaultRecording() && recordingHardwareSupported());
+    webui_logModeChanged(recording::mode());
+    devicesetup::currentMode(recording::mode());
+    simplePrintln("WiFi: non-blocking connection; automatic fallback available.");
 
     // Apply configured WiFi TX power after connect (logs once on change)
     applyWifiTxPower(true);
@@ -4066,7 +4100,10 @@ void setup() {
     } else {
         simplePrintln("RTSP server paused by stream schedule. It will resume in the next allowed window.");
     }
-    if (recording::mode() && recording::settings().autoStart && !overheatLatched) startRecording();
+    if (recording::mode()) {
+        recordingAutoStartPending = recording::settings().autoStart && !overheatLatched;
+        if (!recordingAutoStartPending) recording::checkCard(recordingHardwareSupported(), s3BoardVariant);
+    }
     simplePrintln("Web UI: http://" + WiFi.localIP().toString() + "/");
     if (mqttEnabled) {
         simplePrintln("MQTT: enabled (" + mqttHost + ":" + String(mqttPort) +
@@ -4078,14 +4115,174 @@ void setup() {
     }
 }
 
+// Explicit diagnostic actions may arrange one recovery reboot/timed sleep.
+// Ordinary Wi-Fi-off and low-battery sleep never arm a wake timer.
+struct FieldPowerTestReceipt {
+    uint32_t magic, kind, radioMode, offlineKiB, elapsedSeconds, writtenKiB;
+    uint32_t verifiedBytes, droppedSamples, dmaDelta, i2sDelta, saved;
+};
+RTC_NOINIT_ATTR static FieldPowerTestReceipt fieldPowerReceipt;
+static uint32_t fieldTestAt = 0, fieldTestWake = 0, fieldTestBaseKiB = 0;
+static uint32_t fieldTestOfflineWake = 0;
+static uint32_t fieldTestDma = 0, fieldTestI2s = 0;
+static bool fieldTestRadioSeen = false, fieldPowerStopRequested = false, fieldPowerSaveFinished = false;
+
+void cancelRecordingAutoStart() { recordingAutoStartPending = false; }
+
+String fieldPowerTestJson() {
+    if (fieldPowerReceipt.magic != 0x46505431) return "null";
+    const auto& r = fieldPowerReceipt;
+    return String("{\"kind\":") + r.kind + ",\"radio_mode\":" + r.radioMode +
+        ",\"offline_kib\":" + r.offlineKiB + ",\"elapsed_seconds\":" + r.elapsedSeconds +
+        ",\"written_kib\":" + r.writtenKiB + ",\"verified_bytes\":" + r.verifiedBytes +
+        ",\"dropped_samples\":" + r.droppedSamples + ",\"dma_delta\":" + r.dmaDelta +
+        ",\"i2s_delta\":" + r.i2sDelta + ",\"saved\":" + (r.saved ? "true" : "false") +
+        ",\"wake_cause\":" + uint32_t(esp_sleep_get_wakeup_cause()) + "}";
+}
+
+static void storeFieldPowerReceipt(uint32_t kind) {
+    const auto r = recording::status();
+    fieldPowerReceipt = {0, kind, uint32_t(WiFi.getMode()),
+        fieldTestRadioSeen && r.writtenKiB >= fieldTestBaseKiB ? r.writtenKiB-fieldTestBaseKiB : 0,
+        r.elapsedSeconds, r.writtenKiB, r.verifiedBytes, r.droppedSamples,
+        getI2sDmaOverrunTotal()-fieldTestDma, audioI2SErrorCount-fieldTestI2s,
+        uint32_t(r.state == recording::State::Saved && r.verified)};
+    fieldPowerReceipt.magic = 0x46505431;
+}
+
+bool requestRecordingWifiOff(uint32_t testSeconds = 0) {
+    if (!recording::mode() || (!testSeconds && recording::status().state != recording::State::Recording) ||
+        (testSeconds && (testSeconds < 30 || testSeconds > 300)) || fieldTestAt || fieldTestWake || fieldTestOfflineWake) return false;
+    const uint32_t delayMs = uint32_t(fieldpower::settings().wifiDelaySeconds)*1000;
+    if (!devicesetup::requestWifiOff(delayMs)) return false;
+    browserAudioStop();
+    simplePrintln("Recording: Wi-Fi off requested; delay=" + String(fieldpower::settings().wifiDelaySeconds) + "s; device sleeps when recording finishes");
+    if (testSeconds) {
+        fieldPowerReceipt.magic = 0;
+        fieldTestDma = getI2sDmaOverrunTotal(); fieldTestI2s = audioI2SErrorCount;
+        fieldTestRadioSeen = false;
+        fieldTestAt = millis() + max(uint32_t(250), delayMs) + testSeconds*1000;
+    }
+    return true;
+}
+
+bool requestBatterySleepTest(uint32_t wakeSeconds) {
+    const auto r = battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant);
+    const auto s = fieldpower::settings();
+    if (wakeSeconds < 10 || wakeSeconds > 120 || fieldTestAt || fieldTestWake || fieldTestOfflineWake ||
+        !recording::mode() || !s.guardEnabled ||
+        !s.sleepAfterSave || !r.valid) return false;
+    fieldPowerReceipt.magic = 0;
+    fieldTestDma = getI2sDmaOverrunTotal(); fieldTestI2s = audioI2SErrorCount;
+    fieldTestWake = wakeSeconds;
+    return true;
+}
+
+// Explicit diagnostics only: exercise the normal offline end/sleep path, with
+// a one-shot timer so a remote test can inspect the receipt and restore settings.
+bool requestOfflineSleepTest(uint32_t wakeSeconds) {
+    if (wakeSeconds < 10 || wakeSeconds > 120 || !recording::mode() ||
+        fieldTestAt || fieldTestWake || fieldTestOfflineWake) return false;
+    const auto state = recording::status().state;
+    if (state != recording::State::Recording && state != recording::State::Saved && state != recording::State::Error) return false;
+    if (!devicesetup::requestWifiOff(uint32_t(fieldpower::settings().wifiDelaySeconds)*1000)) return false;
+    fieldPowerReceipt.magic = 0;
+    fieldTestDma = getI2sDmaOverrunTotal(); fieldTestI2s = audioI2SErrorCount;
+    fieldTestRadioSeen = false;
+    fieldTestOfflineWake = wakeSeconds;
+    browserAudioStop();
+    return true;
+}
+
+// Only the application loop writes the Web UI's String log buffer.
+void flushRecordingLogs() {
+    String line;
+    while (recording::nextLog(line)) {
+        const String stamped = "[" + formatLogTimestamp() + "] " + line;
+        Serial.println(stamped);
+        webui_pushRecordingLog(stamped);
+    }
+}
+
+static void sleepRecordingDevice(uint32_t receipt, const char* reason) {
+    const uint32_t wake = fieldTestWake ? fieldTestWake : fieldTestOfflineWake;
+    if (wake) storeFieldPowerReceipt(receipt);
+    flushRecordingLogs();
+    simplePrintln(reason);
+    pauseAudioCapture();
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    if (wake) esp_sleep_enable_timer_wakeup(uint64_t(wake)*1000000ULL);
+    esp_deep_sleep_start();
+}
+
+static void serviceFieldPower() {
+    static bool wifiErrorReported = false;
+    if (*devicesetup::wifiOffError()) {
+        if (!wifiErrorReported) simplePrintln("Recording: Wi-Fi switch-off failed; control connection restored, retry available");
+        wifiErrorReported = true;
+    } else wifiErrorReported = false;
+    auto reading = battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant);
+    // Explicit sleep diagnostic simulates low voltage without changing ADC calibration,
+    // saved thresholds or the normal (untimed) shutdown behavior.
+    if (fieldTestWake && reading.valid) {
+        reading.millivolts = fieldpower::settings().cutoffMv - 100;
+        reading.sequence = millis();
+    }
+    // Protection covers the entire Recording mode, including idle, completed
+    // and error states. Stopping a session must not disable battery protection.
+    const bool triggeredNow = fieldpower::observe(recording::mode(), reading);
+    if (triggeredNow || !fieldpower::triggered()) fieldPowerStopRequested = fieldPowerSaveFinished = false;
+    if (fieldpower::triggered() && !fieldPowerStopRequested) {
+        recordingAutoStartPending = false;
+        cancelThermalResume();
+        recording::requestStop(recording::StopReason::LowBattery);
+        fieldPowerStopRequested = true;
+        simplePrintln("Low battery: stopping recording and closing the WAV file");
+    }
+    if (fieldpower::triggered() && !recording::busy() && !fieldPowerSaveFinished) {
+        const auto state = recording::status().state;
+        fieldpower::saved(state != recording::State::Error);
+        fieldPowerSaveFinished = true;
+        if (fieldpower::settings().sleepAfterSave && !fieldTestAt) {
+            sleepRecordingDevice(2, "Recording: low-battery stop completed; entering deep sleep until reset/power cycle");
+            return;
+        }
+    }
+    // The worker clears busy only after WAV close, final event/journal sync and
+    // unmount. Cooling/resume and OTA/reboot paths must finish their own work.
+    const auto finalState = recording::status().state;
+    if (recording::mode() && devicesetup::wifiSuspended() && !recording::busy() &&
+        !recording::resumePending() && !recordingAutoStartPending && !scheduledRebootAt && !fieldTestAt &&
+        (finalState == recording::State::Saved || finalState == recording::State::Error)) {
+        sleepRecordingDevice(3, "Recording: offline session ended; entering deep sleep until reset/power cycle");
+        return;
+    }
+    if (recordingAutoStartPending && !recording::busy() && !overheatLatched &&
+        fieldpower::canStart(reading)) {
+        recordingAutoStartPending = false;
+        startRecording();
+    }
+    if (fieldTestAt || fieldTestOfflineWake) {
+        if (devicesetup::wifiSuspended() && !fieldTestRadioSeen) {
+            fieldTestRadioSeen = true; fieldTestBaseKiB = recording::status().writtenKiB;
+        }
+    }
+    if (fieldTestAt) {
+        if (int32_t(millis()-fieldTestAt) >= 0) {
+            recording::requestStop();
+            if (!recording::busy()) { storeFieldPowerReceipt(1); ESP.restart(); }
+        }
+    }
+}
+
 void loop() {
     flashlayout::loop();
     if (!flashlayout::busy()) {
-        if (!recording::busy()) ArduinoOTA.handle();
+        if (!recording::busy() && !devicesetup::wifiSuspended()) ArduinoOTA.handle();
         wifiApRecoveryLoop();
     }
 
-    if (millis() - lastWebuiHandleMs >= WEBUI_HANDLE_INTERVAL_MS) {
+    if (!devicesetup::wifiSuspended() && millis() - lastWebuiHandleMs >= WEBUI_HANDLE_INTERVAL_MS) {
         webui_handleClient();
         lastWebuiHandleMs = millis();
     }
@@ -4098,6 +4295,10 @@ void loop() {
         delay(1);
         return;
     }
+
+    battery::loop(devicesetup::batteryMonitoring(), s3BoardVariant);
+    flushRecordingLogs();
+    serviceFieldPower();
 
     if (millis() - lastTempCheck > TEMPERATURE_CHECK_INTERVAL_MS) {
         checkTemperature();
@@ -4206,7 +4407,7 @@ void loop() {
     for (uint8_t i = 0; i < 2; ++i) recentStreamRate[i].update(rateNow, streamStats[i].packetsSent);
     checkMqtt();
     // Handle deferred WiFi reconnect
-    if (wifiReconnectAt != 0 && millis() >= wifiReconnectAt) {
+    if (wifiReconnectAt != 0 && !devicesetup::wifiSuspended() && !devicesetup::wifiOffPending() && millis() >= wifiReconnectAt) {
         wifiReconnectAt = 0;
 
         bool wasStreaming = isStreaming;
@@ -4214,52 +4415,7 @@ void loop() {
         refreshLegacyRtspState();
         if (wasStreaming) mqttPublishState(true);
 
-        String ssid = wifiApSsid();
-        String pass = WiFi.psk();
-        if (ssid.length() == 0) {
-            simplePrintln("WiFi reconnect aborted: no stored SSID");
-        } else {
-            String fromBssid = (WiFi.status() == WL_CONNECTED) ? WiFi.BSSIDstr() : String("none");
-            const char *passArg = pass.length() ? pass.c_str() : nullptr;
-
-            if (wifiReconnectHasBssid) {
-                simplePrintln("WiFi reconnect: from " + fromBssid +
-                              " -> pinning " + bssidBytesToStr(wifiReconnectBssid));
-                WiFi.persistent(false);
-                WiFi.disconnect(false);
-                delay(WIFI_RECONNECT_SETTLE_MS);
-                WiFi.begin(ssid.c_str(), passArg, 0, wifiReconnectBssid, true);
-                WiFi.persistent(true);
-            } else {
-                simplePrintln("WiFi reconnect: from " + fromBssid + " -> supplicant choice");
-                clearStoredBssidPin();
-                WiFi.disconnect(false);
-                delay(WIFI_RECONNECT_SETTLE_MS);
-                WiFi.begin(ssid.c_str(), passArg);
-            }
-
-            unsigned long waitStart = millis();
-            while (WiFi.status() != WL_CONNECTED &&
-                   (millis() - waitStart) < WIFI_RECONNECT_TIMEOUT_MS) {
-                delay(WIFI_RECONNECT_POLL_MS);
-            }
-
-            if (WiFi.status() == WL_CONNECTED) {
-                wifiReconnectCount++;
-                clearStoredBssidPin();
-                logConnectedAp("after-reconnect");
-                applyMdnsSetting();
-                if (timeSyncEnabled) {
-                    attemptTimeSync(false);
-                }
-                mqttRequestReconnect(true);
-                mqttPublishState(true);
-            } else {
-                simplePrintln("WiFi reconnect: still not associated after " +
-                              String(WIFI_RECONNECT_TIMEOUT_MS / 1000UL) + "s");
-            }
-        }
-
+        devicesetup::reconnect(wifiReconnectHasBssid ? wifiReconnectBssid : nullptr);
         wifiReconnectHasBssid = false;
     }
 

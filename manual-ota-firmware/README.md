@@ -1,6 +1,9 @@
 # Manual OTA firmware
 
-This folder contains the **v1.35** app-only firmware files for manual OTA update through the device
+> **Firmware 2.00:** Streaming and standalone Recording. See the [main guide](../README.md).
+
+
+This folder contains app-only firmware files for manual OTA update through the device
 Web UI.
 
 Open the device update page:

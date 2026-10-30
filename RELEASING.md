@@ -1,13 +1,6 @@
 # Release validation
 
-Firmware **1.35** includes all four XIAO board images. Maintainer hardware validation
-primarily covers C6 with an I2S microphone; the maintainer also reports a successful PDM listening test. Physical C3 migration
-and long-running C5/PDM qualification remain pending.
-
-## Release notes
-
-See the [current changelog](esp32-birdnet-mic/CHANGELOG.md#135---2026-10-24).
-Previous release records are retained in `release-notes/`. See [v1.35 validation](release-notes/1.35-validation.md).
+Current release: **2.00**. See [release notes](release-notes/2.00.md).
 
 ## Build and local checks
 
@@ -50,7 +43,7 @@ retrying; uploads and deployments are not rolled back automatically.
 The read-only acceptance check can also be rerun independently:
 
 ```sh
-python3 tools/verify_published_release.py 1.35
+python3 tools/verify_published_release.py 2.00
 ```
 
 The check downloads public artifacts over the actual HTTP OTA route and compares all

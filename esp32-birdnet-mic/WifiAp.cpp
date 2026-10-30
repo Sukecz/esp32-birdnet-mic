@@ -1,14 +1,11 @@
 #include "WifiAp.h"
+#include "DeviceSetup.h"
 #include <WiFi.h>
 #include <Preferences.h>
 #include <esp_wifi.h>
 
 static uint8_t pinned[6] = {};
 static bool locked = false;
-static bool recovery = false;
-static bool fieldControl = false;
-void wifiApEnableFieldControl() { fieldControl = true; }
-static unsigned long disconnectedAt = 0;
 
 void wifiApLoad() {
     Preferences prefs;
@@ -52,7 +49,7 @@ String wifiApSsid() {
 }
 
 bool wifiApBeginPinned() {
-    if (!locked) return false;
+    if (!locked || devicesetup::wifiSuspended() || devicesetup::wifiOffPending()) return false;
     WiFi.mode(WIFI_STA);
     wifi_config_t config = {};
     if (esp_wifi_get_config(WIFI_IF_STA, &config) != ESP_OK || !config.sta.ssid[0]) return false;
@@ -61,24 +58,11 @@ bool wifiApBeginPinned() {
     memcpy(password, config.sta.password, 64);
     WiFi.begin(ssid, password[0] ? password : nullptr, 0, pinned, true);
     memset(password, 0, sizeof(password));
-    disconnectedAt = millis();
     return true;
 }
 
-bool wifiApRecoveryActive() { return recovery; }
+bool wifiApRecoveryActive() { return devicesetup::apActive(); }
 
 void wifiApRecoveryLoop() {
-    if (WiFi.status() == WL_CONNECTED) {
-        disconnectedAt = 0;
-        if (recovery && !fieldControl) {
-            WiFi.softAPdisconnect(true);
-            recovery = false;
-        }
-        return;
-    }
-    if (!disconnectedAt) disconnectedAt = millis();
-    // Keep the recovery network until connected, including after the user unlocks.
-    if ((locked || fieldControl) && !recovery && (fieldControl || millis() - disconnectedAt >= 60000UL)) {
-        recovery = WiFi.softAP("ESP32-RTSP-Mic-AP");
-    }
+    devicesetup::loop();
 }
