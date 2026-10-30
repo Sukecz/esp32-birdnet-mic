@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.01 - unreleased
+
+- **S3 PSRAM:** enable the XIAO S3 OPI PSRAM in the common build helper and use
+  it for Streaming and Listen buffers, sharing the C5 allocation/fallback policy.
+  DMA and capture/DSP working buffers stay internal.
+- **Recording memory on all boards:** do not allocate an unused RTSP ring in
+  Recording. Keep Listen independent, release the SD PCM queue before returning
+  to Streaming, and restore the previous mode if capture restart fails.
+- **SD checks:** the first card check uses the same smaller I/O reserve as later
+  checks, with a separate worker-stack budget and contiguous-memory check.
+- **Listen stability:** give preview transport its own bounded worker so web
+  requests cannot starve audio sending. Catch up in bounded bursts; recover
+  short preview queue overflows by discarding stale preview PCM while keeping
+  partial TCP blocks aligned. Keep slow-reader limits and SD recording independent.
+  Expose transport reasons, memory/stack reserves and preview recovery counters.
+- **Retries:** a new recording attempt reports its current allocation error,
+  instead of keeping an earlier missing-card error.
+- **Diagnostics:** report free, largest and minimum internal heap plus detected
+  PSRAM on every board. See the [validation record](../release-notes/2.01-validation.md).
+
 ## 2.00 - 2026-10-30
 
 - **Standalone Recording:** save mono 16-bit WAV to microSD, with timed or continuous

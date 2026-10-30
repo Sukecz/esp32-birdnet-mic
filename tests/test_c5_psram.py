@@ -1,4 +1,4 @@
-"""XIAO ESP32-C5 PSRAM: larger listening queue, internal fallbacks, and the build helper's PSRAM option."""
+"""XIAO S3/C5 PSRAM: larger listening queue, internal fallbacks, and the build helper's PSRAM option."""
 import os
 import pathlib
 import stat
@@ -46,8 +46,8 @@ int main(){
                             '-I', str(ROOT / 'esp32-birdnet-mic'), str(cpp), '-o', str(binary)], check=True)
             subprocess.run([str(binary)], check=True, timeout=30)
 
-    def test_psram_only_on_c5_with_internal_fallbacks(self):
-        self.assertIn('#if defined(CONFIG_IDF_TARGET_ESP32C5) && CONFIG_SPIRAM\n#define AUDIO_RING_IN_PSRAM 1', SKETCH)
+    def test_psram_on_s3_and_c5_with_internal_fallbacks(self):
+        self.assertIn('#include \"AudioMemory.h\"', SKETCH)
         start = SKETCH[SKETCH.index('bool startAudioProducer() {'):]
         # PSRAM first, then the unchanged internal reserve path as fallback.
         self.assertLess(start.index('createPsramAudioRing(requested)'), start.index('audioreserve::fit(requested'))
@@ -61,7 +61,7 @@ int main(){
             self.assertRegex(SKETCH, buffer + r' = \([a-z0-9_]+\*\)audioWorkAlloc\(')
         self.assertIn('heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)', SKETCH)
         self.assertIn('#define LOG_MEMORY_TREND 0', SKETCH)
-        self.assertIn('#if defined(CONFIG_IDF_TARGET_ESP32C5) && CONFIG_SPIRAM', BROWSER)
+        self.assertIn('#if AUDIO_RING_IN_PSRAM', BROWSER)
         self.assertIn('heap_caps_malloc(kPsramQueueBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)', BROWSER)
 
     def test_compile_helper_enables_c5_psram(self):
@@ -85,7 +85,11 @@ int main(){
             self.assertIn('esp32:esp32:XIAO_ESP32C5:CPUFreq=160,PSRAM=enabled',
                           run('-b', 'esp32:esp32:XIAO_ESP32C5:CPUFreq=160'))
             self.assertIn('esp32:esp32:XIAO_ESP32C5:PSRAM=disabled', run('--fqbn', 'esp32:esp32:XIAO_ESP32C5:PSRAM=disabled'))
-            for other in ('XIAO_ESP32C3', 'XIAO_ESP32S3', 'XIAO_ESP32C6'):
+            self.assertIn('esp32:esp32:XIAO_ESP32S3:PSRAM=opi', run('--fqbn', 'esp32:esp32:XIAO_ESP32S3'))
+            self.assertIn('--fqbn=esp32:esp32:XIAO_ESP32S3:PSRAM=opi', run('--fqbn=esp32:esp32:XIAO_ESP32S3'))
+            self.assertIn('esp32:esp32:XIAO_ESP32S3:CPUFreq=160,PSRAM=opi', run('-b', 'esp32:esp32:XIAO_ESP32S3:CPUFreq=160'))
+            self.assertIn('esp32:esp32:XIAO_ESP32S3:PSRAM=disabled', run('--fqbn', 'esp32:esp32:XIAO_ESP32S3:PSRAM=disabled'))
+            for other in ('XIAO_ESP32C3', 'XIAO_ESP32C6'):
                 lines = run('--fqbn', 'esp32:esp32:' + other)
                 self.assertIn('esp32:esp32:' + other, lines)
                 self.assertFalse(any('PSRAM' in line for line in lines))

@@ -15,7 +15,8 @@ to BirdNET-Go, BirdNET-Pi, VLC or ffmpeg; **Recording** saves WAV files to a mic
 card, even away from your home Wi-Fi. Use **Listen** for a quick sound check in either mode.
 Bird identification runs on the receiving computer, not on the ESP32.
 
-> **Firmware 2.00** — live Streaming and standalone microSD Recording.
+> **Firmware 2.01 (in preparation)** — fixes Recording memory use across XIAO boards.
+> See the [2.01 validation record](release-notes/2.01-validation.md).
 
 **[Boards](#supported-boards) · [Quick start](#quick-start) · [Modes](#streaming-and-recording) · [Battery](#battery) · [Features](#features) · [Wiring](#microphones-and-wiring) · [Help](#everyday-use-and-troubleshooting)**
 
@@ -267,7 +268,7 @@ it complements the pack's hardware protection.
 - **Thermal protection:** shared capture protection for both modes and optional
   recovery after cooling; recording can continue in a new file. Automatic recovery
   is off by default.
-- **Board-specific options:** C6 internal/external antenna selection, C5 PSRAM audio
+- **Board-specific options:** C6 internal/external antenna selection, S3/C5 PSRAM audio
   buffers with an internal-RAM fallback, and optional 240 MHz CPU on S3/C5.
 - **Firmware updates:** USB installation and board-specific OTA with saved settings
   preserved; guided preparation for older C3/C6 flash layouts.
@@ -505,7 +506,9 @@ tools/compile_firmware.sh --fqbn esp32:esp32:XIAO_ESP32C6 \
 
 For another supported board, replace `XIAO_ESP32C6` with `XIAO_ESP32C3`, `XIAO_ESP32S3`,
 or `XIAO_ESP32C5` and choose a matching output folder. The helper automatically enables
-LTO for C3/C6 and PSRAM for C5; S3 keeps normal compilation.
+LTO for C3/C6, OPI PSRAM for S3 and PSRAM for C5. Recording releases the
+RTSP reserve; returning to Streaming releases the SD PCM queue. Listen stays
+independent in both modes. DMA and capture working buffers remain internal.
 
 For OTA, select `esp32-birdnet-mic/build/c6/esp32-birdnet-mic.ino.bin` under
 **Firmware update -> Upload compiled file** in the device Web UI. Use the image built for

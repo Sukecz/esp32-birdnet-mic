@@ -49,16 +49,7 @@ static bool recordingAutoStartPending = false;
 #include "AudioReserve.h"
 #include <esp_memory_utils.h>
 
-// XIAO ESP32-C5 with PSRAM enabled: the RTSP audio ring (and the browser-listening
-// queue, BrowserAudio.cpp) go in its 8 MB PSRAM, so internal RAM stays free for
-// Wi-Fi bursts. DMA and PDM working buffers stay internal. Needs board option
-// PSRAM=enabled (-DBOARD_HAS_PSRAM; tools/compile_firmware.sh adds it for C5).
-// Without it the core clears CONFIG_SPIRAM and the internal-RAM path is used.
-#if defined(CONFIG_IDF_TARGET_ESP32C5) && CONFIG_SPIRAM
-#define AUDIO_RING_IN_PSRAM 1
-#else
-#define AUDIO_RING_IN_PSRAM 0
-#endif
+#include "AudioMemory.h"
 #ifndef LOG_MEMORY_TREND
 #define LOG_MEMORY_TREND 0  // 1: log heap, PSRAM and stream counters every 5 minutes
 #endif
@@ -95,7 +86,7 @@ static constexpr uint32_t PDM_SAMPLE_RATE = 48000;
 static constexpr uint32_t PDM_CLOCK_HZ = PDM_SAMPLE_RATE * 64;
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi) ==================
-#define FW_VERSION "2.00"
+#define FW_VERSION "2.01"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 // Build timestamp for diagnostics (compile time)
@@ -2712,22 +2703,38 @@ bool setDeviceMode(bool recordingMode) {
     if (recordingMode && !recordingHardwareSupported()) return false;
     if (recordingMode == recording::mode()) return true;
     if (otaInProgress || flashlayout::busy()) return false;
+    const bool previousMode = recording::mode();
     const bool wasRecording = recording::busy();
     if (!recording::stop() || (wasRecording && recording::status().state == recording::State::Error)) return false;
     recordingAutoStartPending = false;
     if (!recordingMode) cancelThermalResume();
-    if (!webui_logModeChanged(recordingMode)) return false;
-    recording::setRuntimeMode(recordingMode);
-    devicesetup::currentMode(recordingMode);
     browserAudioStop();
     stopAllRtspClients("Device mode changed");
     rtspServerEnabled = false;
     rtspServer.stop();
-    if (recordingMode) recording::checkCard(recordingHardwareSupported(), s3BoardVariant);
-    if (!recordingMode && !overheatLatched && isStreamScheduleAllowedNow()) {
+    // Quiesce the producer before changing/freeing either mode's buffers.
+    // Listen has an independent queue and capture restarts in both modes.
+    stopAudioProducer();
+    bool ok = recordingMode || recording::releaseBuffer();
+    if (ok) {
+        recording::setRuntimeMode(recordingMode);
+        ok = webui_logModeChanged(recordingMode);
+    }
+    if (ok && !overheatLatched) ok = startAudioProducer();
+    if (!ok) {
+        stopAudioProducer();
+        recording::setRuntimeMode(previousMode);
+        webui_logModeChanged(previousMode);
+        if (!overheatLatched && !startAudioProducer())
+            simplePrintln("Mode change rollback: audio restart failed.");
+    }
+    devicesetup::currentMode(recording::mode());
+    if (ok && recordingMode && !overheatLatched)
+        recording::checkCard(recordingHardwareSupported(), s3BoardVariant);
+    if (!recording::mode() && !overheatLatched && isStreamScheduleAllowedNow()) {
         rtspServer.begin(); rtspServer.setNoDelay(true); rtspServerEnabled = true;
     }
-    return true;
+    return ok;
 }
 
 // Restart I2S with new parameters
@@ -3153,6 +3160,7 @@ static RingbufHandle_t createInternalAudioRing(size_t bytes) {
 bool startAudioProducer() {
     stopAudioProducer();
 
+    if (!recording::mode()) {
     const size_t requested = computeAudioRingBufferCapacity();
 #if AUDIO_RING_IN_PSRAM
     // PSRAM first; the unchanged internal-RAM reserve path below is the fallback.
@@ -3193,6 +3201,17 @@ bool startAudioProducer() {
 #if AUDIO_RING_IN_PSRAM
     }
 #endif
+    } else {
+        // Recording sends PCM directly to the SD queue and independent Listen
+        // queue. An unused RTSP ring would consume up to 64 KiB on C3/C6.
+        const uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+        if (!audioreserve::externalHeadroom(heap_caps_get_free_size(caps),
+                                           heap_caps_get_largest_free_block(caps),
+                                           audioreserve::kC5MinimumHeapMargin)) {
+            simplePrintln("Recording capture: insufficient internal RAM for Wi-Fi and producer.");
+            return false;
+        }
+    }
     updateHighpassCoeffs(); // producer is stopped here
     audioProducerStopRequested = false;
     audioProducerLastReadMs = millis();

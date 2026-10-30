@@ -73,6 +73,7 @@ enum class StopReason : uint8_t { User, LowBattery, Thermal, ModeChange, Update 
 void requestStop(StopReason reason = StopReason::User);
 void captureFault();
 bool stop(uint32_t timeoutMs = 10000); // false: caller must defer destructive action
+bool releaseBuffer(); // idle only; free PCM storage before returning to Streaming
 Status status();
 // Bounded worker events; main loop and SD worker each consume their own copy.
 bool nextLog(String& line);

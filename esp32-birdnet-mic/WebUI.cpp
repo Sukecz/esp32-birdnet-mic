@@ -22,9 +22,7 @@
 #include "AudioDiagnostics.h"
 #include "MicrophoneSignal.h"
 #include "BrowserAudio.h"
-#if defined(CONFIG_IDF_TARGET_ESP32C5) && CONFIG_SPIRAM
 #include <esp_heap_caps.h>
-#endif
 #include "MicrophoneProfiles.h"
 #include "WifiAp.h"
 #include "ThermalRecovery.h"
@@ -1042,12 +1040,12 @@ static void httpStatus() {
     json += "\"wifi_tx_dbm\":" + String(wifiPowerLevelToDbm(currentWifiPowerLevel),1) + ",";
     json += "\"free_heap_kb\":" + String(freeHeap/1024) + ",";
     json += "\"min_free_heap_kb\":" + String(minFreeHeap/1024) + ",";
-#if defined(CONFIG_IDF_TARGET_ESP32C5) && CONFIG_SPIRAM
     const uint32_t internalCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    json += "\"internal_heap_free_kb\":" + String((uint32_t)(heap_caps_get_free_size(internalCaps)/1024)) + ",";
+    json += "\"internal_heap_largest_kb\":" + String((uint32_t)(heap_caps_get_largest_free_block(internalCaps)/1024)) + ",";
     json += "\"internal_heap_min_kb\":" + String((uint32_t)(heap_caps_get_minimum_free_size(internalCaps)/1024)) + ",";
     json += "\"psram_total_kb\":" + String(ESP.getPsramSize()/1024) + ",";
     json += "\"psram_free_kb\":" + String(ESP.getFreePsram()/1024) + ",";
-#endif
     json += "\"uptime\":\"" + uptimeStr + "\",";
     json += "\"time_synced\":" + String(timeSynced?"true":"false") + ",";
     json += "\"time_valid\":" + String(localTimeStr != "unavailable" && utcTimeStr != "unavailable" ? "true" : "false") + ",";
@@ -1155,6 +1153,17 @@ static void httpAudioStatus() {
     json += "\"rb_capacity_bytes\":" + String((uint32_t)audioRingBufferCapacityBytes) + ",";
     json += "\"rb_in_psram\":" + String(audioRingInPsram ? "true" : "false") + ",";
     json += "\"listen_queue_bytes\":" + String((uint32_t)browserAudioQueueBytes()) + ",";
+    const auto listen = browserAudioDiagnostics();
+    json += "\"listen_last_stop\":\"" + String(listen.lastStop) + "\",";
+    json += "\"listen_stops\":" + String(listen.stops) + ",";
+    json += "\"listen_overflows\":" + String(listen.overflows) + ",";
+    json += "\"listen_send_timeouts\":" + String(listen.sendTimeouts) + ",";
+    json += "\"listen_socket_errors\":" + String(listen.socketErrors) + ",";
+    json += "\"listen_max_loop_gap_ms\":" + String(listen.maxLoopGapMs) + ",";
+    json += "\"listen_bytes_sent\":" + String(listen.bytesSent) + ",";
+    json += "\"listen_independent_worker\":" + String(listen.independentWorker ? "true" : "false") + ",";
+    json += "\"listen_worker_stack_free_bytes\":" + String(listen.workerStackFreeBytes) + ",";
+    json += "\"listen_preview_discarded_bytes\":" + String(listen.previewDiscardedBytes) + ",";
     json += "\"rb_chunks\":" + String(audioRingBufferChunkCount) + ",";
     json += "\"rb_drops\":" + String(audioRingBufferDropCount.load(std::memory_order_relaxed)) + ",";
     json += "\"rb_flushes\":" + String(audioRingBufferFlushCount) + ",";

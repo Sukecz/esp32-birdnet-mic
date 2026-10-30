@@ -6,14 +6,14 @@
 
 Two modes: live **RTSP Streaming** or standalone **microSD WAV Recording**.
 Start with the [beginner guide](../README.md) and [field recording guide](../docs/field-recording.md).
-Current release: **2.00**.
+Firmware **2.01 is in preparation**; see the [validation record](../release-notes/2.01-validation.md).
 For new builds we recommend **XIAO ESP32-C5 + IM73D122 PDM**, with an Adafruit BFF for SD.
 
 Arduino firmware for Seeed Studio XIAO ESP32 and M5Stack AtomS3U, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Latest firmware: **v2.00** — Streaming and standalone Recording.
+- Firmware candidate: **v2.01** — Recording memory fixes and S3 PSRAM support.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
@@ -30,7 +30,7 @@ and Home Assistant MQTT Discovery.
 - Local Web UI with save/discard feedback, JSON API, logs and microphone/stream diagnostics.
 - MQTT, Home Assistant discovery, local-time schedules and optional deep sleep.
 - Hardware PDM conversion on S3; software PDM conversion on C3/C5/C6; mono 48 kHz output.
-- C5 PSRAM audio buffers with an internal-memory fallback; optional 240 MHz on S3/C5.
+- S3/C5 PSRAM audio buffers with an internal-memory fallback; optional 240 MHz on S3/C5.
 - Capture pauses during OTA and thermal shutdown; optional recovery after cooling and
   immediate manual acknowledgement when thermal protection is explicitly OFF.
 - Board-specific USB installation and OTA updates that preserve saved settings and partitions.
@@ -98,18 +98,41 @@ Reads are staged in the app loop and reported in `/api/status`, independently
 of the browser. See the
 [battery guide](../docs/battery-monitoring.md) for GPIOs, APIs and validation limits.
 
-## C5 PSRAM audio buffers (v1.34)
+## Audio memory by board (v2.01)
 
-The build helper enables C5 PSRAM by default. The RTSP reserve uses 64 KiB and
-browser listening uses 32 KiB of PSRAM. DMA, PDM filter and capture/RTP working
-buffers stay in internal RAM. If PSRAM is disabled, unavailable or an allocation
-fails, the existing adaptive internal reserve and 4 KiB listening queue remain
-available. Internal Wi-Fi and producer-stack headroom is checked before capture.
+The build helper enables S3's 8 MB OPI PSRAM (`PSRAM=opi`) and C5's 8 MB
+PSRAM (`PSRAM=enabled`). Streaming puts its normally 64 KiB RTSP reserve there;
+browser listening uses a separate 32 KiB PSRAM queue with a 4 KiB internal
+fallback. Disabled/unavailable PSRAM and allocation failures retain the adaptive
+internal Streaming reserve. C3/C6 use internal RAM and the existing 16 KiB Listen
+queue. DMA, PDM filter and capture/RTP working buffers always remain internal.
 
-`/api/audio_status` reports `rb_in_psram`, `rb_capacity_bytes` and
-`listen_queue_bytes`. C5 PSRAM builds also expose `internal_heap_min_kb`,
-`psram_total_kb` and `psram_free_kb` in `/api/status`. The true internal-heap
-minimum captures brief memory dips that the sampled UI minimum can miss.
+Recording allocates no RTSP reserve on any board. Its independent SD PCM queue
+uses 512 or 128 KiB of PSRAM when available, otherwise an adaptive 32–128 KiB
+internal queue retaining 72 KiB of internal headroom. The queue is allocated only
+when recording starts and released before returning to Streaming. The SD worker
+is retained for later checks. A card check or log read allocates no PCM queue and
+uses a separate 48 KiB internal reserve plus the first worker's 8 KiB budget.
+Capture and Listen remain active in Recording; only the unused RTSP buffer is
+removed. Mode changes stop the producer before changing buffer ownership and
+restore the previous mode if capture cannot restart.
+
+`/api/audio_status` reports `rb_in_psram`, `rb_capacity_bytes` (zero in Recording)
+and `listen_queue_bytes`. All boards expose `internal_heap_free_kb`,
+`internal_heap_largest_kb`, `internal_heap_min_kb`, `psram_total_kb` and
+`psram_free_kb` in `/api/status`. These diagnostic fields use KiB despite the
+legacy `_kb` suffix. The true minimum captures brief dips missed by UI sampling.
+
+Listen has its own transport task with a 3 KiB internal stack and an independent
+PCM queue, so synchronous web requests cannot starve its sender. Each pass is
+bounded to eight nonblocking writes and 2 ms. Temporary preview overflows discard
+old preview PCM and resume with current audio; partial TCP blocks are retained to
+preserve sample alignment. A socket stalled for 500 ms still disconnects. Capture
+and SD recording never wait for a browser. This live preview can skip delayed
+sound; the independent SD WAV path retains its separate loss/error accounting. `/api/audio_status` reports `listen_last_stop`,
+`listen_overflows`, `listen_send_timeouts`, `listen_socket_errors`,
+`listen_max_loop_gap_ms`, `listen_bytes_sent`, `listen_preview_discarded_bytes`,
+`listen_independent_worker` and `listen_worker_stack_free_bytes` for diagnosis.
 
 ## Important URLs
 
@@ -294,7 +317,7 @@ Use **512 samples per packet on C3/C5**. Larger buffers consume more RAM; the au
 now adapts to available internal heap, normally retaining 80 KiB for Wi-Fi/TCP plus the producer task
 and allocation overhead. If that cannot fit, C5 alone may use the minimum reserve while still
 retaining 64 KiB plus the task and overhead; insufficient or fragmented memory is rejected.
-The C5 browser-listening queue uses 32 KiB in PSRAM when available, or 4 KiB
+The S3/C5 browser-listening queue uses 32 KiB in PSRAM when available, or 4 KiB
 (about 43 ms at 48 kHz) with the internal-memory fallback; other boards use 16 KiB.
 A slow browser listener is disconnected so it cannot block RTSP. C6/S3 retain the full reserve when memory permits. The API reports
 its actual size as `rb_capacity_bytes` and recommends 512 on C3/C5 via
@@ -703,14 +726,14 @@ tools/compile_firmware.sh --fqbn esp32:esp32:XIAO_ESP32C6 \
 | Board | FQBN |
 |---|---|
 | XIAO ESP32-C3 | `esp32:esp32:XIAO_ESP32C3` |
-| XIAO ESP32-S3 | `esp32:esp32:XIAO_ESP32S3` |
+| XIAO ESP32-S3 | `esp32:esp32:XIAO_ESP32S3` (the helper adds `PSRAM=opi`) |
 | XIAO ESP32-C5 | `esp32:esp32:XIAO_ESP32C5` (the helper adds `PSRAM=enabled`) |
 | XIAO ESP32-C6 | `esp32:esp32:XIAO_ESP32C6` |
 
 Change the FQBN and output folder together when building another board.
 The helper automatically enables LTO at compilation and linking for C3/C6 and isolates their
-Arduino core build artifacts. For C5 it adds `PSRAM=enabled`, so the RTSP audio ring and the
-browser-listening queue use the board's 8 MB PSRAM. S3 retains normal compilation. The all-board packaging script
+Arduino core build artifacts. It adds `PSRAM=opi` for S3 and `PSRAM=enabled` for C5,
+so Streaming and Listen can use the boards' 8 MB PSRAM. The all-board packaging script
 and GitHub Actions use the same helper, so no per-release flag changes are needed.
 
 For OTA, open **Firmware update -> Upload compiled file** on the device and select
@@ -735,6 +758,7 @@ When changing the embedded Web UI, first regenerate its assets as described unde
 1. Open `esp32-birdnet-mic/esp32-birdnet-mic.ino`.
 2. Install an ESP32 Arduino core with support for the selected XIAO target.
 3. Select the matching board: *XIAO_ESP32C3*, *XIAO_ESP32S3*, *XIAO_ESP32C5*, or *XIAO_ESP32C6*.
+   For *XIAO_ESP32S3*, set **Tools → PSRAM → OPI PSRAM**.
    For *XIAO_ESP32C5*, also set **Tools → PSRAM → Enabled**. Without it the C5 still works,
    but with the adaptive internal-RAM audio buffer and listening queue (4 KB).
 4. Compile and upload over USB.

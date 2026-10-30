@@ -522,14 +522,15 @@ bool prepare(bool needsQueue = true) {
     // queues still retain 72 KiB. This avoids false rejections during UI loads.
     const bool psramQueue = needsQueue && (queueInPsram ||
         (!queue && heap_caps_get_free_size(external) >= 128 * 1024 + 8192));
-    // Reusing an idle worker for a card check or bounded log read allocates no
-    // PCM queue or task stack. Keep its own conservative 48 KiB I/O reserve;
-    // recording retains the existing 64/72 KiB capture/network reserve.
-    const size_t headroom = !needsQueue && storageTask ? 48 * 1024 : psramQueue ? 64 * 1024 : internalHeadroom;
+    // A card check/log read allocates no PCM queue. Apply the same 48 KiB
+    // I/O reserve on the first check too, accounting separately for its worker.
+    // Recording retains the existing 64/72 KiB capture/network reserve.
+    const size_t headroom = !needsQueue ? 48 * 1024 : psramQueue ? 64 * 1024 : internalHeadroom;
     // Account for the worker stack and task metadata before allocating a queue.
     const size_t taskBytes = storageTask ? 0 : 6144 + 2048;
     const size_t freeInternal = heap_caps_get_free_size(internal);
     if (freeInternal < headroom + taskBytes) return false;
+    if (!storageTask && heap_caps_get_largest_free_block(internal) < taskBytes) return false;
     if (needsQueue && !queue) {
         // SD writes use CPU-accessible PCM, not an SPI DMA buffer. Keep this
         // queue in PSRAM where available, leaving Wi-Fi/Listen RAM internal.
@@ -688,8 +689,10 @@ static bool startSession(uint32_t rate, bool supported, uint8_t boardVariant, bo
     if (!supported || !pins.supported) { error("SD recording is unavailable for this board"); return false; }
 #if RECORDING_SPI_SUPPORTED
     if (rate < 8000 || rate > 96000) { error("Unsupported WAV sample rate"); return false; }
-    if (!prepare()) { error("Not enough RAM for SD recording buffer"); return false; }
+    // A new attempt must not inherit a previous card-check error and mask a
+    // current allocation failure. Stop/cleanup still preserve their first error.
     portENTER_CRITICAL(&mux); view = Status{}; view.state = State::Starting; portEXIT_CRITICAL(&mux);
+    if (!prepare()) { error("Not enough RAM for SD recording buffer"); return false; }
     sessionPins = pins;
     checkOnly.store(false); diagnosticOnly.store(false);
     if (continuing) targetFrames = config.durationMinutes ? remainingFrames*rate/startRate : 0;
@@ -778,6 +781,19 @@ bool stop(uint32_t timeoutMs) {
         if (millis()-at >= timeoutMs) { error("SD stop timed out; wait before retrying"); return false; }
         delay(1);
     }
+    return true;
+}
+bool releaseBuffer() {
+    if (busy() || resumePending() || inPush.load()) return false;
+#if RECORDING_SPI_SUPPORTED
+    if (queue) {
+        if (queueInPsram) vRingbufferDeleteWithCaps(queue);
+        else vRingbufferDelete(queue);
+        queue = nullptr;
+    }
+    queueInPsram = false;
+    queueCapacityBytes.store(0);
+#endif
     return true;
 }
 Status status() {

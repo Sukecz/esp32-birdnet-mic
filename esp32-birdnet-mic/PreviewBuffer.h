@@ -8,19 +8,21 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include "AudioMemory.h"
 
 // Independent, bounded PCM queue. No capture-side allocation, waiting or socket
-// calls. A slow preview is disconnected instead of applying backpressure to RTSP.
+// calls. The consumer can discard stale preview PCM after temporary backpressure;
+// capture and SD recording never wait for the preview connection.
 class PreviewBuffer {
 public:
-#if defined(CONFIG_IDF_TARGET_ESP32C5)
+#if defined(CONFIG_IDF_TARGET_ESP32C5) || AUDIO_RING_IN_PSRAM
     // Free 12 KiB of internal RAM for capture and Wi-Fi/TCP on C5.
     // At 48 kHz mono int16 this holds about 43 ms for one browser listener.
     static constexpr size_t capacity = 4096;
 #else
     static constexpr size_t capacity = 16384;
 #endif
-    // Optional larger queue (C5 with PSRAM). Call once before the first
+    // Optional larger queue (S3/C5 with PSRAM). Call once before the first
     // begin(); the size must be a power of two so offsets survive uint32 wrap.
     bool useStorage(uint8_t* buffer, size_t bytes) {
         if (!buffer || bytes <= capacity || (bytes & (bytes - 1)) || active() || everStarted || buf != storage) return false;
@@ -41,6 +43,16 @@ public:
     void end() { enabled.store(false); }
     bool active() const { return enabled.load(); }
     bool overflowed() const { return failed.load(); }
+    // Consumer only, with no borrowed storage: pop() copies into its own buffer.
+    // Keep published offsets monotonic. An in-flight producer may publish its
+    // next block afterwards; that fresh PCM remains readable after this discard.
+    uint32_t discardBacklog() {
+        const uint32_t write = head.load(std::memory_order_acquire);
+        const uint32_t read = tail.load(std::memory_order_relaxed);
+        tail.store(write, std::memory_order_release);
+        failed.store(false, std::memory_order_release);
+        return write-read;
+    }
     void push(const void* data, size_t bytes) {
         if (!active()) return;
         uint32_t write = head.load(std::memory_order_relaxed);

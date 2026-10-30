@@ -46,6 +46,10 @@ jobs:
             fqbn: esp32:esp32:XIAO_ESP32C5
           - name: XIAO ESP32-C6
             fqbn: esp32:esp32:XIAO_ESP32C6
+          - name: XIAO ESP32-S3 without PSRAM
+            fqbn: esp32:esp32:XIAO_ESP32S3:PSRAM=disabled
+          - name: XIAO ESP32-C5 without PSRAM
+            fqbn: esp32:esp32:XIAO_ESP32C5:PSRAM=disabled
     steps:
       - name: Checkout
         uses: actions/checkout@v4

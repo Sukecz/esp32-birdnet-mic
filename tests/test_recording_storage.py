@@ -70,7 +70,7 @@ struct Preferences {
 };
 ''',
 'esp_timer.h': '#pragma once\ninline uint64_t esp_timer_get_time(){return uint64_t(testNow)*1000;}\n',
-'esp_heap_caps.h': '#pragma once\n#define MALLOC_CAP_INTERNAL 1\n#define MALLOC_CAP_8BIT 2\n#define MALLOC_CAP_SPIRAM 4\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void heap_caps_free(void* p){free(p);}\ninline size_t testInternal=86*1024,testExternal=8*1024*1024;\ninline size_t heap_caps_get_free_size(int caps){return caps & MALLOC_CAP_SPIRAM ? testExternal : testInternal;}\n',
+'esp_heap_caps.h': '#pragma once\n#define MALLOC_CAP_INTERNAL 1\n#define MALLOC_CAP_8BIT 2\n#define MALLOC_CAP_SPIRAM 4\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void heap_caps_free(void* p){free(p);}\ninline size_t testInternal=86*1024,testExternal=8*1024*1024;\ninline size_t heap_caps_get_free_size(int caps){return caps & MALLOC_CAP_SPIRAM ? testExternal : testInternal;}\ninline size_t testLargest=1024*1024;\ninline size_t heap_caps_get_largest_free_block(int){return testLargest;}\n',
 'freertos/FreeRTOS.h': '#pragma once\n#define pdMS_TO_TICKS(n) (n)\n#define pdPASS 1\n#define pdTRUE 1\n',
 'freertos/task.h': r'''
 #pragma once
@@ -231,12 +231,17 @@ int main(){
  // Preflight mounts/unmounts without creating a directory or recording file.
  assert(!checkCard(false));assert(status().state==State::Error);
  // C5-like heap: SD check needs only a worker, no audio queue or PSRAM.
- testExternal=0;testInternal=79*1024;
+ testExternal=0;testInternal=55*1024;
  assert(!checkCard(true,boardVariant)&&!queue&&!storageTask);
- testInternal=86*1024;
+ testInternal=79*1024;
+ testLargest=7*1024;assert(!checkCard(true,boardVariant)&&!storageTask);
+ testLargest=1024*1024;
  cardMissing=true;assert(checkCard(true,boardVariant));assert(status().state==State::Checking&&busy());
  assert(!start(8000,true,boardVariant));assert(!checkCard(true,boardVariant));runWorker();
  assert(status().state==State::Error&&!status().cardReady&&!busy());
+ // A new allocation failure must replace the preceding missing-card error.
+ assert(!start(8000,true,boardVariant));
+ assert(std::string(status().error)=="Not enough RAM for SD recording buffer");
  cardMissing=false;assert(checkCard(true,boardVariant));runWorker();
  assert(status().state==State::Ready&&status().cardReady&&!busy());
  assert(std::filesystem::exists(SD.root+"/recording.log"));assert(!std::filesystem::exists(SD.root+"/recordings"));assert(!queue);
@@ -346,12 +351,16 @@ assert(kDefaultStorageClockHz==16000000&&kDefaultWriteBlockBytes==4096);
  // An unknown clock produces an explicit fallback rather than a bogus date.
  testEpoch=0;runSession();assert(std::string(status().file).find("unsynced_")!=std::string::npos);
  // The same worker must also record with small PSRAM or no PSRAM (C3/C6).
- vRingbufferDeleteWithCaps(queue);queue=nullptr;queueInPsram=false;queueCapacityBytes.store(0);
+ assert(releaseBuffer()&&!queue&&!status().queueBytes);
  testExternal=192*1024;runSession();
  assert(status().state==State::Saved&&queueInPsram&&status().queueBytes==128*1024);
- vRingbufferDeleteWithCaps(queue);queue=nullptr;queueInPsram=false;queueCapacityBytes.store(0);
+ assert(releaseBuffer()&&!queue&&!status().queueBytes);
  testExternal=0;testInternal=150*1024;runSession();
  assert(status().state==State::Saved&&!queueInPsram&&status().queueBytes>=32768&&status().queueBytes<=128*1024);
+ // Returning to Streaming frees the internal queue, then Recording can recreate it.
+ assert(releaseBuffer()&&!queue&&!queueInPsram&&!status().queueBytes);
+ testInternal=106*1024;runSession();assert(status().state==State::Saved&&status().queueBytes>=32768);
+ assert(releaseBuffer());testInternal=150*1024;
  // Normal defaults are concise; the SD file appends across sessions and reads stay on the worker.
  auto logsConfig=logSettings();logsConfig.detailed=0;logsConfig.maxKiB=64;
  assert(saveLogSettings(logsConfig));

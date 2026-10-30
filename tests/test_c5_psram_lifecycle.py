@@ -27,6 +27,7 @@ class C5PsramLifecycleTests(unittest.TestCase):
 #include <string>
 #define AUDIO_RING_IN_PSRAM 1
 #define CONFIG_IDF_TARGET_ESP32C5 1
+namespace recording {inline bool recordingMode=false;bool mode(){return recordingMode;}}
 constexpr uint32_t MALLOC_CAP_INTERNAL=1,MALLOC_CAP_8BIT=2,MALLOC_CAP_SPIRAM=4;
 constexpr int RINGBUF_TYPE_BYTEBUF=0,pdPASS=1;
 using BaseType_t=int;
@@ -80,7 +81,15 @@ int main(){
  failExternal=true;assert(!startAudioProducer());assert(!audioRingBuffer&&created==deleted);
  failExternal=failTask=false;internalFree=70*1024;
  int before=tasks;assert(!startAudioProducer());assert(tasks==before&&!audioRingBuffer);
- internalFree=128*1024;internalLargest=1024;
+ // Recording must start capture and Listen without an RTSP allocation.
+ internalFree=100*1024;internalLargest=25*1024;recording::recordingMode=true;
+ for(int n=0;n<50;++n){assert(startAudioProducer());assert(!audioRingBuffer&&!audioRingBufferCapacityBytes);}
+ stopAudioProducer();assert(created==deleted);
+ // A task failure still leaves no buffer; returning to Streaming recreates it.
+ failTask=true;assert(!startAudioProducer());failTask=false;
+ recording::recordingMode=false;internalFree=128*1024;externalLargest=8*1024*1024;
+ assert(startAudioProducer()&&audioRingInPsram);stopAudioProducer();
+ before=tasks;internalFree=128*1024;internalLargest=1024;
  assert(!startAudioProducer());assert(tasks==before&&!audioRingBuffer&&created==deleted);
 }
 '''
