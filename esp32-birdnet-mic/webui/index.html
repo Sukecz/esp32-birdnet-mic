@@ -2032,6 +2032,33 @@ function clearListenAudio(session){
  for(const source of session.sources){try{source.stop();}catch(_){}}
  session.sources.clear();session.next=0;
 }
+function queueListenAudio(session,bytes,rate){
+ const {context,gain}=session,now=context.currentTime;
+ // Schedule by PCM sample count, never by fetch packet arrival. TCP can merge
+ // many capture blocks or pause briefly while the browser services the UI.
+ // Keep a playback reserve on the browser, without using ESP capture RAM.
+ const maxSeconds=2,maxSamples=Math.floor(rate*maxSeconds);
+ if(session.next>now+maxSeconds){
+  session.stats.resyncs++;clearListenAudio(session);
+ }
+ let offset=0;
+ if(bytes.length/2>maxSamples){offset=bytes.length-maxSamples*2;session.stats.droppedSamples+=offset/2;}
+ if(!session.next||session.next<now+0.015){
+  if(session.next){session.stats.underruns++;session.reserve=Math.min(1.5,session.reserve+0.25);}
+  session.next=now+session.reserve;
+ }
+ // Preserve every sample in ordinary bursts, with bounded nodes and memory.
+ const blockSamples=Math.max(1,Math.floor(rate*0.1));
+ while(offset<bytes.length){
+  const count=Math.min((bytes.length-offset)/2,blockSamples);
+  const buffer=context.createBuffer(1,count,rate),out=buffer.getChannelData(0);
+  const pcm=new DataView(bytes.buffer,bytes.byteOffset+offset,count*2);
+  for(let i=0;i<count;i++)out[i]=pcm.getInt16(i*2,true)/32768;
+  const source=context.createBufferSource();source.buffer=buffer;source.connect(gain);
+  session.sources.add(source);source.onended=()=>{session.sources.delete(source);source.disconnect();};
+  source.start(session.next);session.next+=buffer.duration;offset+=count*2;
+ }
+}
 function stopListening(message='Listening stopped.'){
  const session=listenSession;listenSession=null;
  if(session){session.abort.abort();session.request?.abort();clearListenAudio(session);session.context.close().catch(()=>{});}
@@ -2063,7 +2090,7 @@ async function toggleListen(){
  if(!Audio){listenMessage('Audio playback is unavailable in this browser.');return;}
  const context=new Audio(), gain=context.createGain();
  gain.gain.value=Number(document.getElementById('listen_volume').value)/100; gain.connect(context.destination);
- const session={context,gain,abort:new AbortController(),request:null,sources:new Set(),next:0};
+ const session={context,gain,abort:new AbortController(),request:null,sources:new Set(),next:0,reserve:0.5,stats:{underruns:0,resyncs:0,droppedSamples:0}};
  listenSession=session;
  const button=document.getElementById('listen_button');
  button.textContent='Stop listening'; button.setAttribute('aria-pressed','true');
@@ -2102,15 +2129,7 @@ async function toggleListen(){
      if(!bytes.length)continue;
      if(!healthySince)healthySince=Date.now();
      if(Date.now()-healthySince>=10000)failures=0;
-     // Bound queued sound and memory even when a browser/network delivers a burst.
-     const count=Math.min(bytes.length/2,Math.floor(rate*0.25)),offset=bytes.length-count*2;
-     if(session.next>context.currentTime+0.35)continue;
-     const buffer=context.createBuffer(1,count,rate),out=buffer.getChannelData(0);
-     const pcm=new DataView(bytes.buffer,bytes.byteOffset+offset,count*2);
-     for(let i=0;i<count;i++)out[i]=pcm.getInt16(i*2,true)/32768;
-     const source=context.createBufferSource();source.buffer=buffer;source.connect(gain);
-     session.sources.add(source);source.onended=()=>{session.sources.delete(source);source.disconnect();};
-     session.next=Math.max(session.next,context.currentTime+0.06);source.start(session.next);session.next+=buffer.duration;
+     queueListenAudio(session,bytes,rate);
    }
   }catch(error){
    request.abort();

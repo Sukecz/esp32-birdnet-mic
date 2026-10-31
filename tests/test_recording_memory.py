@@ -19,7 +19,9 @@ class RecordingMemoryTests(unittest.TestCase):
 #define MALLOC_CAP_SPIRAM 4
 inline void* heap_caps_malloc(size_t n,int){return malloc(n);}
 inline void heap_caps_free(void* p){free(p);}
-inline size_t testInternal=57*1024,testExternal=8*1024*1024;
+// Conservatively subtract the largest static-RAM increase of Listen 2.04,
+// even though PSRAM-equipped C5/S3 builds retain their previous global size.
+inline size_t testInternal=57*1024-16,testExternal=8*1024*1024;
 inline size_t testLargest=33*1024;
 inline size_t externalControlCost=0;
 inline size_t heap_caps_get_free_size(int caps){return caps&MALLOC_CAP_SPIRAM?testExternal:testInternal;}

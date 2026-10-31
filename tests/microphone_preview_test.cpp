@@ -55,6 +55,25 @@ int main() {
     }
     preview.push(in.data(), in.size()); preview.push(in.data(), 2);
     assert(preview.overflowed()); // Bounded memory, never overwrite unread samples.
+    assert(preview.takeDroppedBytes() == 2);
+    assert(!preview.overflowed());
+    // Reporting an overflow must preserve the full queue, not throw it away.
+    assert(preview.pop(out.data(), out.size()) == in.size());
+    assert(out == in);
+    preview.push(in.data(), in.size());
+    for(int i=0;i<3;++i) preview.push(in.data(),2);
+    assert(preview.takeDroppedBytes() == 6);
+    assert(preview.takeDroppedBytes() == 0);
+    std::atomic<bool> rejectedDone{false};
+    std::thread rejecting([&]{
+        for(int i=0;i<100000;++i) preview.push(in.data(),2);
+        rejectedDone.store(true);
+    });
+    uint32_t rejectedTotal=0;
+    while(!rejectedDone.load()) rejectedTotal+=preview.takeDroppedBytes();
+    rejecting.join();rejectedTotal+=preview.takeDroppedBytes();
+    assert(rejectedTotal==200000); // No lost overflow reports across tasks.
+    assert(preview.pop(out.data(),out.size())==in.size()&&out==in);
     preview.end(); assert(!preview.active());
     preview.begin(); assert(!preview.overflowed());
     assert(preview.pop(out.data(), out.size()) == 0); // Reconnect discards backlog.

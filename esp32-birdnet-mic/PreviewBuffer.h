@@ -11,7 +11,7 @@
 #include "AudioMemory.h"
 
 // Independent, bounded PCM queue. No capture-side allocation, waiting or socket
-// calls. The consumer can discard stale preview PCM after temporary backpressure;
+// calls. Full queues reject only the incoming block, preserving unread PCM;
 // capture and SD recording never wait for the preview connection.
 class PreviewBuffer {
 public:
@@ -36,28 +36,21 @@ public:
         // Only the consumer discards backlog. Monotonic offsets are never reset
         // while capture could still be publishing a block from the last session.
         tail.store(head.load(std::memory_order_acquire), std::memory_order_release);
-        failed.store(false);
+        droppedBytes.store(0);
         enabled.store(true);
         return true;
     }
     void end() { enabled.store(false); }
     bool active() const { return enabled.load(); }
-    bool overflowed() const { return failed.load(); }
-    // Consumer only, with no borrowed storage: pop() copies into its own buffer.
-    // Keep published offsets monotonic. An in-flight producer may publish its
-    // next block afterwards; that fresh PCM remains readable after this discard.
-    uint32_t discardBacklog() {
-        const uint32_t write = head.load(std::memory_order_acquire);
-        const uint32_t read = tail.load(std::memory_order_relaxed);
-        tail.store(write, std::memory_order_release);
-        failed.store(false, std::memory_order_release);
-        return write-read;
-    }
+    bool overflowed() const { return droppedBytes.load(std::memory_order_relaxed) != 0; }
+    // Exchange only diagnostics, never the consumer position. Concurrent rejected
+    // blocks are counted in this exchange or the next, without clearing a flag race.
+    uint32_t takeDroppedBytes() { return droppedBytes.exchange(0, std::memory_order_relaxed); }
     void push(const void* data, size_t bytes) {
         if (!active()) return;
         uint32_t write = head.load(std::memory_order_relaxed);
         uint32_t read = tail.load(std::memory_order_acquire);
-        if (bytes > size - uint32_t(write - read)) failed.store(true);
+        if (bytes > size - uint32_t(write - read)) droppedBytes.fetch_add(bytes, std::memory_order_relaxed);
         else {
             size_t offset = write % size;
             size_t first = bytes < size - offset ? bytes : size - offset;
@@ -83,5 +76,6 @@ private:
     uint8_t* buf = storage;
     size_t size = capacity;
     std::atomic<uint32_t> head{0}, tail{0};
-    std::atomic<bool> enabled{false}, failed{false};
+    std::atomic<uint32_t> droppedBytes{0};
+    std::atomic<bool> enabled{false};
 };

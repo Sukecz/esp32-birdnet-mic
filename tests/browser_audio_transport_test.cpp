@@ -133,11 +133,16 @@ int main() {
     partialFd=latestServer;partialMode=1;
     browserAudioPush(first.data(),first.size());browserAudioLoop(true,48000);
     std::string received=read(peer);assert(received.size()==23);
-    browserAudioPush(first.data(),first.size()); // Queued stale PCM, separate from pending.
+    browserAudioPush(first.data(),first.size()); // Queued PCM must survive overflow too.
     browserAudioPush(overflow.data(),overflow.size());browserAudioLoop(true,48000);
     assert(browserAudioActive()&&browserAudioDiagnostics().previewDiscardedBytes>=first.size()*2);
     partialMode=0;browserAudioPush(fresh,4);browserAudioLoop(true,48000);received+=read(peer);
     const std::string firstBytes(reinterpret_cast<const char*>(first.data()),first.size()*2);
-    assert(received==firstBytes+std::string(reinterpret_cast<const char*>(fresh),sizeof(fresh)));
+    // Preserving the extra queued block can fill the intentionally tiny socket;
+    // alternate reads and bounded sends until the entire retained tail drains.
+    for(int i=0;i<8&&received.size()<firstBytes.size()*2+sizeof(fresh);++i){
+        browserAudioLoop(true,48000);received+=read(peer);
+    }
+    assert(received==firstBytes+firstBytes+std::string(reinterpret_cast<const char*>(fresh),sizeof(fresh)));
     partialFd=-1;browserAudioStop();close(peer);
 }

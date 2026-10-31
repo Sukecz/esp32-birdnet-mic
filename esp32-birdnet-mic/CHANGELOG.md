@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.04 - 2026-10-31
+
+- **Smoother Listen:** schedule incoming PCM continuously instead of inserting small gaps or dropping ordinary network bursts. Start with a 500 ms browser-side reserve and increase it after playback starvation, with bounded buffering and memory.
+- **Preview overflow:** retain audio already captured in the Listen queue. Reject only incoming blocks that cannot fit, preserving PCM order and partially sent samples. Report actual rejected PCM bytes without losing concurrent overflow reports.
+- **Recording resources:** keep preview queue capacities, capture/SD independence and task counts unchanged. Static RAM grows by only 16 bytes on C3/C6; S3/C5 static RAM is unchanged.
+- **Validation:** four-board builds, recording-memory regressions and source/embedded browser checks; C6 local OTA and measured playback continuity. Long network stalls can still lose audio once the finite preview queue fills. See the [validation record](https://github.com/Sukecz/esp32-birdnet-mic/blob/v2.04/release-notes/2.04-validation.md) for results and physical SD limits.
+
 ## 2.03 - 2026-10-31
 
 - **Recording:** fix false memory-allocation failures with PSRAM, Device Wi-Fi, PDM and mDNS enabled. Use the Recording budget for capture restarts, retain the larger internal-buffer reserve, and show the actual reason when a start is blocked.

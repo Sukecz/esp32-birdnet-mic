@@ -219,14 +219,13 @@ void serviceBrowserAudio(bool allowed, uint32_t rate) {
         }
         sending = true;
     }
-    if (queue.overflowed()) {
+    const uint32_t discarded = queue.takeDroppedBytes();
+    if (discarded) {
         ++diagnostics.overflows;
-        const uint32_t discarded = queue.discardBacklog();
         diagnostics.previewDiscardedBytes += discarded;
-        if (discarded) lastAudioAt = now;
-        // This is a live preview, not the SD recording. Resume with current PCM
-        // after a short network hiccup. Keep any partially sent block/header
-        // intact so the HTTP/PCM byte stream cannot lose sample alignment.
+        // Count only rejected producer bytes. Drain already captured PCM in
+        // order, including a partially sent block, instead of losing an extra
+        // entire queue on top of the actual overflow. Work/memory stay bounded.
     }
     // Catch up after bounded HTTP/SD service delays. One 2 KiB write per pass
     // cannot sustain 48 kHz when passes take more than 21 ms. Keep the PCM

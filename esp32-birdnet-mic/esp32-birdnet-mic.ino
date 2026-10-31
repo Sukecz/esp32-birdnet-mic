@@ -87,7 +87,7 @@ static constexpr uint32_t PDM_SAMPLE_RATE = 48000;
 static constexpr uint32_t PDM_CLOCK_HZ = PDM_SAMPLE_RATE * 64;
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi) ==================
-#define FW_VERSION "2.03"
+#define FW_VERSION "2.04"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 // Build timestamp for diagnostics (compile time)
