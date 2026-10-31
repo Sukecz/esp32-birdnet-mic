@@ -124,17 +124,18 @@ int main(){String error;NetworkClient stream;assert(!streamUpdate(stream,4,error
 #include "Platform.h"
 bool allowed=false;int begins=0;
 namespace flashlayout {bool otaAllowed(String&){return allowed;}}
-String mdnsHostname="mic";
+String mdnsHostname="mic";bool mdnsEnabled=false,otaMdns=true;
 using ota_error_t=int;
 void simplePrintln(const String&){}
 void beginOtaUpdate(){}
 void endOtaUpdate(bool){}
 struct {
  void setHostname(const char*){}
+ void setMdnsEnabled(bool value){otaMdns=value;}
  template<class T>void onStart(T){}
  template<class T>void onError(T){}
  void begin(){++begins;}
 } ArduinoOTA;
 ''' + function(SKETCH,'void setupOTA()') + r'''
-int main(){setupOTA();assert(!begins);allowed=true;setupOTA();assert(begins==1);}
+int main(){setupOTA();assert(!begins);allowed=true;setupOTA();assert(begins==1&&!otaMdns);mdnsEnabled=true;setupOTA();assert(begins==2&&otaMdns);}
 ''')

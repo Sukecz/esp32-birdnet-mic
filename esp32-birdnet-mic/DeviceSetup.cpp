@@ -86,11 +86,16 @@ void begin(bool legacyRecording) {
     wifi_config_t legacy = {};
     esp_wifi_get_config(WIFI_IF_STA, &legacy);
     Preferences prefs;
-    bool loaded = false, previousRecording = false;
+    bool loaded = false, migrated = false, previousRecording = false;
     if (prefs.begin("setup", true)) {
         Config saved;
         loaded = prefs.getBytesLength("config") == sizeof(saved) &&
             prefs.getBytes("config", &saved, sizeof(saved)) == sizeof(saved) && valid(saved);
+        if (!loaded && prefs.getBytesLength("config") == sizeof(LegacyConfig)) {
+            LegacyConfig old;
+            loaded = prefs.getBytes("config", &old, sizeof(old)) == sizeof(old) && migrate(old, saved);
+            migrated = loaded;
+        }
         if (loaded) config = saved;
         prefs.end();
     }
@@ -109,12 +114,12 @@ void begin(bool legacyRecording) {
         configPersisted = persist(config); // Save retries a failed initial write.
     }
     else {
-        configPersisted = true;
+        configPersisted = !migrated;
         // No password has been used by an AP client before setup is completed.
-        if (!config.complete && strlen(config.apKey) > 8) {
+        if (migrated && !config.complete && strlen(config.apKey) > 8) {
             generateApKey(config);
-            configPersisted = persist(config);
         }
+        if (migrated) configPersisted = persist(config);
     }
     memset(&legacy, 0, sizeof(legacy));
     // Trial credentials never replace the SDK's flash-backed legacy config.
@@ -180,9 +185,26 @@ bool suspendWifiNow() {
 }
 String apName() { return name; }
 String apPassword() { return String(config.apKey); }
+bool canChangeApPassword() {
+    return !connectionBusy() && !suspended && !suspendPending;
+}
+bool setApPassword(const String& password) {
+    if (!validApPassword(password.c_str(), password.length())) return false;
+    if (password == config.apKey && configPersisted) return true;
+    if (!canChangeApPassword()) return false;
+    Config next = config;
+    memset(next.apKey, 0, sizeof(next.apKey));
+    password.toCharArray(next.apKey, sizeof(next.apKey));
+    if (!persist(next)) return false;
+    config = next;
+    configPersisted = true;
+    // Send the save acknowledgement before AP clients need to reconnect.
+    if (active && !openAp) rekeyAt = millis() + 1500;
+    return true;
+}
 bool shortenApPassword() {
     if (strlen(config.apKey) == 8) return true;
-    if (connectionBusy() || (active && WiFi.softAPgetStationNum())) return false;
+    if (!canChangeApPassword() || (active && WiFi.softAPgetStationNum())) return false;
     Config next = config;
     generateApKey(next);
     if (!persist(next)) return false;
@@ -299,7 +321,7 @@ void loop() {
     if (rekeyAt && int32_t(now - rekeyAt) >= 0) {
         rekeyAt = 0;
         stopAp();
-        startAp(); // Completing initial setup changes open provisioning to WPA2.
+        startAp(); // Apply a saved password or complete open provisioning.
     }
     if (queued && now - attemptAt >= 300 && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
         queued = false;

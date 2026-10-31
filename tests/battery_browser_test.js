@@ -17,6 +17,7 @@ const base={ok:true,complete:true,default_mode:'streaming',connection:'home',con
    page.on('pageerror',e=>errors.push(e.message));
    let saved,info={...base,chip_family:'ESP32-'+family,board_name:'XIAO ESP32-'+family,s3_board_supported:family==='S3',antenna_supported:family==='C6'};
    await page.route('http://battery.test/**',route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
     const path=new URL(route.request().url()).pathname;
     if(path==='/')return route.fulfill({contentType:'text/html',body:asset('setup.html','SETUP_HTML_GZ',packed)});
     if(path==='/setup.js'||path==='/setup.css')return route.fulfill({contentType:path.endsWith('js')?'application/javascript':'text/css',body:asset(path.slice(1),path.endsWith('js')?'SETUP_JS_GZ':'SETUP_CSS_GZ',packed)});
@@ -69,6 +70,7 @@ const base={ok:true,complete:true,default_mode:'streaming',connection:'home',con
    fixture.status.recording={mode:'streaming',supported:true,state:'ready',busy:false,card_ready:false,elapsed_seconds:0,duration_minutes:0,segment_minutes:60,auto_start:false,written_kib:0,free_mib:0,dropped_samples:0,file:'',error:''};
    const batteryWrites=[];
    await page.route('http://battery.test/**',route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
     const path=new URL(route.request().url()).pathname;
     if(path==='/api/battery'){
      assert.equal(route.request().headers()['x-esp32mic-csrf'],'1');

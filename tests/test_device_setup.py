@@ -189,7 +189,7 @@ int main(int argc,char** argv){
   nvs["recording/settings"]={1};begin(true);assert(complete()&&defaultRecording());
   tick(15000);assert(apActive()); // existing offline Recording does not re-enter welcome.
  }else if(scenario=="legacy-key"){
-  Config previous;previous.complete=1;strcpy(previous.ssid,"Original");strcpy(previous.apKey,"ABCDEF1234567890");
+  LegacyConfig previous;previous.complete=1;strcpy(previous.ssid,"Original");strcpy(previous.apKey,"ABCDEF1234567890");
   auto* bytes=(uint8_t*)&previous;nvs["setup/config"]={bytes,bytes+sizeof(previous)};
   begin(false);assert(apPassword()=="ABCDEF1234567890"&&complete());
   failWrite=true;assert(!shortenApPassword()&&apPassword().size()==16);failWrite=false;
@@ -198,10 +198,36 @@ int main(int argc,char** argv){
   for(char c:apPassword())assert(strchr("ABCDEFGHJKLMNPQRSTUVWXYZ23456789",c));
   auto saved=nvs["setup/config"];assert(shortenApPassword()&&nvs["setup/config"]==saved);
  }else if(scenario=="unfinished-key"){
-  Config previous;strcpy(previous.apKey,"ABCDEF1234567890");
+  LegacyConfig previous;strcpy(previous.apKey,"ABCDEF1234567890");
   auto* bytes=(uint8_t*)&previous;nvs["setup/config"]={bytes,bytes+sizeof(previous)};
   begin(false);assert(!complete()&&apPassword().size()==8&&apActive()&&WiFi.key.empty());
   assert(strlen(stored().apKey)==8);
+ }else if(scenario=="custom-key"){
+  setLegacy();begin(true);const Config original=stored();auto before=nvs;
+  for(const auto& bad:{std::string("short"),std::string(64,'a'),std::string("accent-\xC4\x8D"),std::string("abcd\n1234"),std::string("abc\0defghi",10)}){
+   assert(!setApPassword(String(bad))&&nvs==before);
+  }
+  const String custom=" Long custom password + symbols & spaces! ";
+  failWrite=true;assert(!setApPassword(custom)&&nvs==before);failWrite=false;
+  assert(testCredentials("Other","password"));assert(!setApPassword(custom));tick(300);tick(26000);
+  // An AP client receives the acknowledgement before the delayed rekey.
+  tick(15001);WiFi.clients=1;const int starts=WiFi.starts;const String previous=WiFi.key;
+  assert(setApPassword(custom)&&apPassword()==custom);
+  assert(WiFi.key==previous&&WiFi.starts==starts);tick(1499);assert(WiFi.key==previous);
+  tick(1);assert(WiFi.key==custom&&WiFi.starts==starts+1);
+  assert(stored().password==std::string(original.password)&&stored().recording==original.recording);
+  before=nvs;failWrite=true;assert(setApPassword(custom)&&nvs==before);failWrite=false;
+  begin(true);assert(apPassword()==custom&&complete());
+  assert(setApPassword(String(std::string(63,'x'))));begin(true);assert(apPassword().size()==63);
+  assert(setApPassword("12345678"));begin(true);assert(apPassword()=="12345678");
+ }else if(scenario=="migration-write-failure"){
+  LegacyConfig old;old.complete=1;old.recording=1;old.batteryEnabled=1;
+  strcpy(old.ssid,"Keep network");strcpy(old.password,"keep password");strcpy(old.apKey,"OLDKEY12");
+  auto* bytes=(uint8_t*)&old;nvs["setup/config"]={bytes,bytes+sizeof(old)};const auto before=nvs;
+  failWrite=true;begin(true);assert(complete()&&defaultRecording()&&batteryMonitoring());
+  assert(apPassword()=="OLDKEY12"&&savedSsid()=="Keep network"&&nvs==before);
+  failWrite=false;assert(setApPassword("OLDKEY12"));assert(stored().password==std::string("keep password"));
+  begin(true);assert(apPassword()=="OLDKEY12"&&savedSsid()=="Keep network");
  }else if(scenario=="battery"){
   setLegacy();begin(false);assert(!batteryMonitoring()&&stored().batteryEnabled==0);
   const auto before=nvs["setup/config"];
@@ -412,6 +438,51 @@ int main(){
             end += 1
         return source[start:end]
 
+    def test_ap_password_endpoint(self):
+        source = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
+        handler = 'static void httpSetupAccess() {' + source.split('static void httpSetupAccess() {', 1)[1].split('\nstatic void httpStatus()', 1)[0]
+        code = r'''
+#include "Arduino.h"
+#include "SetupConfig.h"
+bool auth=true,active=false,pending=false,allowed=true,writeOk=true;int writes=0,lastCode=200;
+String current="OLDKEY12",reply;
+struct {std::map<std::string,String> args;bool hasArg(const char* n){return args.count(n);}String arg(const char* n){return args[n];}void send(int code,const char*,const char* body){lastCode=code;reply=body;}} web;
+bool requireMutationAuth(){return auth;}
+String jsonEscape(const String& s){return s;}
+void apiSendJSON(const String& s){lastCode=200;reply=s;}
+namespace recording {bool busy(){return active;}bool resumePending(){return pending;}}
+namespace devicesetup {
+ bool canChangeApPassword(){return allowed;}
+ String apPassword(){return current;}
+ bool setApPassword(const String& s){++writes;if(!writeOk)return false;current=s;return true;}
+ bool shortenApPassword(){++writes;return writeOk;}
+}
+''' + handler + r'''
+int main(){
+ auth=false;web.args={{"password","Test secret"}};httpSetupAccess();assert(!writes);auth=true;
+ for(const auto& bad:{std::string(""),std::string("short"),std::string(64,'a'),std::string("line\nbreak"),std::string("accent-\xC4\x8D"),std::string("a\0b12345678",11)}){
+  web.args={{"password",String(bad)}};httpSetupAccess();assert(!writes&&lastCode==400);
+ }
+ web.args={{"password","Valid & key "},{"shorten","1"}};httpSetupAccess();assert(!writes&&lastCode==400);
+ web.args={{"password","Valid & key "}};
+ active=true;httpSetupAccess();assert(!writes&&lastCode==409);active=false;
+ pending=true;httpSetupAccess();assert(!writes&&lastCode==409);pending=false;
+ allowed=false;httpSetupAccess();assert(!writes&&lastCode==409);allowed=true;
+ writeOk=false;httpSetupAccess();assert(writes==1&&lastCode==503&&current=="OLDKEY12");
+ writeOk=true;httpSetupAccess();assert(writes==2&&lastCode==200&&current=="Valid & key ");
+ web.args.clear();active=true;pending=true;httpSetupAccess();assert(writes==2&&lastCode==200);
+ assert(reply.find("Valid & key ")!=std::string::npos);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            (tmp / 'Arduino.h').write_text(STUBS['Arduino.h'])
+            (tmp / 'test.cpp').write_text(code)
+            subprocess.run(['g++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+                            '-I', str(tmp), '-I', str(ROOT / 'esp32-birdnet-mic'),
+                            str(tmp / 'test.cpp'), '-o', str(tmp / 'test')], check=True)
+            subprocess.run([str(tmp / 'test')], check=True, timeout=10)
+
     def test_production_state_machine(self):
         with tempfile.TemporaryDirectory() as directory:
             tmp = Path(directory)
@@ -423,7 +494,7 @@ int main(){
                             '-I', str(tmp), '-I', str(ROOT / 'esp32-birdnet-mic'),
                             str(tmp / 'test.cpp'), '-o', str(tmp / 'test')], check=True)
             for scenario in ('wifi-off', 'wifi-off-failure', 'new', 'legacy', 'trial-failure', 'trial-success',
-                             'scan-and-wrap', 'same-ssid-proof', 'uncommitted-trial-expiry', 'migration-recording-no-wifi', 'legacy-key', 'unfinished-key', 'battery', 'reset'):
+                             'scan-and-wrap', 'same-ssid-proof', 'uncommitted-trial-expiry', 'migration-recording-no-wifi', 'legacy-key', 'unfinished-key', 'custom-key', 'migration-write-failure', 'battery', 'reset'):
                 with self.subTest(scenario=scenario):
                     subprocess.run([str(tmp / 'test'), scenario], check=True, timeout=10)
 

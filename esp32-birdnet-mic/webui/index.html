@@ -80,6 +80,7 @@
 @media(max-width:600px){.playback{padding:8px;gap:6px 8px}.mode-controls label,.listen-volume label{display:none}.listen-controls{gap:8px}.listen-volume{grid-template-columns:64px 5ch;gap:5px}#listen_volume{width:64px}#listen_button{padding:8px 10px;min-width:75px}.overview>.health-checks{padding:10px;font-size:12px}}
 @media(max-width:360px){.playback{column-gap:6px}#device_mode{width:96px;font-size:12px;padding:6px}.listen-controls{gap:4px}.listen-volume{grid-template-columns:40px 5ch;gap:3px}#listen_volume{width:40px}#listen_button{min-width:60px;padding:8px 6px}#listen_button:before{display:none}}
 </style>
+<script src="/ap-password.js" defer></script>
 </head>
 
 <body>
@@ -625,6 +626,16 @@
 <tr><td class='k'>Password</td><td class='v' id='direct_access_password'>Loading…</td></tr>
 <tr><td class='k'>Control page</td><td class='v'><a href='http://192.168.4.1/'>http://192.168.4.1</a></td></tr>
 </table>
+<div id="ap_password_control">
+<button type="button" id="ap_password_change" aria-expanded="false" aria-controls="ap_password_editor">Change password</button>
+<div id="ap_password_editor" hidden>
+<label for="ap_password_input">Device Wi-Fi password</label>
+<div class="field password"><input id="ap_password_input" type="password" maxlength="63" autocomplete="new-password" aria-describedby="ap_password_help ap_password_dirty"><button type="button" id="ap_password_show" aria-pressed="false">Show</button><span id="ap_password_dirty" class="edit-note"></span></div>
+<p id="ap_password_help" class="muted">Use 8–63 characters: letters without accents, numbers, spaces or symbols. Stop recording before saving. Devices connected to this Wi-Fi will need to reconnect with the new password.</p>
+<div class="actions"><button type="button" id="ap_password_save" disabled>Save password</button><button type="button" id="ap_password_cancel">Cancel</button></div>
+</div>
+<p id="ap_password_feedback" class="feedback" role="status" aria-live="polite"></p>
+</div>
 </section>
 <table>
 <tr><td class='k' id='t_ip'>IP Address</td><td class='v' id='ip'></td></tr>
@@ -1246,6 +1257,8 @@ function updateDiscard(root){
  button.hidden=!root.querySelector('.dirty');button.disabled=sectionBusy.has(root.id);
 }
 async function discardChanges(id){
+ if(id==='networksec'&&window.deviceApPassword?.busy())return;
+ if(id==='networksec')window.deviceApPassword?.cancel();
  if(sectionBusy.has(id))return;
  $(id).querySelectorAll('[data-dirty-key]').forEach(el=>{const k=el.dataset.dirtyKey;pendingSyncKeys.delete(k);clearDirty(k);if(el.type==='password')el.value='';if(el.type==='checkbox')el.checked=false;});
  feedback(id,'Changes discarded.');await refreshAll();updateDependencies();
@@ -1724,7 +1737,7 @@ async function loadDirectAccess(){
  try{
   const response=await mutationFetch('/api/setup/access','');const result=await response.json();
   if(!response.ok||!result.ok)throw Error();
-  message.textContent=result.password;directAccessLoaded=true;
+  message.textContent=result.password;directAccessLoaded=true;window.deviceApPassword?.confirmed(result.password);
  }catch(_){message.textContent='Could not load. Reopen Network to retry.';}
  finally{directAccessLoading=false;}
 }
@@ -2015,17 +2028,34 @@ function setListenVolume(value){
  document.getElementById('listen_volume_value').textContent=percent+'%';
  if(listenSession) listenSession.gain.gain.value=percent/100;
 }
+function clearListenAudio(session){
+ for(const source of session.sources){try{source.stop();}catch(_){}}
+ session.sources.clear();session.next=0;
+}
 function stopListening(message='Listening stopped.'){
- const session=listenSession; listenSession=null;
- if(session){
-   session.abort.abort();
-   for(const source of session.sources){ try{source.stop();}catch(_){} }
-   session.sources.clear();
-   session.context.close().catch(()=>{});
- }
+ const session=listenSession;listenSession=null;
+ if(session){session.abort.abort();session.request?.abort();clearListenAudio(session);session.context.close().catch(()=>{});}
  const button=document.getElementById('listen_button');
- button.textContent='Listen'; button.setAttribute('aria-pressed','false');
- listenMessage(message);
+ button.textContent='Listen';button.setAttribute('aria-pressed','false');listenMessage(message);
+}
+function listenDelay(session,ms){
+ return new Promise(resolve=>{
+  const finish=()=>{clearTimeout(timer);session.abort.signal.removeEventListener('abort',finish);resolve();};
+  const timer=setTimeout(finish,ms);
+  session.abort.signal.addEventListener('abort',finish,{once:true});
+  if(session.abort.signal.aborted)finish();
+ });
+}
+function listenWait(promise,session,request){
+ return new Promise((resolve,reject)=>{
+  let finished=false;
+  const done=(fn,value)=>{if(finished)return;finished=true;clearTimeout(timer);session.abort.signal.removeEventListener('abort',cancel);fn(value);};
+  const cancel=()=>{const error=new Error('Listening stopped.');error.name='AbortError';done(reject,error);request.abort();};
+  const timer=setTimeout(()=>{const error=new Error('Live audio stalled.');error.retryable=true;done(reject,error);request.abort();},4000);
+  session.abort.signal.addEventListener('abort',cancel,{once:true});
+  Promise.resolve(promise).then(value=>done(resolve,value),error=>done(reject,error));
+  if(session.abort.signal.aborted)cancel();
+ });
 }
 async function toggleListen(){
  if(listenSession){stopListening();return;}
@@ -2033,22 +2063,31 @@ async function toggleListen(){
  if(!Audio){listenMessage('Audio playback is unavailable in this browser.');return;}
  const context=new Audio(), gain=context.createGain();
  gain.gain.value=Number(document.getElementById('listen_volume').value)/100; gain.connect(context.destination);
- const session={context,gain,abort:new AbortController(),sources:new Set(),next:0};
+ const session={context,gain,abort:new AbortController(),request:null,sources:new Set(),next:0};
  listenSession=session;
  const button=document.getElementById('listen_button');
  button.textContent='Stop listening'; button.setAttribute('aria-pressed','true');
  listenMessage('Connecting…');
- try{
-   await context.resume();
-   if(listenSession!==session)return;
-   const url=new URL(location.href); url.port='81'; url.pathname='/listen.wav'; url.search=''; url.hash='';
-   const response=await fetch(url.href,{cache:'no-store',signal:session.abort.signal});
-   if(!response.ok)throw new Error(response.status===503?'Listening is busy or streaming is paused.':'Could not open live audio.');
+ try{await context.resume();}catch(_){if(listenSession===session)stopListening('Could not start audio playback.');return;}
+ const url=new URL(location.href);url.port='81';url.pathname='/listen.wav';url.search='';url.hash='';
+ let failures=0;
+ while(listenSession===session){
+  const request=new AbortController();session.request=request;
+  try{
+   let response;
+   for(let attempt=0;attempt<4;attempt++){
+     response=await listenWait(fetch(url.href,{cache:'no-store',signal:request.signal}),session,request);
+     if(listenSession!==session)return;
+     if(response.status!==503||attempt===3)break;
+     listenMessage('Waiting for Listen…');await listenDelay(session,250);
+     if(listenSession!==session)return;
+   }
+   if(!response.ok)throw new Error(response.status===503?'Listening is busy or streaming is paused. Stop other listening tabs and retry.':'Could not open live audio.');
    const reader=response.body.getReader();
-   let header=new Uint8Array(44),headerBytes=0,rate=0,carry=null;
+   let header=new Uint8Array(44),headerBytes=0,rate=0,carry=null,healthySince=0;
    while(listenSession===session){
-     const {done,value}=await reader.read();
-     if(done)throw new Error('Listening ended. Press Listen to reconnect.');
+     const {done,value}=await listenWait(reader.read(),session,request);
+     if(done){const error=new Error('Live audio connection ended.');error.retryable=true;throw error;}
      let bytes=value;
      if(headerBytes<44){
        const take=Math.min(44-headerBytes,bytes.length);header.set(bytes.subarray(0,take),headerBytes);headerBytes+=take;bytes=bytes.subarray(take);
@@ -2061,6 +2100,8 @@ async function toggleListen(){
      if(carry!==null){const joined=new Uint8Array(bytes.length+1);joined[0]=carry;joined.set(bytes,1);bytes=joined;carry=null;}
      if(bytes.length%2){carry=bytes[bytes.length-1];bytes=bytes.subarray(0,bytes.length-1);}
      if(!bytes.length)continue;
+     if(!healthySince)healthySince=Date.now();
+     if(Date.now()-healthySince>=10000)failures=0;
      // Bound queued sound and memory even when a browser/network delivers a burst.
      const count=Math.min(bytes.length/2,Math.floor(rate*0.25)),offset=bytes.length-count*2;
      if(session.next>context.currentTime+0.35)continue;
@@ -2071,9 +2112,17 @@ async function toggleListen(){
      session.sources.add(source);source.onended=()=>{session.sources.delete(source);source.disconnect();};
      session.next=Math.max(session.next,context.currentTime+0.06);source.start(session.next);session.next+=buffer.duration;
    }
- }catch(error){
-   if(listenSession===session)stopListening(error.name==='AbortError'?'Listening stopped.':(error.message||'Could not play audio.'));
+  }catch(error){
+   request.abort();
+   if(listenSession!==session)return;
+   if(typeof wifiOffIntent!=='undefined'&&wifiOffIntent){stopListening('Listening stopped: device Wi-Fi is off.');return;}
+   if(!(error.retryable||error.name==='TypeError')||++failures>3){
+    stopListening(error.retryable||error.name==='TypeError'?'Live audio connection failed. Press Listen to retry.':(error.message||'Could not play audio.'));return;
+   }
+   clearListenAudio(session);listenMessage('Reconnecting…');await listenDelay(session,500);
+  }finally{request.abort();if(session.request===request)session.request=null;}
  }
+
 }
 window.addEventListener('pagehide',()=>stopListening());
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&listenSession)stopListening();});
@@ -2096,6 +2145,16 @@ function highlightNewDrafts(){
 document.addEventListener('input',highlightNewDrafts);document.addEventListener('change',highlightNewDrafts);
 for(const name of ['renderRecording','renderBattery','renderFieldPower','renderRecordingLog']){const original=window[name];window[name]=function(...args){const result=original(...args);highlightNewDrafts();return result;};}
 
+</script>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+ window.deviceApPassword=window.createApPasswordEditor({
+  saved:password=>{document.getElementById('direct_access_password').textContent=password;directAccessLoaded=true;},
+  changed:()=>updateDiscard(document.getElementById('networksec')),
+  locked:()=>!!recordingState?.busy||!!recordingState?.cooling_pending
+ });
+ loadDirectAccess();
+});
 </script>
 </body>
 </html>

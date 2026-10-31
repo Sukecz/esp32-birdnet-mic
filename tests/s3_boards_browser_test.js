@@ -14,6 +14,7 @@ const {chromium}=require('playwright-core');
   const page=await browser.newPage({viewport:{width:390,height:844}});
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('http://ui.test/**',async route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const req=route.request(),path=new URL(req.url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:source});
    if(req.method()!=='GET'){

@@ -40,6 +40,7 @@ class ModeMemoryTests(unittest.TestCase):
                 self.native(r'''
 #include "AudioMemory.h"
 #include "AudioReserve.h"
+#include "RecordingMemory.h"
 #include "PreviewBuffer.h"
 #include <cassert>
 #include <cstdint>
@@ -111,8 +112,10 @@ int main(){
  assert(startAudioProducer());assert(!audioRingInPsram);stopAudioProducer();failExternal=false;
  // Failed task creation releases its ring in both placement modes.
  failTask=true;assert(!startAudioProducer());assert(internalFree==baseline&&!rings);
- failTask=false;recording::active=true;internalFree=70*1024;
+ failTask=false;recording::active=true;internalFree=54*1024;
  assert(!startAudioProducer()&&!rings&&!audioProducerTaskHandle);
+ internalFree=57*1024;assert(startAudioProducer());
+ assert(internalFree>=recordingmemory::kWorkingReserveBytes);stopAudioProducer();
  internalFree=baseline;internalLargest=1024;assert(!startAudioProducer());
 }
 ''', ['-DCONFIG_IDF_TARGET_ESP32' + board + '=1', '-DCONFIG_SPIRAM=' + str(int(psram))])

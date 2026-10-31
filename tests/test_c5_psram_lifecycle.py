@@ -22,6 +22,7 @@ class C5PsramLifecycleTests(unittest.TestCase):
     def test_actual_ring_allocation_task_failure_and_restarts(self):
         code = r'''
 #include "AudioReserve.h"
+#include "RecordingMemory.h"
 #include <cassert>
 #include <cstdint>
 #include <string>

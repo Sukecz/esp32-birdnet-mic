@@ -6,14 +6,14 @@
 
 Two modes: live **RTSP Streaming** or standalone **microSD WAV Recording**.
 Start with the [beginner guide](../README.md) and [field recording guide](../docs/field-recording.md).
-Current release: **2.01**; see the [validation record](../release-notes/2.01-validation.md).
+Current firmware: **2.03** ([validation record](../release-notes/2.03-validation.md)).
 For new builds we recommend **XIAO ESP32-C5 + IM73D122 PDM**, with an Adafruit BFF for SD.
 
 Arduino firmware for Seeed Studio XIAO ESP32 and M5Stack AtomS3U, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Latest firmware: **v2.01** — Recording memory fixes and S3 PSRAM support.
+- Current firmware: **v2.03** — Recording memory fixes, Listen recovery and custom device Wi-Fi passwords.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
@@ -98,7 +98,7 @@ Reads are staged in the app loop and reported in `/api/status`, independently
 of the browser. See the
 [battery guide](../docs/battery-monitoring.md) for GPIOs, APIs and validation limits.
 
-## Audio memory by board (v2.01)
+## Audio memory by board (v2.03)
 
 The build helper enables S3's 8 MB OPI PSRAM (`PSRAM=opi`) and C5's 8 MB
 PSRAM (`PSRAM=enabled`). Streaming puts its normally 64 KiB RTSP reserve there;
@@ -113,6 +113,9 @@ internal queue retaining 72 KiB of internal headroom. The queue is allocated onl
 when recording starts and released before returning to Streaming. The SD worker
 is retained for later checks. A card check or log read allocates no PCM queue and
 uses a separate 48 KiB internal reserve plus the first worker's 8 KiB budget.
+PSRAM recording queues use that same SD working reserve, with actual heap checked
+again after allocations. Recording capture restarts budget their producer stack
+separately from the 48 KiB working reserve; Streaming limits remain unchanged.
 Capture and Listen remain active in Recording; only the unused RTSP buffer is
 removed. Mode changes stop the producer before changing buffer ownership and
 restore the previous mode if capture cannot restart.
@@ -127,12 +130,16 @@ Listen has its own transport task with a 3 KiB internal stack and an independent
 PCM queue, so synchronous web requests cannot starve its sender. Each pass is
 bounded to eight nonblocking writes and 2 ms. Temporary preview overflows discard
 old preview PCM and resume with current audio; partial TCP blocks are retained to
-preserve sample alignment. A socket stalled for 500 ms still disconnects. Capture
+preserve sample alignment. Temporary TCP stalls can recover for up to five seconds;
+the sender tries the socket before timing out. An empty capture queue has a separate
+two-second starvation limit. Capture
 and SD recording never wait for a browser. This live preview can skip delayed
 sound; the independent SD WAV path retains its separate loss/error accounting. `/api/audio_status` reports `listen_last_stop`,
 `listen_overflows`, `listen_send_timeouts`, `listen_socket_errors`,
 `listen_max_loop_gap_ms`, `listen_bytes_sent`, `listen_preview_discarded_bytes`,
-`listen_independent_worker` and `listen_worker_stack_free_bytes` for diagnosis.
+`listen_independent_worker`, `listen_worker_stack_free_bytes`,
+`listen_max_send_stall_ms`, `listen_send_recoveries` and
+`listen_no_audio_timeouts` for diagnosis.
 
 ## Important URLs
 
@@ -428,7 +435,7 @@ The Web UI runs on port **80**.
 
 *Development screenshot (v1.27); interface included in v1.30.*
 
-The header contains **Listen / Stop**, **Playback volume (0–100%)** and a brief
+The header contains **Listen / Stop**, **Playback volume (0–150%)** and a brief
 microphone, RTSP, Wi-Fi and temperature overview. Each link opens the relevant section.
 All nine sections start collapsed on every page load; opening one leaves the others
 unchanged. Background refresh preserves expansion state and pending edits.
@@ -575,10 +582,15 @@ browser playback, not the microphone gain or the BirdNET stream.
 
 One browser can listen at a time, independently of the RTSP client limit. Keep the page
 open and visible; Stop, leaving the page or hiding the tab ends playback. A slow browser
-connection ends only the preview. Audio reconfiguration, OTA, Wi-Fi reconnect, server OFF,
-scheduling and thermal shutdown close the preview; press Listen again when ready.
+connection affects only the preview. Brief interruptions reopen the audio connection
+automatically while preserving playback volume; consecutive failures have a bounded
+retry limit. Stop cancels recovery immediately. Audio reconfiguration, OTA, Wi-Fi
+reconnect, server OFF, scheduling and thermal shutdown may close or pause the preview;
+press Listen again if it cannot recover. Intentionally turning Wi-Fi off stops Listen.
 
-The preview uses HTTP port **81**, `/listen.wav`, with a bounded separate 16 KiB buffer.
+The preview uses HTTP port **81**, `/listen.wav`, with a separate bounded queue
+as described in the memory table above. Busy replies remain readable in Chrome;
+after a quick Stop → Listen the browser briefly retries the previous connection.
 Open the device's HTTP Web UI directly; network filtering must permit both ports 80 and 81.
 Cross-origin browser access is limited to the matching device page on port 80.
 

@@ -16,6 +16,7 @@ function html(packed){
    Object.assign(fixture.status,{fw_version:'1.36',time_sync_enabled:true,time_valid:false,time_synced:false,time_sync_status:'waiting_wifi',last_time_sync:'never',local_time:'unavailable',utc_time:'unavailable'});
    const page=await browser.newPage({viewport:{width:320,height:900}});page.on('pageerror',e=>errors.push(e.message));
    await page.route('http://time.test/**',route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
     const r=route.request(),path=new URL(r.url()).pathname;
     if(path==='/')return route.fulfill({contentType:'text/html',body:html(packed)});
     if(path==='/api/action/time_sync'){

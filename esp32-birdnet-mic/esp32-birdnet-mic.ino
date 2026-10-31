@@ -40,6 +40,7 @@
 #include "MicrophoneSignal.h"
 #include "BrowserAudio.h"
 #include "Recording.h"
+#include "RecordingMemory.h"
 #include "RecordingPins.h"
 static uint32_t recordingDmaBaseline = 0;
 static bool recordingAutoStartPending = false;
@@ -86,7 +87,7 @@ static constexpr uint32_t PDM_SAMPLE_RATE = 48000;
 static constexpr uint32_t PDM_CLOCK_HZ = PDM_SAMPLE_RATE * 64;
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi) ==================
-#define FW_VERSION "2.01"
+#define FW_VERSION "2.03"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 // Build timestamp for diagnostics (compile time)
@@ -2679,9 +2680,17 @@ bool recordingHardwareSupported() {
 }
 
 bool startRecording() {
-    if (!fieldpower::canStart(battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant))) return false;
-    if (recording::busy() || otaInProgress || flashlayout::busy() || overheatLatched ||
-        !audioProducerRunning || audioProducerStopRequested || scheduledRebootAt) return false;
+    if (recording::busy()) return false;
+    if (!fieldpower::canStart(battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant)))
+        return recording::rejectStart("Battery protection is blocking recording; check Battery");
+    if (otaInProgress || flashlayout::busy())
+        return recording::rejectStart("An update is in progress; wait before starting recording");
+    if (overheatLatched)
+        return recording::rejectStart("Thermal protection is blocking recording; check Thermal management");
+    if (!audioProducerRunning || audioProducerStopRequested)
+        return recording::rejectStart("Microphone capture is stopped; use Reset I2S before recording");
+    if (scheduledRebootAt)
+        return recording::rejectStart("A restart is pending; wait before starting recording");
     recordingDmaBaseline = getI2sDmaOverrunTotal();
     return recording::start(currentSampleRate, recordingHardwareSupported(), s3BoardVariant);
 }
@@ -2803,6 +2812,7 @@ void setupOTA() {
 #endif
     ArduinoOTA.onStart([] { beginOtaUpdate(); });
     ArduinoOTA.onError([](ota_error_t) { endOtaUpdate(false); });
+    ArduinoOTA.setMdnsEnabled(mdnsEnabled);
     ArduinoOTA.begin();
 }
 
@@ -3207,7 +3217,7 @@ bool startAudioProducer() {
         const uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
         if (!audioreserve::externalHeadroom(heap_caps_get_free_size(caps),
                                            heap_caps_get_largest_free_block(caps),
-                                           audioreserve::kC5MinimumHeapMargin)) {
+                                           recordingmemory::kWorkingReserveBytes)) {
             simplePrintln("Recording capture: insufficient internal RAM for Wi-Fi and producer.");
             return false;
         }

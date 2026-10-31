@@ -13,6 +13,7 @@
 #include <Update.h>
 #include <WebServer.h>
 #include "DeviceSetup.h"
+#include "SetupConfig.h"
 #include "Battery.h"
 #include "FieldPower.h"
 #include "S3Boards.h"
@@ -347,6 +348,7 @@ static void httpIndex() {
 static void httpSetupPage() { sendGzipAsset("text/html; charset=utf-8", SETUP_HTML_GZ, SETUP_HTML_GZ_LEN); }
 static void httpSetupCss() { sendGzipAsset("text/css; charset=utf-8", SETUP_CSS_GZ, SETUP_CSS_GZ_LEN); }
 static void httpSetupJs() { sendGzipAsset("application/javascript; charset=utf-8", SETUP_JS_GZ, SETUP_JS_GZ_LEN); }
+static void httpApPasswordJs() { sendGzipAsset("application/javascript; charset=utf-8", AP_PASSWORD_JS_GZ, AP_PASSWORD_JS_GZ_LEN); }
 static void httpOtaCss() {
     sendGzipAsset("text/css; charset=utf-8", OTA_CSS_GZ, OTA_CSS_GZ_LEN);
 }
@@ -973,6 +975,18 @@ static String setupStatusJson() {
 static void httpSetupStatus() { apiSendJSON(setupStatusJson()); }
 static void httpSetupAccess() {
     if (!requireMutationAuth()) return;
+    if (web.hasArg("password")) {
+        const String password = web.arg("password");
+        if (web.hasArg("shorten") || !devicesetup::validApPassword(password.c_str(), password.length())) {
+            web.send(400, "application/json", "{\"ok\":false,\"error\":\"Use 8\u201363 characters: letters without accents, numbers, spaces or symbols.\"}"); return;
+        }
+        if (recording::busy() || recording::resumePending() || !devicesetup::canChangeApPassword()) {
+            web.send(409, "application/json", "{\"ok\":false,\"error\":\"Stop recording and finish Wi-Fi connection tests before changing the password.\"}"); return;
+        }
+        if (!devicesetup::setApPassword(password)) {
+            web.send(503, "application/json", "{\"ok\":false,\"error\":\"Could not save the password. Try again.\"}"); return;
+        }
+    }
     if (web.hasArg("shorten")) {
         if (web.arg("shorten") != "1") {
             web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid password action.\"}"); return;
@@ -1158,6 +1172,9 @@ static void httpAudioStatus() {
     json += "\"listen_stops\":" + String(listen.stops) + ",";
     json += "\"listen_overflows\":" + String(listen.overflows) + ",";
     json += "\"listen_send_timeouts\":" + String(listen.sendTimeouts) + ",";
+    json += "\"listen_no_audio_timeouts\":" + String(listen.noAudioTimeouts) + ",";
+    json += "\"listen_max_send_stall_ms\":" + String(listen.maxSendStallMs) + ",";
+    json += "\"listen_send_recoveries\":" + String(listen.sendRecoveries) + ",";
     json += "\"listen_socket_errors\":" + String(listen.socketErrors) + ",";
     json += "\"listen_max_loop_gap_ms\":" + String(listen.maxLoopGapMs) + ",";
     json += "\"listen_bytes_sent\":" + String(listen.bytesSent) + ",";
@@ -2221,7 +2238,12 @@ static void httpRecordingAction() {
     } else if (action == "battery_acknowledge")
         ok = !recording::busy() && fieldpower::triggered() && fieldpower::acknowledge(battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant));
     else { web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid recording action\"}"); return; }
-    apiSendJSON(ok ? F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"Recording action failed; check recording status\"}"));
+    if (ok) { apiSendJSON(F("{\"ok\":true}")); return; }
+    const auto status = recording::status();
+    const bool recordingAction = action == "start" || action == "check" || action == "diagnose" || action == "stop";
+    const String reason = recordingAction && action != "stop" && recording::busy() ? String("Recording is busy; wait for the current operation") :
+        recordingAction && status.error[0] ? String(status.error) : String("Recording action failed; check recording status");
+    apiSendJSON(String("{\"ok\":false,\"error\":\"") + jsonEscape(reason) + "\"}");
 }
 static void httpRecordingLogSettings() {
     if(!requireMutationAuth())return;
@@ -2318,6 +2340,7 @@ void webui_begin() {
     web.on("/setup", HTTP_GET, httpSetupPage);
     web.on("/setup.css", HTTP_GET, httpSetupCss);
     web.on("/setup.js", HTTP_GET, httpSetupJs);
+    web.on("/ap-password.js", HTTP_GET, httpApPasswordJs);
     web.on("/api/battery", HTTP_POST, httpBatterySettings);
     web.on("/api/field_power", HTTP_POST, httpFieldPowerSettings);
     web.on("/api/setup", HTTP_GET, httpSetupStatus);

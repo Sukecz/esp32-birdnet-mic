@@ -38,7 +38,7 @@ def main():
     for filename, assets in [
         ('WebUI_gz.h', [('WEBUI_INDEX_GZ', 'index.html')]),
         ('OtaAssets_gz.h', [('OTA_CSS_GZ', 'ota.css'), ('OTA_JS_GZ', 'ota.js')]),
-        ('SetupAssets_gz.h', [('SETUP_HTML_GZ', 'setup.html'), ('SETUP_CSS_GZ', 'setup.css'), ('SETUP_JS_GZ', 'setup.js')]),
+        ('SetupAssets_gz.h', [('SETUP_HTML_GZ', 'setup.html'), ('SETUP_CSS_GZ', 'setup.css'), ('SETUP_JS_GZ', 'setup.js'), ('AP_PASSWORD_JS_GZ', 'ap-password.js')]),
     ]:
         path = ROOT / filename
         expected = make_header(assets)

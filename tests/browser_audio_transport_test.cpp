@@ -54,7 +54,9 @@ int main() {
         assert(read(peer) == std::string(reinterpret_cast<const char*>(pcm), sizeof(pcm)));
         assert(browserAudioActive());
         int other = connect(request); browserAudioLoop(true, rate);
-        assert(read(other).find("503 Service Unavailable") != std::string::npos);
+        const auto busy=read(other);
+        assert(busy.find("503 Service Unavailable") != std::string::npos);
+        assert(busy.find("Access-Control-Allow-Origin: *\r\n") != std::string::npos);
         assert(browserAudioActive()); close(other); // Does not displace existing listener.
         browserAudioLoop(false, rate);
         assert(!browserAudioActive()); close(peer);
@@ -80,7 +82,7 @@ int main() {
     for (int i = 0; i < 30 && browserAudioActive(); ++i) {
         browserAudioPush(pcm.data(), pcm.size()); browserAudioLoop(true, 48000); ++testNow;
     }
-    testNow += 501; browserAudioLoop(true, 48000);
+    testNow += 5001; browserAudioLoop(true, 48000);
     assert(!browserAudioActive()); close(peer);
     const auto slow = browserAudioDiagnostics();
     assert(slow.overflows || slow.sendTimeouts);

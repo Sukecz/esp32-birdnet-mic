@@ -2,6 +2,7 @@
 const node=id=>document.getElementById(id);
 let state=null,accessKey='',working=false,testing=false,scanning=false,finished=false,networkEdited=false,polling=false;
 let testRevision=0,testRequestPending=false;
+const apEditor=window.createApPasswordEditor({saved:password=>{accessKey=password;node('ap_password').textContent=password;},locked:()=>working||testing});
 try{const t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t;}catch(_){}
 async function request(path,values){
  let response,result;
@@ -69,7 +70,7 @@ async function poll(){
    node('ap_name').textContent=next.ap_name;
    node('access_details').open=!next.complete;
    testing=['queued','connecting','connected'].includes(next.test_state);
-   try{const access=await request('/api/setup/access',{});accessKey=access.password;node('ap_password').textContent=accessKey;}catch(_){node('ap_password').textContent='Could not load. Reload before finishing.';}
+   try{const access=await request('/api/setup/access',{});accessKey=access.password;node('ap_password').textContent=accessKey;apEditor.confirmed(accessKey);}catch(_){node('ap_password').textContent='Could not load. Reload before finishing.';}
    message('feedback','');
   }else state=next;
   if(testing||next.test_state==='error'&&previousTest!=='error'){
@@ -131,7 +132,8 @@ async function connect(){
  finally{testRequestPending=false;}
 }
 async function finish(later=false){
- if(!state||working||testing)return;
+ if(!state||working||testing||apEditor.busy())return;
+ if(apEditor.dirty()){message('feedback','Save or cancel the device Wi-Fi password change first.',true);return;}
  if(!accessKey){message('feedback','Reload to get your direct Wi-Fi password before finishing.',true);return;}
  working=true;controls();message('feedback','Saving…');
  try{

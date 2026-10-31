@@ -21,13 +21,17 @@ PreviewBuffer queue;
 char request[1025];
 size_t requestSize = 0, pendingSize = 0, pendingOffset = 0;
 uint8_t pending[2048];
-uint32_t acceptedAt = 0, progressedAt = 0, lastAudioAt = 0;
+uint32_t acceptedAt = 0, lastAudioAt = 0;
 bool sending = false;
+bool sendBlocked = false;
+uint32_t sendBlockedAt = 0;
+constexpr uint32_t kSendStallTimeoutMs = 5000, kNoAudioTimeoutMs = 2000;
 struct AtomicDiagnostics {
     std::atomic<const char*> lastStop{"none"};
     std::atomic<uint32_t> stops{0}, overflows{0}, sendTimeouts{0}, noAudioTimeouts{0};
     std::atomic<uint32_t> socketErrors{0}, maxLoopGapMs{0}, bytesSent{0};
     std::atomic<uint32_t> previewDiscardedBytes{0};
+    std::atomic<uint32_t> maxSendStallMs{0}, sendRecoveries{0};
 } diagnostics;
 uint32_t lastServiceAt = 0;
 #if defined(ARDUINO_ARCH_ESP32)
@@ -43,6 +47,7 @@ void closeBrowserAudio() {
     client.stop();
     requestSize = pendingSize = pendingOffset = 0;
     sending = false;
+    sendBlocked = false;
     request[0] = '\0';
 }
 
@@ -67,8 +72,11 @@ void transportWorker(void*) {
 #endif
 
 void reject(WiFiClient& target, const char* status) {
-    char reply[128];
-    int size = snprintf(reply, sizeof(reply), "HTTP/1.1 %s\r\nConnection: close\r\nContent-Length: 0\r\n\r\n", status);
+    char reply[192];
+    // Error responses contain no audio or credentials. Let a browser read a
+    // busy/paused status across port 80 -> 81 instead of masking it as a generic
+    // fetch failure. Successful audio still requires the matching Host/Origin.
+    int size = snprintf(reply, sizeof(reply), "HTTP/1.1 %s\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\nConnection: close\r\nContent-Length: 0\r\n\r\n", status);
     // A rejection must also never block the RTSP loop.
     ::send(target.fd(), reply, size, MSG_DONTWAIT);
     target.stop();
@@ -114,6 +122,7 @@ bool prepareHeader(uint32_t rate) {
     pendingOffset = 0;
     diagnostics.lastStop = "none";
     diagnostics.maxLoopGapMs = diagnostics.bytesSent = 0;
+    diagnostics.maxSendStallMs = 0;
     return queue.begin();
 }
 }
@@ -149,6 +158,8 @@ BrowserAudioDiagnostics browserAudioDiagnostics() {
     copy.socketErrors = diagnostics.socketErrors.load(); copy.maxLoopGapMs = diagnostics.maxLoopGapMs.load();
     copy.bytesSent = diagnostics.bytesSent.load();
     copy.previewDiscardedBytes = diagnostics.previewDiscardedBytes.load();
+    copy.maxSendStallMs = diagnostics.maxSendStallMs.load();
+    copy.sendRecoveries = diagnostics.sendRecoveries.load();
 #if defined(ARDUINO_ARCH_ESP32)
     copy.independentWorker = transportTask != nullptr;
     if (transportTask) copy.workerStackFreeBytes = uxTaskGetStackHighWaterMark(transportTask);
@@ -186,7 +197,7 @@ void serviceBrowserAudio(bool allowed, uint32_t rate) {
         if (!allowed || client.connected()) reject(incoming, "503 Service Unavailable");
         else {
             client = incoming; client.setNoDelay(true);
-            acceptedAt = progressedAt = lastAudioAt = now;
+            acceptedAt = lastAudioAt = now;
         }
     }
     if (!client.connected()) return;
@@ -210,16 +221,12 @@ void serviceBrowserAudio(bool allowed, uint32_t rate) {
     }
     if (queue.overflowed()) {
         ++diagnostics.overflows;
-        diagnostics.previewDiscardedBytes += queue.discardBacklog();
+        const uint32_t discarded = queue.discardBacklog();
+        diagnostics.previewDiscardedBytes += discarded;
+        if (discarded) lastAudioAt = now;
         // This is a live preview, not the SD recording. Resume with current PCM
         // after a short network hiccup. Keep any partially sent block/header
         // intact so the HTTP/PCM byte stream cannot lose sample alignment.
-    }
-    if (uint32_t(now - progressedAt) >= 500) {
-        ++diagnostics.sendTimeouts; stopWithReason("send_timeout"); return;
-    }
-    if (uint32_t(now - lastAudioAt) >= 2000) {
-        ++diagnostics.noAudioTimeouts; stopWithReason("no_audio"); return;
     }
     // Catch up after bounded HTTP/SD service delays. One 2 KiB write per pass
     // cannot sustain 48 kHz when passes take more than 21 ms. Keep the PCM
@@ -232,12 +239,35 @@ void serviceBrowserAudio(bool allowed, uint32_t rate) {
             pendingSize = queue.pop(pending, sizeof(pending)); pendingOffset = 0;
             if (pendingSize) lastAudioAt = now;
         }
-        if (!pendingSize) { progressedAt = now; return; }
+        if (!pendingSize) {
+            if (uint32_t(now-lastAudioAt) >= kNoAudioTimeoutMs) {
+                ++diagnostics.noAudioTimeouts; stopWithReason("no_audio");
+            }
+            return;
+        }
         int sent = ::send(client.fd(), pending + pendingOffset, pendingSize - pendingOffset, MSG_DONTWAIT);
-        if (sent > 0) { pendingOffset += sent; progressedAt = now; diagnostics.bytesSent += sent; }
+        if (sent > 0) {
+            if (sendBlocked) {
+                const uint32_t elapsed = now-sendBlockedAt;
+                if (elapsed > diagnostics.maxSendStallMs) diagnostics.maxSendStallMs = elapsed;
+                if (elapsed >= 500) ++diagnostics.sendRecoveries;
+                sendBlocked = false;
+            }
+            pendingOffset += sent; diagnostics.bytesSent += sent;
+        }
         else {
             if (!sent || (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
                 ++diagnostics.socketErrors; stopWithReason("socket_error");
+            } else {
+                // Try sending before applying a timeout: a delayed worker can
+                // resume immediately if the socket is writable again. PCM and
+                // network stalls are distinct; pending bytes remain aligned.
+                if (!sendBlocked) { sendBlocked = true; sendBlockedAt = now; }
+                const uint32_t elapsed = now-sendBlockedAt;
+                if (elapsed > diagnostics.maxSendStallMs) diagnostics.maxSendStallMs = elapsed;
+                if (elapsed >= kSendStallTimeoutMs) {
+                    ++diagnostics.sendTimeouts; stopWithReason("send_timeout");
+                }
             }
             return; // Backpressure: retain the exact pending bytes for later.
         }

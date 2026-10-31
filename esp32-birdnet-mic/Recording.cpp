@@ -1,6 +1,7 @@
 #include "Recording.h"
 #include "RecordingWav.h"
 #include "RecordingPins.h"
+#include "RecordingMemory.h"
 #include "BoundedLog.h"
 #include "LogStorage.h"
 #include <time.h>
@@ -112,6 +113,7 @@ void state(State value) {
 }
 #if RECORDING_SPI_SUPPORTED
 TaskHandle_t storageTask = nullptr;
+const char* preparationError = "";
 // Only this worker touches the card or its file descriptors. POSIX fsync is
 // checked explicitly; Arduino File::flush() cannot report a failure.
 void noteStorageDelay(uint64_t before);
@@ -514,18 +516,18 @@ void worker(void*) {
     }
 }
 bool prepare(bool needsQueue = true) {
+    preparationError = "Not enough internal RAM for SD; stop Listen and close extra device tabs";
     const uint32_t internal = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
     const size_t internalHeadroom = 72 * 1024;
     const uint32_t external = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
-    // A PSRAM queue consumes no large internal buffer. Retain the same 64 KiB
-    // networking margin used by the existing PSRAM audio reserve; internal
-    // queues still retain 72 KiB. This avoids false rejections during UI loads.
+    // Capture, DMA and the Wi-Fi driver are already allocated. External PCM
+    // needs the same 48 KiB SD/filesystem/network working reserve as a card
+    // check, not the Streaming ring's allowance for starting another producer.
+    // The C5 PDM + AP + mDNS field case has only 54-57 KiB internal free while
+    // 8 MiB PSRAM is available. Keep the larger margin for an internal queue.
     const bool psramQueue = needsQueue && (queueInPsram ||
         (!queue && heap_caps_get_free_size(external) >= 128 * 1024 + 8192));
-    // A card check/log read allocates no PCM queue. Apply the same 48 KiB
-    // I/O reserve on the first check too, accounting separately for its worker.
-    // Recording retains the existing 64/72 KiB capture/network reserve.
-    const size_t headroom = !needsQueue ? 48 * 1024 : psramQueue ? 64 * 1024 : internalHeadroom;
+    const size_t headroom = !needsQueue || psramQueue ? recordingmemory::kWorkingReserveBytes : internalHeadroom;
     // Account for the worker stack and task metadata before allocating a queue.
     const size_t taskBytes = storageTask ? 0 : 6144 + 2048;
     const size_t freeInternal = heap_caps_get_free_size(internal);
@@ -554,15 +556,25 @@ bool prepare(bool needsQueue = true) {
                 if (queue) queueCapacityBytes.store(reserve - 1024);
             }
         }
-        if (!queue) return false;
+        if (!queue) { preparationError = "Could not allocate the SD recording buffer"; return false; }
     }
-    if (!storageTask && xTaskCreate(worker, "sd_storage", 6144, nullptr, 2, &storageTask) != pdPASS) {
+    // Re-read actual heap after allocation: a capability allocator or another
+    // task may have consumed internal RAM since the initial budget snapshot.
+    const auto releaseQueue = []() {
         if (queue) {
             if (queueInPsram) vRingbufferDeleteWithCaps(queue);
             else vRingbufferDelete(queue);
         }
-        queue = nullptr; queueInPsram = false; queueCapacityBytes.store(0); return false;
+        queue = nullptr; queueInPsram = false; queueCapacityBytes.store(0);
+        return false;
+    };
+    const size_t retained = !needsQueue || queueInPsram ? recordingmemory::kWorkingReserveBytes : internalHeadroom;
+    if (heap_caps_get_free_size(internal) < retained + taskBytes) return releaseQueue();
+    if (!storageTask && xTaskCreate(worker, "sd_storage", 6144, nullptr, 2, &storageTask) != pdPASS) {
+        preparationError = "Could not start the SD storage task; retry recording";
+        return releaseQueue();
     }
+    if (heap_caps_get_free_size(internal) < retained) return releaseQueue();
     return true;
 }
 #endif
@@ -672,7 +684,7 @@ bool checkCard(bool supported, uint8_t boardVariant) {
     const auto pins = recordingpins::resolve(boardVariant);
     if (!supported || !pins.supported) { error("SD recording is unavailable for this board"); return false; }
 #if RECORDING_SPI_SUPPORTED
-    if (!prepare(false)) { error("Not enough RAM for SD check"); return false; }
+    if (!prepare(false)) { error(preparationError); return false; }
     sessionPins = pins;
     state(State::Checking);
     stopRequested.store(false); diagnosticOnly.store(false); checkOnly.store(true);
@@ -692,7 +704,7 @@ static bool startSession(uint32_t rate, bool supported, uint8_t boardVariant, bo
     // A new attempt must not inherit a previous card-check error and mask a
     // current allocation failure. Stop/cleanup still preserve their first error.
     portENTER_CRITICAL(&mux); view = Status{}; view.state = State::Starting; portEXIT_CRITICAL(&mux);
-    if (!prepare()) { error("Not enough RAM for SD recording buffer"); return false; }
+    if (!prepare()) { error(preparationError); return false; }
     sessionPins = pins;
     checkOnly.store(false); diagnosticOnly.store(false);
     if (continuing) targetFrames = config.durationMinutes ? remainingFrames*rate/startRate : 0;
@@ -727,7 +739,7 @@ bool diagnose(bool supported, uint8_t boardVariant) {
     const auto pins = recordingpins::resolve(boardVariant);
     if (!supported || !pins.supported) return false;
 #if RECORDING_SPI_SUPPORTED
-    if (!prepare(false)) return false;
+    if (!prepare(false)) { rejectStart(preparationError); return false; }
     portENTER_CRITICAL(&mux); view = Status{}; view.diagnostic = true; view.state = State::Checking; portEXIT_CRITICAL(&mux);
     lost.store(0); sessionPins = pins;
     stopRequested.store(false); checkOnly.store(false); diagnosticOnly.store(true);
@@ -739,6 +751,12 @@ bool diagnose(bool supported, uint8_t boardVariant) {
 }
 bool start(uint32_t rate, bool supported, uint8_t boardVariant) {
     return startSession(rate, supported, boardVariant, false);
+}
+bool rejectStart(const char* message) {
+    if (busy()) return false; // Never change an active session's status.
+    portENTER_CRITICAL(&mux); view.error[0] = 0; portEXIT_CRITICAL(&mux);
+    error(message);
+    return false;
 }
 bool resume(uint32_t rate, bool supported, uint8_t boardVariant) {
     if (!resumePending()) return false;

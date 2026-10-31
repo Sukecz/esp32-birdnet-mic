@@ -21,6 +21,8 @@ bool suspendWifiNow();
 String apName();
 String apPassword(); // Only returned through the protected access-details action.
 bool shortenApPassword(); // Explicit action; existing configured keys otherwise remain valid.
+bool canChangeApPassword();
+bool setApPassword(const String& password);
 String savedSsid();
 bool connectionBusy();
 bool testCredentials(const String& ssid, const String& password);

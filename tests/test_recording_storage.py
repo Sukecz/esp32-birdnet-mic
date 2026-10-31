@@ -241,7 +241,7 @@ int main(){
  assert(status().state==State::Error&&!status().cardReady&&!busy());
  // A new allocation failure must replace the preceding missing-card error.
  assert(!start(8000,true,boardVariant));
- assert(std::string(status().error)=="Not enough RAM for SD recording buffer");
+ assert(std::string(status().error)=="Could not allocate the SD recording buffer");
  cardMissing=false;assert(checkCard(true,boardVariant));runWorker();
  assert(status().state==State::Ready&&status().cardReady&&!busy());
  assert(std::filesystem::exists(SD.root+"/recording.log"));assert(!std::filesystem::exists(SD.root+"/recordings"));assert(!queue);

@@ -14,6 +14,7 @@ const {chromium}=require('playwright-core');
   page.on('pageerror',e=>errors.push(e.message));
   const profile=format=>({ok:true,board:'XIAO ESP32-'+board.toUpperCase(),mic_format:format,current_format:fixture.audio_status.mic_format,sample_rate:48000,gain:format===2?24:1.5,buffer_size:512,i2s_shift:12,hp_enable:true,hp_cutoff_hz:500,cpu_mhz:format===2&&board!=='s3'?160:0});
   await page.route('http://ui.test/**',async route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const req=route.request(),url=new URL(req.url()),path=url.pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:source});
    if(path==='/api/microphone_profile'){

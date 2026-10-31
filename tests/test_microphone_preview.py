@@ -107,3 +107,6 @@ int main() {
 
     def test_browser_playback_lifecycle(self):
         subprocess.run(['node', str(ROOT / 'tests/browser_audio_ui_test.js')], check=True, timeout=15)
+
+    def test_browser_network_recovery_and_cancellation(self):
+        subprocess.run(['node', str(ROOT / 'tests/browser_audio_recovery_test.js')], check=True, timeout=15)

@@ -10,6 +10,7 @@ const fixture=JSON.parse(fs.readFileSync('tests/fixtures/ui-state.json'));
   let accept=false,rejectSave=false;
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>accept?d.accept():d.dismiss());
   await page.route('http://ui.test/**',async route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const request=route.request(),path=new URL(request.url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:source});
    if(path==='/api/settings/antenna'){

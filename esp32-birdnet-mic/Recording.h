@@ -64,6 +64,7 @@ bool pauseForCooling();
 void cancelResume();
 bool resume(uint32_t rate, bool hardwareSupported, uint8_t boardVariant = 0);
 bool start(uint32_t rate, bool hardwareSupported, uint8_t boardVariant = 0);
+bool rejectStart(const char* message); // idle only; publish the current blocking reason
 bool checkCard(bool hardwareSupported, uint8_t boardVariant = 0); // async, no recording files created
 // Runtime-only clock selection for controlled storage diagnostics; no NVS write.
 bool setStorageClock(uint32_t hz, uint32_t writeBlockBytes = kDefaultWriteBlockBytes);

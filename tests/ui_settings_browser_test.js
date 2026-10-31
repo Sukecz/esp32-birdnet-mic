@@ -12,6 +12,7 @@ const {chromium}=require('playwright-core');
   let failure='',hold=null,release=null,acceptDialog=false,thermalFailure=false;
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>acceptDialog?d.accept():d.dismiss());
   await page.route('http://ui.test/**',async route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const req=route.request(),path=new URL(req.url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:source});
    if(req.method()!=='GET'){

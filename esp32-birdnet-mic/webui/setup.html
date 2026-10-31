@@ -7,6 +7,7 @@
 <meta name="color-scheme" content="light dark">
 <title>BirdNETMic · Device configuration</title>
 <link rel="stylesheet" href="/setup.css">
+<script src="/ap-password.js" defer></script>
 <script src="/setup.js" defer></script>
 </head>
 <body>
@@ -49,6 +50,16 @@
 <details id="access_details"><summary>Direct Wi-Fi access</summary>
 <p class="note">Save these details for standalone use or Wi-Fi outages.</p>
 <dl><dt>Network</dt><dd id="ap_name"></dd><dt>Password</dt><dd id="ap_password"></dd><dt>Control page</dt><dd>http://192.168.4.1</dd></dl>
+<div id="ap_password_control">
+<button type="button" id="ap_password_change" aria-expanded="false" aria-controls="ap_password_editor">Change password</button>
+<div id="ap_password_editor" hidden>
+<label for="ap_password_input">Device Wi-Fi password</label>
+<div class="field password"><input id="ap_password_input" type="password" maxlength="63" autocomplete="new-password" aria-describedby="ap_password_help ap_password_dirty"><button type="button" id="ap_password_show" aria-pressed="false">Show</button><span id="ap_password_dirty" class="edit-note"></span></div>
+<p id="ap_password_help" class="note">Use 8–63 characters: letters without accents, numbers, spaces or symbols. Stop recording before saving. Devices connected to this Wi-Fi will need to reconnect with the new password.</p>
+<div class="actions"><button type="button" id="ap_password_save" disabled>Save password</button><button type="button" id="ap_password_cancel">Cancel</button></div>
+</div>
+<p id="ap_password_feedback" class="status" role="status" aria-live="polite"></p>
+</div>
 <button id="copy_access" type="button">Copy details</button><p id="copy_status" class="status" role="status"></p>
 </details>
 </section>

@@ -13,6 +13,7 @@ const fixture=require('./fixtures/ui-state.json');
   page.on('dialog',dialog=>dialog.accept());
   let failAudio=false;
   await page.route('http://ui.test/**',async route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const req=route.request(),path=new URL(req.url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:source});
    if(req.method()!=='GET'){writes.push(path);return route.fulfill({json:{ok:true}});}

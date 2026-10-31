@@ -9,6 +9,7 @@ struct BrowserAudioDiagnostics {
     bool independentWorker = false;
     uint32_t workerStackFreeBytes = 0;
     uint32_t previewDiscardedBytes = 0;
+    uint32_t maxSendStallMs = 0, sendRecoveries = 0;
 };
 BrowserAudioDiagnostics browserAudioDiagnostics();
 void browserAudioBegin();

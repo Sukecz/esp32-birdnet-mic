@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.03 - 2026-10-31
+
+- **Recording:** fix false memory-allocation failures with PSRAM, Device Wi-Fi, PDM and mDNS enabled. Use the Recording budget for capture restarts, retain the larger internal-buffer reserve, and show the actual reason when a start is blocked.
+- **Listen:** fix Chrome's generic “Failed to fetch” for busy connections and retry a quick Stop → Listen restart. Recover temporary TCP stalls and automatically reopen interrupted or stalled audio transfers, preserving playback volume. Stop and intentional Wi-Fi-off cancel recovery; repeated failures remain bounded.
+- **Device Wi-Fi password:** set your own 8–63-character password in Network or Device configuration. Save or cancel independently, retain drafts across polling and preserve existing passwords/settings during upgrade. Stop recording before changing it; reconnect AP clients with the new password afterward.
+- **mDNS:** respect saved OFF when the OTA service starts, including after reboot.
+- **Validation:** all four firmware targets, 117 native/Python tests and source/embedded browser checks passed. C6 playback/recovery and S3 settings persistence were physically checked; see the [validation record](https://github.com/Sukecz/esp32-birdnet-mic/blob/v2.03/release-notes/2.03-validation.md) for hardware limits.
+
 ## 2.01 - 2026-10-30
 
 - **S3 PSRAM:** enable the XIAO S3 OPI PSRAM in the common build helper and use

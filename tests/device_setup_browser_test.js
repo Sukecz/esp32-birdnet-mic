@@ -17,6 +17,7 @@ const base={ok:true,complete:false,default_mode:'streaming',connection:'home',co
     let state={...base},trial='',scanCalls=0,scanReads=0;
     page.on('pageerror',e=>errors.push(e.message));
     await page.route('http://setup.test/**',async route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
      const req=route.request(),path=new URL(req.url()).pathname;
      for(const [url,name,symbol,type] of [['/','setup.html','SETUP_HTML_GZ','text/html'],['/setup.css','setup.css','SETUP_CSS_GZ','text/css'],['/setup.js','setup.js','SETUP_JS_GZ','application/javascript']]){
       if(path===url)return route.fulfill({contentType:type,body:asset(name,symbol,packed)});
@@ -88,6 +89,7 @@ const base={ok:true,complete:false,default_mode:'streaming',connection:'home',co
   const page=await browser.newPage({viewport:{width:320,height:850}});let state={...base,s3_board_supported:true,antenna_supported:false,board_name:'XIAO ESP32-S3',test_state:'connecting'},save;
   await page.addInitScript(()=>Object.defineProperty(window,'localStorage',{get(){throw Error('Unavailable in captive browser');}}));
   await page.route('http://setup.test/**',route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const path=new URL(route.request().url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:asset('setup.html','',false)});
    if(path==='/setup.js'||path==='/setup.css')return route.fulfill({contentType:path.endsWith('js')?'application/javascript':'text/css',body:asset(path.slice(1),'',false)});
@@ -108,6 +110,7 @@ const base={ok:true,complete:false,default_mode:'streaming',connection:'home',co
   const held=new Promise(resolve=>{requestHeld=resolve;});
   let raceState={...base,complete:true,ssid:'Original',test_state:'error',test_error:'connection_failed'};
   await racePage.route('http://setup.test/**',route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const req=route.request(),path=new URL(req.url()).pathname;
    if(path==='/'||path==='/setup.js'||path==='/setup.css')return route.fulfill({contentType:path.endsWith('.js')?'application/javascript':path.endsWith('.css')?'text/css':'text/html',body:asset(path==='/'?'setup.html':path.slice(1),'',false)});
    if(path==='/api/setup/access')return route.fulfill({json:{ok:true,password:'ABCD2345'}});

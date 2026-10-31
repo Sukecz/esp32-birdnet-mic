@@ -5,7 +5,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../esp32-birdnet
 const script=html.match(/<script id='browser_audio_script'>([\s\S]*?)<\/script>/)[1];
 const nodes=Object.fromEntries(['listen_button','listen_volume','listen_volume_value','listen_status','mic_signal_status'].map(id=>[id,{textContent:'',value:'60',setAttribute(key,value){this[key]=value;}}]));
 const events={},buffers=[],sources=[],contexts=[];
-let reads=[],pendingRead,fetchStatus=200;
+let reads=[],pendingRead,fetchStatus=200,fetchStatuses=[],fetchCalls=0,fetchFailure=null;
 class AudioContext {
  constructor(){this.currentTime=0;contexts.push(this);}
  createGain(){return {gain:{value:0},connect(){}};}
@@ -15,10 +15,12 @@ class AudioContext {
  createBufferSource(){const s={connect(){},disconnect(){},start(at){this.at=at;},stop(){this.stopped=true;}};sources.push(s);return s;}
 }
 const c=vm.createContext({window:{AudioContext,addEventListener:(name,fn)=>events[name]=fn},document:{hidden:false,getElementById:id=>nodes[id],addEventListener:(name,fn)=>events[name]=fn},
- location:{href:'http://mic.local/?test=1#x'},URL,AbortController,DataView,Uint8Array,Set,Math,Number,Error,
+ location:{href:'http://mic.local/?test=1#x'},URL,AbortController,DataView,Uint8Array,Set,Math,Number,Error,setTimeout,clearTimeout,
  fetch:async(url,options)=>{
    assert.equal(url,'http://mic.local:81/listen.wav');assert.equal(options.cache,'no-store');
-   return {ok:fetchStatus===200,status:fetchStatus,body:{getReader:()=>({read:()=>reads.length?Promise.resolve(reads.shift()):new Promise(resolve=>pendingRead=resolve)})}};
+   ++fetchCalls;if(fetchFailure)throw fetchFailure;
+   const status=fetchStatuses.length?fetchStatuses.shift():fetchStatus;
+   return {ok:status===200,status,body:{getReader:()=>({read:()=>reads.length?Promise.resolve(reads.shift()):new Promise(resolve=>pendingRead=resolve)})}};
  }});
 vm.runInContext(script,c);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
@@ -46,6 +48,17 @@ function stream(rate,pcm){
    assert.equal(nodes.listen_button.textContent,'Listen');assert(contexts.at(-1).closed);
  }
  fetchStatus=503;await c.toggleListen();assert.match(nodes.listen_status.textContent,/busy or streaming is paused/);
+ const attempts=fetchCalls;fetchStatus=200;fetchStatuses=[503,503,200];stream(48000,[1,2]);
+ const retry=c.toggleListen();await new Promise(resolve=>setTimeout(resolve,650));
+ assert.equal(fetchCalls-attempts,3);assert.equal(nodes.listen_status.textContent,'Listening');
+ c.stopListening();pendingRead({done:true});await retry;
+ // Cancelling a grace-period retry cannot close the next independent session.
+ fetchStatuses=[503];const cancelling=c.toggleListen();await tick();c.stopListening();
+ stream(48000,[3,4]);const replacement=c.toggleListen();await tick();
+ await cancelling;assert.equal(nodes.listen_status.textContent,'Listening');
+ c.stopListening();pendingRead({done:true});await replacement;
+ fetchFailure=new TypeError('Failed to fetch');await c.toggleListen();fetchFailure=null;
+ assert.match(nodes.listen_status.textContent,/Live audio connection failed/);
  fetchStatus=200;stream(48000,[10,20]);const first=c.toggleListen();await tick();const oldRead=pendingRead;
  c.stopListening();stream(48000,[30,40]);const second=c.toggleListen();await tick();
  oldRead({done:true});await first;assert.equal(nodes.listen_status.textContent,'Listening'); // Old completion cannot close new session.

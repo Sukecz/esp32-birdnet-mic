@@ -4,6 +4,8 @@ BirdNETMic can collect woodland, garden and other environmental sounds without a
 computer or router. Our recommended new assembly is **XIAO ESP32-C5 + IM73D122 PDM
 + Adafruit microSD BFF #5683**. See [parts](parts.md) and [wiring](../README.md#microphones-and-wiring).
 
+To choose your own device Wi-Fi password, open **Network → Device Wi-Fi → Change password** (also available in Device configuration). Use 8–63 characters without accents, then **Save password**. Stop recording before saving. If connected through device Wi-Fi, reconnect with the new password afterward. Available from firmware 2.03; earlier firmware keeps its existing generated password.
+
 ## Before leaving
 
 1. Install the matching firmware and select Recording in Device configuration as
@@ -70,6 +72,13 @@ The onboard charger is intended for small batteries; a large pack takes much lon
 to charge. See [battery protection and charging](battery-wiring.md).
 
 ## What has actually been tested
+
+Firmware 2.03 corrects the internal-memory budget used to start
+Recording with a PSRAM buffer and keeps mDNS OFF across restart. Host regressions
+cover the low-memory AP case and allocation failures. Additional S3 checks with
+AP and mDNS enabled confirm buffer preparation and capture restart under low
+internal memory, without an attached card. A fresh C5 field test with PDM, AP,
+mDNS and an actual SD card is still required for this change.
 
 A C5 with Adafruit BFF and 32 GB FAT32 card recorded for **9 h 6 min 52 s** at
 48 kHz, CPU 80 MHz and Wi-Fi ON. Ten WAV files were finalized (about 3.15 GB),

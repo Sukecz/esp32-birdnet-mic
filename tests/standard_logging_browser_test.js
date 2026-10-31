@@ -9,6 +9,7 @@ const {chromium}=require('playwright-core');
   if(packed){const h=fs.readFileSync('esp32-birdnet-mic/WebUI_gz.h','utf8'),a=h.indexOf('WEBUI_INDEX_GZ[]');source=zlib.gunzipSync(Buffer.from([...h.slice(a,h.indexOf('};',a)).matchAll(/0x([0-9a-f]{2})/g)].map(m=>parseInt(m[1],16)))).toString();}
   const page=await browser.newPage({viewport:{width:390,height:900}});page.on('pageerror',e=>errors.push(e.message));let posts=[],reads=0;
   await page.route('http://logging.test/**',route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const req=route.request(),path=new URL(req.url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:source});
    if(req.method()==='POST'){

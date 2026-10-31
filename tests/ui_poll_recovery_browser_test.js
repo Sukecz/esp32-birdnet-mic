@@ -8,6 +8,7 @@ fixture.status.recording={mode:'streaming',state:'ready',supported:true,busy:fal
  try{
   const page=await browser.newPage();let statusCalls=0,logsCalls=0;const held=[];
   await page.route('http://ui.test/**',async route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const path=new URL(route.request().url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:fs.readFileSync('esp32-birdnet-mic/webui/index.html','utf8')});
    if(path==='/api/status'&&++statusCalls===1)return route.abort();
@@ -28,6 +29,7 @@ fixture.status.recording={mode:'streaming',state:'ready',supported:true,busy:fal
    AbortSignal.timeout=ms=>{window.requestedTimeouts.push(ms);return timeout(Math.min(ms,400));};
   });
   await logPage.route('http://ui.test/**',async route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const path=new URL(route.request().url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:fs.readFileSync('esp32-birdnet-mic/webui/index.html','utf8')});
    if(path==='/api/logs'){held.push(route);return;}
@@ -46,6 +48,7 @@ fixture.status.recording={mode:'streaming',state:'ready',supported:true,busy:fal
    get(){throw new DOMException('Storage denied','SecurityError');}
   }));
   await restricted.route('http://ui.test/**',route=>{
+   if(new URL(route.request().url()).pathname==='/ap-password.js')return require('./ui_assets').apPassword(route,typeof packed==='undefined'?false:packed);
    const path=new URL(route.request().url()).pathname;
    if(path==='/')return route.fulfill({contentType:'text/html',body:fs.readFileSync('esp32-birdnet-mic/webui/index.html','utf8')});
    if(path==='/api/status')++restrictedStatus;
