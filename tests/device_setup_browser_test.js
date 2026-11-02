@@ -9,7 +9,7 @@ function asset(name,symbol,packed){
 }
 const base={ok:true,complete:false,default_mode:'streaming',connection:'home',connected:false,ssid:'',ap_name:'BirdNETMic-A1B2C3',ap_active:true,ap_ip:'192.168.4.1',ip:'0.0.0.0',test_state:'idle',test_error:'',chip_family:'ESP32-C6',board_name:'XIAO ESP32-C6',s3_board_supported:false,s3_board:0,antenna_supported:true,antenna:'external'};
 (async()=>{
- const browser=await chromium.launch({executablePath:'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  try{
   for(const packed of [false,true]){
    for(const width of [320,390,1000]){

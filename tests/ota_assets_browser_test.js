@@ -25,7 +25,7 @@ function gzip(symbol){return Buffer.from([...header.match(new RegExp(symbol+'\\[
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const origin='http://127.0.0.1:'+server.address().port;
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  try{
   for(action of ['install','upload','checking']){
    requests=[];

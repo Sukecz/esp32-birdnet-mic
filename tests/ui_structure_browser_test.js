@@ -5,7 +5,7 @@ const {chromium}=require('playwright-core');
 const fixture=require('./fixtures/ui-state.json');
 (async()=>{
  const source=fs.readFileSync(process.env.WEBUI_HTML||'esp32-birdnet-mic/webui/index.html','utf8');
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  const errors=[],writes=[];
  try{
   const page=await browser.newPage({viewport:{width:1280,height:900},hasTouch:true});

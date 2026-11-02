@@ -1,7 +1,7 @@
 // Real Web Audio lifecycle, temporary busy retries and cancellation in both assets.
 const assert=require('node:assert/strict'),fs=require('node:fs'),zlib=require('node:zlib');
 const {chromium}=require('playwright-core');
-(async()=>{const browser=await chromium.launch({executablePath:'/snap/bin/chromium',headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
+(async()=>{const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
 const results=[];fs.mkdirSync('tmp/listen-c6-fix/browser',{recursive:true});
 try{for(const packed of [false,true])for(const width of [320,390,1280])for(const theme of ['light','dark']){
  let html=fs.readFileSync('esp32-birdnet-mic/webui/index.html','utf8');

@@ -4,64 +4,79 @@ on:
   push:
   pull_request:
 
-jobs:
-  ota-contract:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+concurrency:
+  group: arduino-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-      - name: Install web asset generator
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - name: Install test dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends nginx
           python3 -m pip install -r tools/requirements-webui.txt
           npm ci --prefix tools --ignore-scripts
+      - id: targets
+        run: echo "matrix=$(python3 tools/board_registry.py --matrix)" >> "$GITHUB_OUTPUT"
+      - run: python3 tools/test.py host
+      - run: python3 tools/test.py release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-results
+          path: tmp/test-results/
 
-      - name: Validate OTA release contract
-        run: |
-          python3 tests/validate_ota_contract.py
-          node tests/webui_health_test.js
-          node tests/thermal_recovery_ui_test.js
-          python3 -m unittest discover -s tests -p 'test_*.py'
-          g++ -std=c++11 -Wall -Wextra -Werror tests/discovery_progress_test.cpp -o /tmp/discovery-test
-          /tmp/discovery-test
-          g++ -std=c++11 -Wall -Wextra -Werror -Itests/stubs tests/discovery_client_test.cpp -o /tmp/discovery-client-test
-          /tmp/discovery-client-test
-          g++ -std=c++11 -Wall -Wextra -Werror tests/time_zone_schedule_test.cpp -o /tmp/time-zone-schedule-test
-          /tmp/time-zone-schedule-test
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - run: npm ci --prefix tools --ignore-scripts
+      - run: tools/node_modules/.bin/playwright-core install --with-deps chromium
+      - run: python3 tools/test.py browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-results
+          path: tmp/test-results/
 
   compile:
-    needs: ota-contract
+    needs: host
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: XIAO ESP32-C3
-            fqbn: esp32:esp32:XIAO_ESP32C3
-          - name: XIAO ESP32-S3
-            fqbn: esp32:esp32:XIAO_ESP32S3
-          - name: XIAO ESP32-C5
-            fqbn: esp32:esp32:XIAO_ESP32C5
-          - name: XIAO ESP32-C6
-            fqbn: esp32:esp32:XIAO_ESP32C6
-          - name: XIAO ESP32-S3 without PSRAM
-            fqbn: esp32:esp32:XIAO_ESP32S3:PSRAM=disabled
-          - name: XIAO ESP32-C5 without PSRAM
-            fqbn: esp32:esp32:XIAO_ESP32C5:PSRAM=disabled
+      matrix: ${{ fromJSON(needs.host.outputs.matrix) }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
         with:
           version: '1.5.0'
-
-      - name: Install pinned build dependencies
-        run: python3 tools/check_build_dependencies.py --install
-
-      - name: Compile ${{ matrix.name }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: arduino-${{ runner.os }}-${{ hashFiles('build-dependencies.json', 'tools/prepare_sd_library.py') }}
+      - run: python3 tools/check_build_dependencies.py --install
+      - name: Compile and check memory
         run: |
-          tools/compile_firmware.sh --fqbn "${{ matrix.fqbn }}"
+          tools/compile_firmware.sh --fqbn "${{ matrix.fqbn }}" --output-dir "tmp/build/${{ matrix.key }}"
+          python3 tools/check_memory_budget.py "${{ matrix.id }}" "tmp/build/${{ matrix.key }}" ${{ matrix.enabled_psram_bytes == 0 && matrix.psram_bytes > 0 && '--no-psram' || '' }} > "tmp/build/${{ matrix.key }}/memory-report.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: memory-${{ matrix.key }}
+          path: tmp/build/${{ matrix.key }}/memory-report.json

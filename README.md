@@ -490,6 +490,8 @@ No. **Mode** changes the current operation. Set the startup choice separately un
 ## Build From Source
 
 Use Bash (Linux, macOS, or Windows WSL), Python 3 and Arduino CLI **1.5.0**.
+Build validation also requires `size` and `flock`; see the
+[development setup](docs/development.md#setup).
 Run these commands from the repository root. First-time dependency setup:
 
 ```bash
@@ -529,6 +531,7 @@ settings used for the packaged firmware.
 
 ## More documentation
 
+- [Development workflow, board registry and validation](docs/development.md)
 - [Firmware guide and API](esp32-birdnet-mic/README.md)
 - [Manual OTA files](manual-ota-firmware/README.md)
 - [Web flasher and firmware file guide](web-flasher/README.md)

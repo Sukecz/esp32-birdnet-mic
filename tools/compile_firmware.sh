@@ -14,27 +14,36 @@ if [[ -z "$fqbn" ]]; then
   echo "Usage: $0 --fqbn <BOARD_FQBN> [arduino-cli compile options]" >&2
   exit 2
 fi
-# Enable each XIAO's actual PSRAM interface; preserve explicit disabled builds.
-case "$fqbn" in
-  esp32:esp32:XIAO_ESP32C5|esp32:esp32:XIAO_ESP32C5:*|esp32:esp32:XIAO_ESP32S3|esp32:esp32:XIAO_ESP32S3:*)
-    if [[ "$fqbn" != *PSRAM=* ]]; then
-      psram_option=enabled
-      if [[ "$fqbn" == esp32:esp32:XIAO_ESP32S3* ]]; then psram_option=opi; fi
-      if [[ "$fqbn" == *:*:*:* ]]; then psram_fqbn="$fqbn,PSRAM=$psram_option"; else psram_fqbn="$fqbn:PSRAM=$psram_option"; fi
-      for ((i=0; i<${#args[@]}; i++)); do
-        case "${args[i]}" in
-          --fqbn|-b) args[i+1]="$psram_fqbn" ;;
-          --fqbn=*) args[i]="--fqbn=$psram_fqbn" ;;
-        esac
-      done
-      set -- "${args[@]}"
-      fqbn="$psram_fqbn"
-    fi
-    ;;
-esac
-properties=()
-case "$fqbn" in
-  esp32:esp32:XIAO_ESP32C3|esp32:esp32:XIAO_ESP32C3:*|esp32:esp32:XIAO_ESP32C6|esp32:esp32:XIAO_ESP32C6:*)
+# Registry supplies PSRAM defaults; explicit variants remain selectable.
+registry_values="$(python3 - "$ROOT_DIR" "$fqbn" <<'PYREG'
+import sys
+sys.path.insert(0, sys.argv[1] + '/tools')
+from board_registry import boards
+base = ':'.join(sys.argv[2].split(':')[:3])
+b = next((b for b in boards() if b['fqbn'] == base), None)
+if b is None:
+    raise SystemExit('Unsupported target: ' + base)
+print(b['psram_option'] or '')
+print(b['ota_slot_bytes'])
+print('1' if b['lto'] else '0')
+print(b['partition_csv'] or '')
+PYREG
+)"
+mapfile -t registry <<<"$registry_values"
+if [[ -n "${registry[0]}" && "$fqbn" != *PSRAM=* ]]; then
+  if [[ "$fqbn" == *:*:*:* ]]; then normalized="$fqbn,PSRAM=${registry[0]}"; else normalized="$fqbn:PSRAM=${registry[0]}"; fi
+  for ((i=0; i<${#args[@]}; i++)); do
+    case "${args[i]}" in
+      --fqbn|-b) args[i+1]="$normalized" ;;
+      --fqbn=*) args[i]="--fqbn=$normalized" ;;
+    esac
+  done
+  set -- "${args[@]}"
+  fqbn="$normalized"
+fi
+build_key="${fqbn//[^a-zA-Z0-9._-]/_}"
+properties=(--build-path "$ROOT_DIR/esp32-birdnet-mic/build/registry-$build_key")
+if [[ "${registry[2]}" == 1 ]]; then
     # SDK linker flags contain -fno-lto; enable LTO at both compilation and linking.
     # A dedicated build path prevents reuse of a precompiled non-LTO Arduino core.
     # Keep these objects separate from the normal S3/C5 core cache.
@@ -47,11 +56,10 @@ case "$fqbn" in
       # Match the app capacity in birdnet_4mb.csv (0x1F0000). The immutable
       # v1.35 bridge remains available for devices with the original layout;
       # the OTA handler rejects a larger app until preparation is complete.
-      --build-property upload.maximum_size=2031616
-      --build-property "recipe.hooks.prebuild.99.pattern=cp -f \"$ROOT_DIR/tools/partitions/birdnet_4mb.csv\" \"{build.path}/partitions.csv\""
+      --build-property "upload.maximum_size=${registry[1]}"
+      --build-property "recipe.hooks.prebuild.99.pattern=cp -f \"$ROOT_DIR/${registry[3]}\" \"{build.path}/partitions.csv\""
     )
-    ;;
-esac
+fi
 # Use the same stable-ready SD protocol on every supported board. The optional
 # override is only for explicit A/B work; normal builds generate a private copy
 # from the pinned core and never patch its installed files.
@@ -65,4 +73,25 @@ case "$fqbn" in
     properties+=(--library "$sd_library")
     ;;
 esac
-exec arduino-cli compile "${properties[@]}" "$@" "$ROOT_DIR/esp32-birdnet-mic"
+# Serialize a shared target cache, including metadata export. Keep the lock
+# outside the cache directory because --clean removes that directory's contents.
+mkdir -p "$ROOT_DIR/esp32-birdnet-mic/build/.locks"
+exec 9>"$ROOT_DIR/esp32-birdnet-mic/build/.locks/$build_key.lock"
+flock 9
+source_before="$(python3 "$ROOT_DIR/tools/build_receipt.py" fingerprint)"
+arduino-cli compile "${properties[@]}" "$@" "$ROOT_DIR/esp32-birdnet-mic"
+# Arduino exports binaries but not the effective build configuration. Include it
+# beside exported files so memory validation can reject a mismatched target.
+output_dir=""
+for ((i=0; i<$#; i++)); do
+  case "${args[i]}" in
+    --output-dir) output_dir="${args[i+1]:-}" ;;
+    --output-dir=*) output_dir="${args[i]#--output-dir=}" ;;
+  esac
+done
+if [[ -n "$output_dir" ]]; then
+  for metadata in build.options.json flash_args boot_app0.bin; do
+    cp "${properties[1]}/$metadata" "$output_dir/$metadata"
+  done
+  python3 "$ROOT_DIR/tools/build_receipt.py" record "$output_dir" --expected-source "$source_before"
+fi

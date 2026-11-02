@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
 const {chromium}=require('playwright-core');
 const fixture=JSON.parse(fs.readFileSync('tests/fixtures/ui-state.json'));
 (async()=>{
- const browser=await chromium.launch({executablePath:'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  const source=fs.readFileSync('esp32-birdnet-mic/webui/index.html','utf8');
  try{
   const page=await browser.newPage(),writes=[],errors=[];

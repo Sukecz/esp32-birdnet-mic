@@ -4,7 +4,7 @@ const {chromium}=require('playwright-core');
 const fixture=JSON.parse(fs.readFileSync('tests/fixtures/ui-state.json'));
 fixture.status.recording={mode:'streaming',state:'ready',supported:true,busy:false,card_ready:false,elapsed_seconds:0,duration_minutes:0,segment_minutes:60,auto_start:false,written_kib:0,free_mib:0,dropped_samples:0,file:'',error:''};
 (async()=>{
- const browser=await chromium.launch({executablePath:'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  try{
   const page=await browser.newPage();let statusCalls=0,logsCalls=0;const held=[];
   await page.route('http://ui.test/**',async route=>{

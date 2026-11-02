@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),zlib=require('node:zlib');
 const {chromium}=require('playwright-core');
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  const results=[];fs.mkdirSync('tmp/recording-ram-fix/browser',{recursive:true});
  try{for(const packed of [false,true]){
   let html=fs.readFileSync('esp32-birdnet-mic/webui/index.html','utf8');
@@ -31,6 +31,8 @@ const {chromium}=require('playwright-core');
    await page.selectOption('#themeSel',theme);await page.click('#recording_start');
    await page.waitForFunction(()=>document.querySelector('#recording_feedback').textContent.startsWith('Not enough internal RAM'));
    assert.equal(await page.locator('#recording_feedback').textContent(),error);
+   // The action feedback precedes the separate status fetch/render.
+   await page.waitForFunction(()=>document.querySelector('#recording_summary').textContent.includes('Not enough internal RAM'));
    assert.match(await page.locator('#recording_summary').textContent(),/Not enough internal RAM/);
    assert(await page.locator('#recording_start').isEnabled());
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);

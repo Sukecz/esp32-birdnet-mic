@@ -8,7 +8,7 @@ function html(packed){
  return zlib.gunzipSync(Buffer.from([...h.slice(a,h.indexOf('};',a)).matchAll(/0x([0-9a-f]{2})/g)].map(m=>parseInt(m[1],16)))).toString();
 }
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  const errors=[];fs.mkdirSync('tmp/time-sync-fix',{recursive:true});
  try{
   for(const packed of [false,true]){

@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),zlib=require('node:zlib');
 const {chromium}=require('playwright-core');
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  try{
  for(const packed of [false,true]){
   let source=fs.readFileSync('esp32-birdnet-mic/webui/index.html','utf8');

@@ -10,7 +10,7 @@ const {chromium} = require('playwright-core');
   const script = [...source.matchAll(/<script>([\s\S]*?)<\/script>/g)].find(m => m[1].includes('let wifiApState'))[1];
   const state = {ok:true, ssid:'Test <network>', connected:true, bssid:'AA:BB:CC:11:22:33', rssi:-58, locked_bssid:'', recovery:false};
   let scans = 0, saves = [], failScan = false;
-  const browser = await chromium.launch({executablePath:process.env.CHROMIUM || '/snap/bin/chromium', headless:true, args:['--no-sandbox']});
+  const browser = await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(), headless:true, args:['--no-sandbox']});
   try {
     const page = await browser.newPage();
     const errors = [];

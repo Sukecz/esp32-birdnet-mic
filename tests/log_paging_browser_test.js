@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),zlib=require('node:zlib');
 const {chromium}=require('playwright-core');
 (async()=>{
- const browser=await chromium.launch({executablePath:'/snap/bin/chromium',headless:true,args:['--no-sandbox']});const errors=[];
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});const errors=[];
  try{for(const packed of [false,true]){
   let source=fs.readFileSync('esp32-birdnet-mic/webui/index.html','utf8');if(packed){const h=fs.readFileSync('esp32-birdnet-mic/WebUI_gz.h','utf8'),a=h.indexOf('WEBUI_INDEX_GZ[]');source=zlib.gunzipSync(Buffer.from([...h.slice(a,h.indexOf('};',a)).matchAll(/0x([0-9a-f]{2})/g)].map(m=>parseInt(m[1],16)))).toString();}
   const fixture=JSON.parse(fs.readFileSync('tests/fixtures/ui-state.json'));const page=await browser.newPage({viewport:{width:390,height:900}});page.on('pageerror',e=>errors.push(e.message));let gets=0,moved=false;

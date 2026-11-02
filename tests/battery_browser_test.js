@@ -9,7 +9,7 @@ function asset(file,symbol,packed){
 }
 const base={ok:true,complete:true,default_mode:'streaming',connection:'home',connected:true,ssid:'Home',ap_name:'BirdNETMic-TEST',ap_active:false,ip:'192.168.1.123',test_state:'idle',test_error:'',antenna:'external',s3_board:0,battery_enabled:false,battery_supported:true};
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/snap/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  const errors=[];fs.mkdirSync('tmp/battery-monitoring',{recursive:true});
  try{
   for(const packed of [false,true])for(const family of ['C3','S3','C5','C6']){

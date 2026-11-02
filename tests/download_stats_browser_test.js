@@ -9,7 +9,7 @@ const boards = ['c3','s3','c5','c6'];
 const fixture = {schema:1,updated_at:new Date().toISOString(),github_updated_at:new Date().toISOString(),github_available:true,web_since:'2026-10-22T03:31:14Z', versions:Array.from({length:10},(_,i)=>({version:'1.'+(35-i),published_at:'2026-10-24T08:00:00Z',boards:Object.fromEntries(boards.map((b,j)=>[b,Object.fromEntries(kinds.map((k,n)=>[k,i===0?(j+1)*(n+1):0]))]))}))};
 for (const version of ['1.9.1', '1.8.0', '1.0.0']) fixture.versions.push({...fixture.versions[1], version});
 (async()=>{
- const browser=await chromium.launch({executablePath:'/usr/bin/chromium-browser',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  const context=await browser.newContext({colorScheme:'dark',viewport:{width:1440,height:1100}});
  let fail=false, requests=[];
  try {
