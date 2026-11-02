@@ -11,7 +11,7 @@ const c=vm.createContext({$:id=>nodes[id],document:{getElementById:id=>nodes[id]
  T:{en:{help_gain:'Original I2S gain help'}},lang:'en',toggleDirty:()=>{}});
 vm.runInContext(html.slice(html.indexOf('function fieldValue('),html.indexOf('function trackEdit('))+html.slice(html.indexOf('function clearDirty('),html.indexOf('function toggleDirty(')),c);
 const a=html.indexOf('function renderMicFormat('),b=html.indexOf('function loadAudio(',a);
-vm.runInContext(html.slice(a,b),c);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../esp32-birdnet-mic/webui/src/js/detection-display.js'),'utf8')+html.slice(a,b),c);
 c.renderMicFormat({mic_format:2,pdm_supported:true});
 assert.equal(nodes.sel_mic_format.value,'2');
 for(const id of ['in_rate','btn_rate_set','in_shift','btn_shift_set']) assert.equal(nodes[id].disabled,true);

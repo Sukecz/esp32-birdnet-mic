@@ -31,7 +31,7 @@ float currentGainFactor=4;
 bool micAutoDetect=false,s3BoardAutoDetect=false,microphoneGainConfigured=true;
 bool overheatLatched=false,otaInProgress=false,autoThresholdEnabled=true;
 String microphoneDetectionNote;
-int8_t microphoneDetectedFormat=-1;
+int8_t microphoneDetectedFormat=-1,detectedS3Board=-1;
 bool detectionBootChanged=false,s3=false,psram=true,sense=false,atom=false,externalPdm=false;
 int probes=0,saves=0,restarts=0;
 micdetect::Result i2s=micdetect::None;
@@ -73,19 +73,20 @@ int main(){
  currentGainFactor=4;detectMicrophoneAtBoot();assert(currentGainFactor==4);
  // Missing PSRAM and missing Atom mic cannot reclassify an existing XIAO.
  s3=true;s3BoardAutoDetect=true;psram=false;externalPdm=false;micAutoDetect=false;micFormat=0;
- detectMicrophoneAtBoot();assert(s3BoardVariant==0&&micFormat==0&&microphoneDetectedFormat==-1);
+ detectMicrophoneAtBoot();assert(s3BoardVariant==0&&micFormat==0&&microphoneDetectedFormat==-1&&detectedS3Board==-1);
  // Positive Atom probe may identify board, but must not force a manual I2S selection.
  atom=true;detectMicrophoneAtBoot();assert(s3BoardVariant==0&&micFormat==0);
- micAutoDetect=true;detectMicrophoneAtBoot();assert(s3BoardVariant==2&&micFormat==2);
+ micAutoDetect=true;detectMicrophoneAtBoot();assert(s3BoardVariant==2&&micFormat==2&&detectedS3Board==2);
  // A saved Sense remains a Sense, including its SD route, when microphone fails.
  atom=false;psram=true;sense=false;s3BoardVariant=1;recordingpins::senseSdPresent=true;
- detectMicrophoneAtBoot();assert(s3BoardVariant==1&&recordingpins::senseSdPresent);
+ detectMicrophoneAtBoot();assert(s3BoardVariant==1&&recordingpins::senseSdPresent&&detectedS3Board==-1);
  // Manual board plus Auto mic is an independent combination.
  s3BoardAutoDetect=false;sense=true;detectMicrophoneAtBoot();assert(s3BoardVariant==1&&micFormat==2&&micAutoDetect);
  // Runtime failure restores format, board, CPU, gain, rate and both Auto flags.
  s3=false;s3BoardVariant=0;micAutoDetect=false;s3BoardAutoDetect=false;micFormat=0;
  currentSampleRate=32000;cpuFrequencyMhz=80;currentGainFactor=3;externalPdm=true;restartOk=false;
- assert(!applyMicrophoneChoice(3,false));assert(!micAutoDetect&&!s3BoardAutoDetect&&micFormat==0&&currentSampleRate==32000&&currentGainFactor==3&&cpuFrequencyMhz==80);
+ detectedS3Board=1;microphoneDetectedFormat=-1;microphoneDetectionNote="previous check";
+ assert(!applyMicrophoneChoice(3,false));assert(detectedS3Board==1&&microphoneDetectedFormat==-1&&microphoneDetectionNote=="previous check");assert(!micAutoDetect&&!s3BoardAutoDetect&&micFormat==0&&currentSampleRate==32000&&currentGainFactor==3&&cpuFrequencyMhz==80);
  recording::working=true;int old=probes;assert(!applyMicrophoneChoice(3,false)&&old==probes);
 }
 '''

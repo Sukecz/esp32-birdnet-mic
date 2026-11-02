@@ -201,6 +201,9 @@ static String detectionJson() {
     return String("{\"mic_auto\":")+(micAutoDetect?"true":"false")+
         ",\"board_auto\":"+(s3BoardAutoDetect?"true":"false")+
         ",\"detected_format\":"+String(microphoneDetectedFormat)+
+        ",\"detected_board\":"+String(detectedS3Board)+
+        ",\"board_name\":\""+jsonEscape(s3BoardSelectionSupported() && s3BoardVariant==s3boards::External && recordingpins::senseSdPresent ?
+            String("XIAO ESP32-S3 Sense (external microphone)") : String(FW_BOARD_NAME_STR))+"\""+
         ",\"note\":\""+jsonEscape(microphoneDetectionNote)+"\"}";
 }
 static void httpSetupStatus() { apiSendJSON(setupStatusJson()); }

@@ -197,7 +197,7 @@
 <option value='2'>M5Stack AtomS3U</option>
 </select>
 <button id='btn_s3_board_apply' onclick='saveS3Board()'>Apply board</button>
-</div><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
+</div><p id='board_detection_note' class='section-note' role='status'></p><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -213,7 +213,7 @@
 <option value='2' id='opt_pdm'>PDM microphone (IM73D122)</option>
 </select>
 <button id='btn_mic_apply' onclick="chooseMicSettings()">Apply</button><button id='btn_mic_recommended' onclick="chooseMicSettings(true)">Recommended settings</button><small id='mic_format_label' class='muted'></small>
-</div><p id='mic_detection_note' class='section-note'></p>
+</div><p id='mic_detection_note' class='section-note' role='status'></p>
 </td>
 </tr>
 <tr id='row_mic_format_hint' style='display:none'>

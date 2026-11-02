@@ -196,6 +196,7 @@ async function saveMicSettings(mode){
  finally{if(cpuChange){sectionBusy.delete('thermalsec');updateDiscard($('thermalsec'));}}
 }
 $('mic_dialog').addEventListener('close',()=>{micDialogState=null;});
+/* @include "detection-display.js" */
 function renderMicFormat(j){
   const row=document.getElementById('row_s3_board');
   if(row){
@@ -209,7 +210,9 @@ function renderMicFormat(j){
   const select=document.getElementById('sel_mic_format');
   const now=Date.now();
   if(select){select.disabled=false;for(const option of select.options||[])if(Number(option.value)<2)option.disabled=locked;syncInput(select,'mic_format',String(j.detection?.mic_auto?3:j.mic_format));}
-  $('mic_detection_note').textContent=j.detection?.note||'';
+  const current=detectionDisplay(j);
+  if($('board_detection_note'))$('board_detection_note').textContent=current.board;
+  $('mic_detection_note').textContent=current.microphone;
   $('btn_mic_recommended').disabled=select?.value==='3';
   if(select){toggleDirty(select,'mic_format');document.getElementById('mic_format_label').textContent=select.selectedOptions[0]?.textContent||'';}
   const option=document.getElementById('opt_pdm');

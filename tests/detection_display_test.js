@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const scope=vm.createContext({});vm.runInContext(fs.readFileSync('esp32-birdnet-mic/webui/src/js/detection-display.js','utf8'),scope);
+const state={s3_board:0,mic_format:0,detection:{board_auto:true,mic_auto:true,detected_board:-1,detected_format:-1}};
+let value=scope.detectionDisplay(state);assert.match(value.board,/Using: XIAO ESP32-S3.*not confirmed/);assert.match(value.microphone,/No microphone confirmed.*Philips I2S/);
+state.detection.detected_board=0;state.detection.detected_format=0;
+value=scope.detectionDisplay(state);assert.equal(value.board,'Detected: XIAO ESP32-S3.');assert.equal(value.microphone,'Detected: Philips I2S.');
+state.mic_format=1;assert.match(scope.detectionDisplay(state).microphone,/No microphone confirmed.*SPH0645/);
+state.detection.mic_auto=false;assert.match(scope.detectionDisplay(state).microphone,/Using: SPH0645.*manual/);
+state.detection.board_name='XIAO ESP32-S3 Sense (external microphone)';assert.match(scope.detectionDisplay(state).board,/Detected: XIAO ESP32-S3 Sense \(external microphone\)/);
+console.log('Detection status: confirmed/current/manual/fallback and Sense external names passed');

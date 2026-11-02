@@ -20,9 +20,10 @@
 <p id="board_name">Loading…</p>
 <label id="variant_field" hidden>Board variant
 <select id="variant"><option value="3">Auto-detect board</option><option value="0">XIAO ESP32-S3</option><option value="1">XIAO ESP32-S3 Sense</option><option value="2">M5Stack AtomS3U</option></select></label>
+<p id="board_detection_note" class="note" role="status"></p>
 <label for="microphone">Microphone format</label>
 <div class="field"><select id="microphone"><option value="3">Auto-detect microphone</option><option value="0">ICS-43434 / INMP441 (Philips I2S)</option><option value="1">SPH0645 (MSB I2S)</option><option value="2">PDM</option></select></div>
-<p id="detection_note" class="note"></p>
+<p id="detection_note" class="note" role="status"></p>
 <p class="note">New devices use Auto. Existing selections are retained. If detection is uncertain, previous settings are kept and manual selection remains available.</p>
 <label id="antenna_field" hidden>Wi-Fi antenna
 <select id="antenna"><option value="external">External</option><option value="internal">Internal (built-in)</option></select>

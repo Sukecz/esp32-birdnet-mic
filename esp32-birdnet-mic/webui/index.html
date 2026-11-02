@@ -265,7 +265,7 @@
 <option value='2'>M5Stack AtomS3U</option>
 </select>
 <button id='btn_s3_board_apply' onclick='saveS3Board()'>Apply board</button>
-</div><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
+</div><p id='board_detection_note' class='section-note' role='status'></p><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -281,7 +281,7 @@
 <option value='2' id='opt_pdm'>PDM microphone (IM73D122)</option>
 </select>
 <button id='btn_mic_apply' onclick="chooseMicSettings()">Apply</button><button id='btn_mic_recommended' onclick="chooseMicSettings(true)">Recommended settings</button><small id='mic_format_label' class='muted'></small>
-</div><p id='mic_detection_note' class='section-note'></p>
+</div><p id='mic_detection_note' class='section-note' role='status'></p>
 </td>
 </tr>
 <tr id='row_mic_format_hint' style='display:none'>
@@ -1532,6 +1532,20 @@ async function saveMicSettings(mode){
  finally{if(cpuChange){sectionBusy.delete('thermalsec');updateDiscard($('thermalsec'));}}
 }
 $('mic_dialog').addEventListener('close',()=>{micDialogState=null;});
+// Render confirmed runtime values, never the unsaved selection in a form.
+// Shared by Audio and Device configuration; keep signal format distinct from model.
+function detectionDisplay(state){
+ const d=state.detection||{},board=Number(state.s3_board??0),format=Number(state.mic_format??0);
+ const boardName=d.board_name||state.board_name||['XIAO ESP32-S3','XIAO ESP32-S3 Sense','M5Stack AtomS3U'][board]||'Unknown board';
+ const formatName=['Philips I2S','SPH0645 (MSB I2S)','PDM'][format]||'Unknown format';
+ const boardConfirmed=d.board_auto&&Number.isInteger(d.detected_board)&&d.detected_board===board;
+ const micConfirmed=d.mic_auto&&Number.isInteger(d.detected_format)&&d.detected_format===format;
+ return {
+  board:boardConfirmed?`Detected: ${boardName}.`:d.board_auto?`Using: ${boardName}. Automatic identification not confirmed; previous configuration kept.`:`Using: ${boardName} (manual selection).`,
+  microphone:micConfirmed?`Detected: ${formatName}.`:d.mic_auto?`No microphone confirmed. Keeping: ${formatName}.`:`Using: ${formatName} (manual selection).`
+ };
+}
+
 function renderMicFormat(j){
   const row=document.getElementById('row_s3_board');
   if(row){
@@ -1545,7 +1559,9 @@ function renderMicFormat(j){
   const select=document.getElementById('sel_mic_format');
   const now=Date.now();
   if(select){select.disabled=false;for(const option of select.options||[])if(Number(option.value)<2)option.disabled=locked;syncInput(select,'mic_format',String(j.detection?.mic_auto?3:j.mic_format));}
-  $('mic_detection_note').textContent=j.detection?.note||'';
+  const current=detectionDisplay(j);
+  if($('board_detection_note'))$('board_detection_note').textContent=current.board;
+  $('mic_detection_note').textContent=current.microphone;
   $('btn_mic_recommended').disabled=select?.value==='3';
   if(select){toggleDirty(select,'mic_format');document.getElementById('mic_format_label').textContent=select.selectedOptions[0]?.textContent||'';}
   const option=document.getElementById('opt_pdm');

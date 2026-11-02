@@ -5,6 +5,7 @@
 extern bool micAutoDetect, s3BoardAutoDetect, microphoneGainConfigured;
 extern String microphoneDetectionNote;
 extern int8_t microphoneDetectedFormat;
+extern int8_t detectedS3Board;
 void detectMicrophoneAtBoot();
 void confirmMicrophoneBoot();
 bool applyMicrophoneChoice(uint8_t format, bool recommended = false);

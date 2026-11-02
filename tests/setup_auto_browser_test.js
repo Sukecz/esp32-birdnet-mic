@@ -28,6 +28,8 @@ const {chromium}=require('playwright-core');
    await page.evaluate(()=>poll());assert.equal(await page.inputValue('#'+id),'3');
    await page.selectOption('#'+id,'0');assert(!await dirty(id));
   }
+  assert.match(await page.locator('#board_detection_note').textContent(),/Using: XIAO ESP32-S3 .*manual/);
+  assert.match(await page.locator('#detection_note').textContent(),/Using: Philips I2S .*manual/);
   await page.click('#finish');assert.equal(writes.length,0);
   await page.selectOption('#variant','3');await page.selectOption('#microphone','3');
   await page.click('#discard_choices');assert.equal(await page.inputValue('#variant'),'0');assert(!await dirty('microphone'));
@@ -43,7 +45,15 @@ const {chromium}=require('playwright-core');
   info.detection.mic_auto=info.detection.board_auto=true;
   await page.reload();await page.waitForFunction(()=>!document.getElementById('choices').disabled);
   assert.equal(await page.inputValue('#variant'),'3');assert.equal(await page.inputValue('#microphone'),'3');
-  assert(!await dirty('variant'));assert(!await dirty('microphone'));assert.deepEqual(errors,[]);
+  assert(!await dirty('variant'));assert(!await dirty('microphone'));
+  assert.match(await page.locator('#board_detection_note').textContent(),/Using: XIAO ESP32-S3.*not confirmed/);
+  assert.match(await page.locator('#detection_note').textContent(),/No microphone confirmed.*Philips I2S/);
+  info.detection.detected_board=0;info.detection.detected_format=0;await page.evaluate(()=>poll());
+  assert.equal(await page.locator('#board_detection_note').textContent(),'Detected: XIAO ESP32-S3.');
+  assert.equal(await page.locator('#detection_note').textContent(),'Detected: Philips I2S.');
+  await page.selectOption('#microphone','1');await page.evaluate(()=>poll());
+  assert.equal(await page.locator('#detection_note').textContent(),'Detected: Philips I2S.');
+  await page.selectOption('#microphone','3');assert.deepEqual(errors,[]);
   results.push({packed,width,theme,style});await page.close();
  }
  fs.writeFileSync('tmp/qualification/auto-ui/setup-results.json',JSON.stringify(results,null,2));console.log('Setup Auto/manual: migration display, source/packed, mobile/desktop, light/dark, typography, drafts/poll/revert/discard/error/save and no-op passed');

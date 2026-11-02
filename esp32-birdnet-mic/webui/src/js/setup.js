@@ -2,11 +2,15 @@ const $=id=>document.getElementById(id);
 const locks={},edits={},dirtyEls={},confirmedValues={},editVersions={},savingKeys=new Set(),pendingSyncKeys=new Set();
 function updateDiscard(){const b=$('discard_choices');if(b)b.hidden=!Object.keys(edits).length;}
 /* @include "settings/fields.js" */
+/* @include "detection-display.js" */
 const setupChoiceFields=['variant','microphone','mode','connection','antenna','battery_enabled'];
 function syncSetupChoices(s){
  const values={variant:String(s.detection?.board_auto?3:s.s3_board),microphone:String(s.detection?.mic_auto?3:(s.mic_format??0)),mode:s.default_mode,connection:s.connection,antenna:s.antenna,battery_enabled:!!s.battery_enabled};
  for(const id of setupChoiceFields)syncInput($(id),id,values[id]);
- $('detection_note').textContent=s.detection?.note||'';
+ const current=detectionDisplay(s);
+ $('board_detection_note').hidden=!s.s3_board_supported;
+ $('board_detection_note').textContent=current.board;
+ $('detection_note').textContent=current.microphone;
 }
 'use strict';
 const node=id=>document.getElementById(id);

@@ -152,6 +152,7 @@ static void releasePdmCapture() {
 bool micAutoDetect = true, s3BoardAutoDetect = true, microphoneGainConfigured = false;
 String microphoneDetectionNote = "Not checked";
 int8_t microphoneDetectedFormat = -1;
+int8_t detectedS3Board = -1;
 static bool detectionBootChanged = false;
 static constexpr size_t MIC_PROBE_WORDS = 2048;
 static constexpr uint32_t MIC_PROBE_SETTLE_MS = 150;
@@ -916,17 +917,22 @@ struct DetectionConfig {
     uint16_t cutoff;
     float gain;
     bool autoMic, autoBoard, sense;
+    int8_t detectedBoard, detectedFormat;
+    String note;
 };
 DetectionConfig detectionConfig() {
     return {s3BoardVariant, micFormat, cpuFrequencyMhz, currentSampleRate,
         minAcceptableRate, highpassCutoffHz, currentGainFactor,
-        micAutoDetect, s3BoardAutoDetect, recordingpins::senseSdPresent};
+        micAutoDetect, s3BoardAutoDetect, recordingpins::senseSdPresent,
+        detectedS3Board, microphoneDetectedFormat, microphoneDetectionNote};
 }
 void restoreDetection(const DetectionConfig& c) {
     s3BoardVariant=c.board; micFormat=c.format; currentSampleRate=c.rate;
     minAcceptableRate=c.minimum; highpassCutoffHz=c.cutoff; currentGainFactor=c.gain;
     micAutoDetect=c.autoMic; s3BoardAutoDetect=c.autoBoard;
     recordingpins::senseSdPresent=c.sense;
+    detectedS3Board=c.detectedBoard; microphoneDetectedFormat=c.detectedFormat;
+    microphoneDetectionNote=c.note;
     if(cpuFrequencyMhz!=c.cpu) setCpuFrequencyMhz(c.cpu);
     cpuFrequencyMhz=c.cpu; updateS3BoardIdentity();
 }
@@ -942,6 +948,7 @@ void closeDetectionDriver() {
 // selection constrains the pins we probe; failed probes preserve its SD route.
 void probeChoices() {
     microphoneDetectedFormat=-1;
+    detectedS3Board=-1;
     microphoneDetectionNote="No microphone confirmed. Keeping the previous configuration; select a format manually if needed.";
     auto* buf=static_cast<int32_t*>(heap_caps_malloc(MIC_PROBE_WORDS*sizeof(int32_t),MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT));
     if(!buf) { microphoneDetectionNote="Microphone check unavailable: insufficient memory. Previous settings kept."; return; }
@@ -980,6 +987,8 @@ void probeChoices() {
         // Do not force a manually selected I2S microphone onto built-in PDM.
         if(micAutoDetect || !s3boards::builtin(variant) || micFormat==MIC_FORMAT_PDM) s3BoardVariant=variant;
         recordingpins::senseSdPresent=sense;
+        // Report a confirmed applied result separately from a retained fallback.
+        if(s3BoardVariant==variant) detectedS3Board=variant;
     }
     if(micAutoDetect && micBoardFormatAllowed(format)) {
         micFormat=format;
