@@ -20,7 +20,7 @@ const {chromium}=require('playwright-core');
    assert(await checkbox.isEnabled());await checkbox.setChecked(!saved);
    assert(await checkbox.evaluate(e=>e.classList.contains('dirty')));
    await page.evaluate(()=>refreshAll());assert.equal(await checkbox.isChecked(),!saved);
-   const style=await checkbox.evaluate(e=>({border:getComputedStyle(e).borderColor,font:getComputedStyle(e.closest('label')).fontSize}));
+   const style=await checkbox.evaluate(e=>({border:getComputedStyle(e.closest('label')).borderColor,font:getComputedStyle(e.closest('label')).fontSize}));
    assert.match(style.border,/rgb\((217, 119, 6|245, 158, 11)\)/);
    await checkbox.setChecked(saved);assert(!await checkbox.evaluate(e=>e.classList.contains('dirty')));
    await checkbox.setChecked(!saved);await page.locator('#batterysec>[data-discard-drafts]').click();

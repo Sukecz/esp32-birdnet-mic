@@ -17,7 +17,7 @@ function renderBattery(j){
  if(!supported)batteryDraft=null;
  if(batteryDraft===!!b.enabled)batteryDraft=null;
  n('battery_monitor').checked=supported&&(batteryDraft===null?!!b.enabled:batteryDraft);
- const locked=batteryPending||!!j.recording?.busy||!!j.recording?.cooling_pending;
+ const locked=batteryPending||fieldPowerPending||!!j.recording?.busy||!!j.recording?.cooling_pending;
  n('battery_monitor').disabled=!supported||locked||!!(j.field_power?.enabled&&b.enabled);let dependency=n('battery_monitor_dependency');if(!dependency){dependency=document.createElement('p');dependency.id='battery_monitor_dependency';dependency.className='section-note';n('battery_monitor').closest('.actions').after(dependency);}dependency.textContent=locked?'Stop recording before changing battery settings.':j.field_power?.enabled?(j.recording?.mode==='recording'?'To turn battery monitoring off, first disable low-battery protection below.':'Battery monitoring is required by the saved low-battery protection setting in Recording mode.'):'';
  n('battery_save').disabled=!supported||locked||batteryDraft===null;
  n('battery_dirty').textContent=batteryDraft===null?'':'Unsaved';
@@ -30,7 +30,7 @@ function renderBattery(j){
  n('battery_reset').disabled=!supported||locked||correction===0;
 }
 async function batteryAction(action){
- if(!batteryState||batteryPending)return;
+ if(!batteryState||batteryPending||fieldPowerPending)return;
  const n=id=>document.getElementById(id),data={action};
  if(action==='enable'){
   if(batteryDraft===null)return;

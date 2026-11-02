@@ -12,9 +12,13 @@ from board_registry import boards
 from check_device_status import validate
 
 
-def sample(status, audio, board):
+def sample(status, audio, board, microphone_absent=False, sd_absent=False):
     errors = validate(status, audio, datetime.now(timezone.utc), 'xiao-esp32' + board['id'])['errors']
-    result = {'uptime': status.get('uptime'), 'streaming': status.get('streaming'),
+    if microphone_absent:
+        errors = [e for e in errors if e != 'Microphone capture is not healthy']
+    if sd_absent and status.get('recording', {}).get('card_ready'):
+        errors.append('Unexpected ready SD card in a peripherals-absent test')
+    result = {'microphone': audio.get('mic_signal'), 'uptime': status.get('uptime'), 'streaming': status.get('streaming'),
               'firmware': status.get('fw_version'), 'i2s_errors': audio.get('i2s_error_count'),
               'rb_drops': audio.get('rb_drops'), 'dma_overruns': audio.get('dma_overruns_total')}
     for key in ('internal_heap_free', 'internal_heap_min', 'internal_heap_largest', 'psram_total', 'psram_free'):
@@ -61,6 +65,8 @@ def main():
     p.add_argument('--seconds', type=float, default=300)
     p.add_argument('--interval', type=float, default=2)
     p.add_argument('--listen', action='store_true')
+    p.add_argument('--microphone-absent', action='store_true', help='Validate web/memory with no microphone; never qualifies audio')
+    p.add_argument('--sd-absent', action='store_true', help='Expect storage unavailable; never qualifies recording')
     p.add_argument('--output', required=True, type=Path)
     args = p.parse_args()
     if args.seconds <= 0 or args.interval <= 0:
@@ -96,7 +102,7 @@ def main():
     try:
         while True:
             try:
-                samples.append(sample(get('/api/status'), get('/api/audio_status'), board))
+                samples.append(sample(get('/api/status'), get('/api/audio_status'), board, args.microphone_absent, args.sd_absent))
             except Exception as error:
                 samples.append({'errors': ['Status read failed: ' + type(error).__name__]})
             if time.monotonic() - started >= args.seconds:
@@ -109,7 +115,7 @@ def main():
     report = {'board': board['id'], 'firmware': status.get('fw_version'),
               'started_utc': started_utc, 'memory_resolution_bytes': 1024, 'duration_seconds': round(time.monotonic()-started, 2),
               'listen_requested': args.listen, 'listen': listen, 'samples': samples, **summarize(samples),
-              'qualification': 'observed_workload_only', 'unmeasured_boards': [b['id'] for b in boards() if b['id'] != args.board]}
+              'qualification': 'web_memory_missing_peripherals' if args.microphone_absent else 'observed_workload_only', 'microphone_expected': not args.microphone_absent, 'storage_qualified': False, 'unmeasured_boards': [b['id'] for b in boards() if b['id'] != args.board]}
     if args.listen and (listen['error'] or listen['bytes'] <= 44):
         report['ok'] = False; report['errors'].append('Listen did not remain healthy')
     args.output.parent.mkdir(parents=True, exist_ok=True)

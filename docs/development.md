@@ -126,7 +126,8 @@ publication commit separately; source ZIP builds remain supported but are not
 accepted as provenance for this maintainer publication path.
 
 The physical qualification matrix remains open where hardware is unavailable.
-Only C6 is available for this release. Use `tools/qualify_runtime.py` and
+C6 is the candidate OTA target. S3 is available without microphone/SD on older
+firmware for read-only diagnostics; C3/C5 are unavailable. Use `tools/qualify_runtime.py` and
 [hardware qualification](hardware-qualification.md) for repeatable observations;
 never replace runtime measurements with total SRAM/PSRAM capacities. Timing JSON
 reports and per-board memory reports remain in `tmp/test-results/` and `tmp/build/`.

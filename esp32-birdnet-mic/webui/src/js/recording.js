@@ -39,7 +39,7 @@ function fieldPowerDraftChanged(){
  const draft=fieldPowerDraft();
  fieldPowerDirty=Object.keys(draft).some(k=>Number(fieldPowerState[k])!==draft[k]);
  recordingNode('field_power_dirty').textContent=fieldPowerDirty?'Unsaved':'';
- const busy=fieldPowerPending||recordingPending||!!(recordingState&&(recordingState.busy||recordingState.cooling_pending));
+ const busy=fieldPowerPending||batteryPending||recordingPending||!!(recordingState&&(recordingState.busy||recordingState.cooling_pending));
  recordingNode('field_wifi_save').disabled=busy||draft.wifi_delay_seconds===Number(fieldPowerState.wifi_delay_seconds);
  recordingNode('field_power_save').disabled=busy||!Object.keys(draft).some(k=>k!=='wifi_delay_seconds'&&Number(fieldPowerState[k])!==draft[k]);
  recordingNode('recording_wifi_off').disabled=fieldPowerDirty||recordingDirty||fieldPowerPending||recordingPending||!recordingState||recordingState.state!=='recording';
@@ -56,7 +56,7 @@ function renderFieldPower(j){
   recordingNode('field_hysteresis').value=(f.hysteresis_mv/1000).toFixed(2);
   recordingNode('field_sleep').value=f.sleep_after_save?'1':'0';
  }
- const busy=fieldPowerPending||recordingPending||!!(recordingState&&(recordingState.busy||recordingState.cooling_pending));
+ const busy=fieldPowerPending||batteryPending||recordingPending||!!(recordingState&&(recordingState.busy||recordingState.cooling_pending));
  for(const id of fieldPowerIds)recordingNode(id).disabled=busy;
  const states={disabled:'Protection disabled.',ready:'Protection ready.',measurement_unavailable:'Waiting for a valid battery reading. Recording cannot start while protection has no reading.',low_pending:'Low battery — confirming for '+f.remaining_seconds+' s.',saving:'Low battery — stopping and saving…',saved:'Recording stopped and saved because the battery was low.',save_failed:'Low battery stop: an SD error occurred. Check the preserved file.'};
  recordingNode('field_power_status').textContent=states[f.state]||f.state;let reason=recordingNode('recording_start_reason');if(!reason){reason=document.createElement('p');reason.id='recording_start_reason';reason.className='feedback';recordingNode('recording_start').parentElement.after(reason);}reason.textContent=f.start_allowed===false?(states[f.state]||'Battery protection prevents recording. Check Battery settings.'):'';
@@ -66,14 +66,14 @@ function renderFieldPower(j){
  fieldPowerDraftChanged();
 }
 async function saveFieldPowerSettings(wifiOnly=false){
- if(!fieldPowerState||fieldPowerPending||wifiOffIntent)return;
+ if(!fieldPowerState||fieldPowerPending||batteryPending||wifiOffIntent)return;
  const v=fieldPowerDraft(),feedback=recordingNode(wifiOnly?'field_wifi_feedback':'field_power_feedback');
  for(const k of Object.keys(v))if((k==='wifi_delay_seconds')!==wifiOnly)v[k]=Number(fieldPowerState[k]);
  const ids=fieldPowerIds.filter(id=>wifiOnly?id==='field_wifi_delay':id!=='field_wifi_delay');if(ids.some(id=>{const e=recordingNode(id);return e.type==='number'&&(!e.value.trim()||!e.checkValidity());})){feedback.textContent='Enter a valid value in each field.';return;}
  if(!Object.values(v).every(Number.isInteger)||v.wifi_delay_seconds<0||v.wifi_delay_seconds>60||v.cutoff_mv<3000||v.cutoff_mv>4200||v.confirm_seconds<0||v.confirm_seconds>300||v.hysteresis_mv<0||v.hysteresis_mv>300){feedback.textContent='Check the voltage and time ranges.';return;}
  fieldPowerPending=true;renderFieldPower({field_power:fieldPowerState});feedback.textContent='Saving…';
  try{
-  await saveValues('/api/field_power',wifiOnly?{wifi_delay_seconds:v.wifi_delay_seconds}:Object.fromEntries(Object.entries(v).filter(([k])=>k!=='wifi_delay_seconds')),ids,'recording_panel','Power settings saved.',{feedbackId:wifiOnly?'field_wifi_feedback':'field_power_feedback',refresh:loadStatus,rawErrors:true});
+  await saveValues('/api/field_power',wifiOnly?{wifi_delay_seconds:v.wifi_delay_seconds}:Object.fromEntries(Object.entries(v).filter(([k])=>k!=='wifi_delay_seconds')),ids,wifiOnly?'recording_panel':'batterysec','Power settings saved.',{feedbackId:wifiOnly?'field_wifi_feedback':'field_power_feedback',refresh:loadStatus,rawErrors:true});
  }catch(e){feedback.textContent=e.message;}
  finally{fieldPowerPending=false;renderFieldPower({field_power:fieldPowerState});}
 }

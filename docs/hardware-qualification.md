@@ -1,13 +1,13 @@
 # Hardware qualification
 
 Build coverage and hardware qualification are separate. At this work stage only
-the configured C6 assembly is available. Do not infer C3/S3/C5 operation, SD
+the configured C6 assembly and an S3 without microphone/microSD adapter are available. Do not infer C3/S3/C5 operation, SD
 reliability or battery runtime from a successful compile or a C6 observation.
 
 | Target | Required build checks | Physical state |
 | --- | --- | --- |
 | C3 | Standard target, app/partition/ELF budgets | Unavailable; qualification pending |
-| S3 | PSRAM and disabled-PSRAM builds, memory regressions | Unavailable; qualification pending |
+| S3 | PSRAM and disabled-PSRAM builds, memory regressions | Available on older firmware without microphone/SD; web/memory diagnostics only |
 | C5 | PSRAM and disabled-PSRAM builds, memory regressions | Unavailable; SD/battery/PDM qualification pending |
 | C6 | Standard target and budgets | Available; qualify the observed Streaming/RTSP/Listen workload |
 
@@ -42,3 +42,8 @@ to inspect the real device in 320/390/1280 px and both themes. It checks orange
 drafts, polling preservation, revert/discard and overflow; all non-GET requests
 are blocked. Mock browser tests cover saving/error paths without writing device
 settings. C6's external antenna must remain selected.
+
+For the currently available S3, `--microphone-absent --sd-absent` selects a
+web/memory observation with explicit missing-peripheral expectations. It never
+qualifies audio or storage and does not authorize firmware installation. Preserve
+the distinction between diagnostics on an older firmware and candidate validation.
