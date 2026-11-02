@@ -138,7 +138,7 @@ const {chromium}=require('playwright-core');
   await page.evaluate(()=>refreshAll());assert.match(await page.locator('#overview_streams').innerText(),/schedule until 06:00|schedule until 22:00/);
   fixture.thermal.latched_persist=true;fixture.thermal.auto_resume_pending=true;
   await page.evaluate(()=>refreshAll());assert.match(await page.locator('#overview_streams').innerText(),/cooling/);
-  thermalFailure=true;await page.evaluate(()=>refreshAll());assert.match(await page.locator('#connection_status').innerText(),/out of date/);
+  thermalFailure=true;await page.evaluate(()=>refreshAll());assert.equal(await page.locator('#connection_status').innerText(),'');await page.evaluate(()=>refreshAll());assert.match(await page.locator('#connection_status').innerText(),/out of date/);
   await page.evaluate(()=>loadAll(false));assert.match(await page.locator('#connection_status').innerText(),/out of date/);
   thermalFailure=false;await page.evaluate(()=>refreshAll());assert.equal(await page.locator('#connection_status').innerText(),'');
   await page.evaluate(()=>openSection('recoverysec'));count=writes.length;await page.locator('#b_defaults').click();assert.equal(writes.length,count);

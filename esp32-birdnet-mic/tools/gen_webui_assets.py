@@ -44,6 +44,13 @@ def main():
             raise SystemExit('Stale webui/index.html; run tools/gen_webui_gzip_header.sh')
     elif not index.is_file() or index.read_bytes() != expected_index:
         index.write_bytes(expected_index)
+    setup_js = ROOT / 'webui/setup.js'
+    expected_setup = assemble(entry='js/setup.js').encode('utf-8')
+    if args.check:
+        if not setup_js.is_file() or setup_js.read_bytes() != expected_setup:
+            raise SystemExit('Stale setup.js; regenerate assets')
+    elif not setup_js.is_file() or setup_js.read_bytes() != expected_setup:
+        setup_js.write_bytes(expected_setup)
     for filename, assets in [
         ('WebUI_gz.h', [('WEBUI_INDEX_GZ', 'index.html')]),
         ('OtaAssets_gz.h', [('OTA_CSS_GZ', 'ota.css'), ('OTA_JS_GZ', 'ota.js')]),

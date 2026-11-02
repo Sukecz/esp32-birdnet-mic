@@ -3,11 +3,11 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../esp32-birdnet-mic/webui/index.html'),'utf8');
-const ids=['sel_mic_format','opt_pdm','in_rate','btn_rate_set','in_shift','btn_shift_set','txt_gain_hint','mic_format_label'];
+const ids=['sel_mic_format','opt_pdm','in_rate','btn_rate_set','in_shift','btn_shift_set','txt_gain_hint','mic_format_label','mic_detection_note','btn_mic_recommended'];
 const nodes=Object.fromEntries(ids.map(id=>[id,{value:'0'}]));
 nodes.sel_mic_format.selectedOptions=[{textContent:'Microphone model'}];
 const edits={},locks={};
-const c=vm.createContext({document:{getElementById:id=>nodes[id]},Date,edits,locks,confirmedValues:{},dirtyEls:{mic_format:[nodes.sel_mic_format]},savingKeys:new Set(),pendingSyncKeys:new Set(),
+const c=vm.createContext({$:id=>nodes[id],document:{getElementById:id=>nodes[id]},Date,edits,locks,confirmedValues:{},dirtyEls:{mic_format:[nodes.sel_mic_format]},savingKeys:new Set(),pendingSyncKeys:new Set(),
  T:{en:{help_gain:'Original I2S gain help'}},lang:'en',toggleDirty:()=>{}});
 vm.runInContext(html.slice(html.indexOf('function fieldValue('),html.indexOf('function trackEdit('))+html.slice(html.indexOf('function clearDirty('),html.indexOf('function toggleDirty(')),c);
 const a=html.indexOf('function renderMicFormat('),b=html.indexOf('function loadAudio(',a);
@@ -30,7 +30,7 @@ assert.equal(nodes.sel_mic_format.value,'0');
 for(const id of ['in_rate','btn_rate_set','in_shift','btn_shift_set']) assert.equal(nodes[id].disabled,false);
 assert.equal(nodes.opt_pdm.disabled,true);
 assert.equal(nodes.txt_gain_hint.textContent,'Original I2S gain help');
-assert(html.includes('Sense: Experimental — needs more testing;'));
+assert(html.includes('Auto checks supported S3 boards'));
 console.log('PDM UI mode, capability, controls, help and edit locks passed');
 
 // Constrained boards must not be advised to increase to 1024/2048 samples.

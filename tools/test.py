@@ -74,6 +74,7 @@ def main():
             for path in scripts:
                 run(path.name, ['node', str(path)], timeout=180)
         if args.suite in ('release', 'all'):
+            run('current release copy', [sys.executable, 'tools/check_release_texts.py'])
             run('release artifact contract', [sys.executable, 'tests/validate_ota_contract.py'])
     return finish()
 

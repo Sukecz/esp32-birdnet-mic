@@ -6,14 +6,14 @@
 
 Two modes: live **RTSP Streaming** or standalone **microSD WAV Recording**.
 Start with the [beginner guide](../README.md) and [field recording guide](../docs/field-recording.md).
-Current firmware: **2.05** ([validation record](../release-notes/2.05-validation.md)).
+Current firmware: **2.06** ([validation record](../release-notes/2.06-validation.md)).
 For new builds we recommend **XIAO ESP32-C5 + IM73D122 PDM**, with an Adafruit BFF for SD.
 
 Arduino firmware for Seeed Studio XIAO ESP32 and M5Stack AtomS3U, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Current firmware: **v2.05** — Consistent settings drafts and safer update validation.
+- Current firmware: **v2.06** — Automatic audio setup and optional experimental noise reduction.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
@@ -98,7 +98,7 @@ Reads are staged in the app loop and reported in `/api/status`, independently
 of the browser. See the
 [battery guide](../docs/battery-monitoring.md) for GPIOs, APIs and validation limits.
 
-## Audio memory by board (v2.05)
+## Audio memory by board (v2.06)
 
 The build helper enables S3's 8 MB OPI PSRAM (`PSRAM=opi`) and C5's 8 MB
 PSRAM (`PSRAM=enabled`). Streaming puts its normally 64 KiB RTSP reserve there;
@@ -903,3 +903,29 @@ Current validation ranges include `sampleRate=8000..192000`, `bufferSize=256..81
 ## License
 
 This firmware is released under the MIT License. See `../LICENSE`.
+
+## Automatic microphone setup and noise reduction
+
+New installations start with Auto microphone selection; existing saved choices
+stay manual after updating. The shared S3 image also offers Auto board selection
+for XIAO ESP32-S3, Sense and AtomS3U. Board and microphone choices are independent
+and can be changed manually in Audio or Device configuration. Detection identifies
+a signal format, not the exact microphone model. Uncertain results retain the
+previous configuration. Auto retains tuned gain; fresh PDM setup uses a starting
+gain of 24. Software PDM may require the CPU to run at 160 MHz.
+
+**Adaptive noise reduction (Experimental)** is in Audio after High-pass and is
+Off by default. High-pass removes low-frequency rumble; adaptive reduction learns
+steady background across the spectrum. Both may be enabled. All outputs, including
+SD files, receive the processed audio when noise reduction is on. This can affect
+faint or continuous bird calls; improved BirdNET recognition has not been verified.
+Keep original recordings when comparing detection performance.
+
+Normal adaptation and 12 dB maximum reduction are starting values. Fast adaptation
+can learn long songs as background. Changing audio settings or restarting starts
+learning again. The profile is not written to flash. The filter requires extra
+memory and processing, may shorten battery runtime, and can be too slow at low
+CPU frequencies such as 80 MHz. It never changes CPU frequency itself. If resources
+are insufficient, the UI reports the reason and audio passes without reduction.
+Details include a spectrum and measured processing cost; the estimated noise floor
+includes environmental sound and is not a calibrated microphone self-noise measurement.

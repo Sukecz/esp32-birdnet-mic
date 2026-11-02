@@ -45,3 +45,8 @@ The initial extraction retained byte-identical output. Version 2.05 then migrate
 Recording/Battery/logging/power to the shared saved/draft/save/discard lifecycle.
 Behavior changes require regressions, all-board builds and the project's
 release/device validation workflow.
+
+Device configuration uses `src/js/setup.js`, assembled into `webui/setup.js`.
+It includes the same `settings/fields.js` draft engine as the main page; edit the
+source fragment and regenerate both source and embedded outputs. Noise reduction
+uses its own logical save group within Audio, and keeps other Audio drafts pending.

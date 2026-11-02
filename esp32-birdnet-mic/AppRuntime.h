@@ -222,4 +222,5 @@ extern bool otaInProgress;
 extern unsigned long lastI2SReset;
 extern uint32_t maxPacketRate;
 extern uint32_t minPacketRate;
+#include "MicrophoneDetection.h"
 #endif

@@ -9,6 +9,9 @@ struct Config {
     uint8_t variant, format;
     uint32_t rate, minRate;
     uint16_t cutoff;
+    bool autoBoard=false, autoMic=false, sense=false;
+    float gain=1.5f;
+    uint8_t cpu=160;
 };
 inline bool valid(uint8_t value) { return value <= AtomS3U; }
 inline bool builtin(uint8_t value) { return value == Sense || value == AtomS3U; }

@@ -6,7 +6,8 @@
 <meta name='viewport' content='width=device-width,initial-scale=1'>
 <meta name='color-scheme' content='light dark'>
 <title>BirdNETMic · Streaming & SD recording</title>
-<style><!-- @include "css/base.css" --></style>
+<style><!-- @include "css/base.css" -->#noise_spectrum{display:block;width:100%;height:240px;border:1px solid var(--border);border-radius:12px;background:var(--row)}
+</style>
 <style><!-- @include "css/audio.css" --></style>
 <style><!-- @include "css/layout.css" --></style>
 <style><!-- @include "css/device-setup.css" --></style>
@@ -190,12 +191,13 @@
 <td class='k'><label for='sel_s3_board'>S3 board</label></td>
 <td class='v'><div class='field'>
 <select id='sel_s3_board'>
-<option value='0'>XIAO ESP32-S3 / Plus (default)</option>
+<option value='3'>Auto-detect board</option>
+<option value='0'>XIAO ESP32-S3</option>
 <option value='1'>XIAO ESP32-S3 Sense</option>
 <option value='2'>M5Stack AtomS3U</option>
 </select>
 <button id='btn_s3_board_apply' onclick='saveS3Board()'>Apply board</button>
-</div><div class='hint'>AtomS3U: contributor-tested with BirdNET-Go; built-in PDM microphone. Sense: Experimental — needs more testing; PDM uses its built-in microphone, I2S uses an external microphone. Recording uses its built-in microSD slot. Default: external microphone. Applying restarts audio and saves the board.</div></td>
+</div><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -205,16 +207,17 @@
 <td class='v'>
 <div class='field'>
 <select id='sel_mic_format'>
+<option value='3'>Auto-detect microphone</option>
 <option value='0'>ICS-43434 / INMP441 (Philips I2S)</option>
 <option value='1'>Adafruit SPH0645 (MSB / left-justified)</option>
 <option value='2' id='opt_pdm'>PDM microphone (IM73D122)</option>
 </select>
 <button id='btn_mic_apply' onclick="chooseMicSettings()">Apply</button><button id='btn_mic_recommended' onclick="chooseMicSettings(true)">Recommended settings</button><small id='mic_format_label' class='muted'></small>
-</div>
+</div><p id='mic_detection_note' class='section-note'></p>
 </td>
 </tr>
 <tr id='row_mic_format_hint' style='display:none'>
-<td colspan='2'><div class='hint'>Philips I2S is the default for existing installations. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
+<td colspan='2'><div class='hint'>Existing installations retain their saved format. New installations start in Auto. Auto identifies the signal format, not the exact microphone model, and retains your tuned gain. Software PDM requires at least 160 MHz; Auto may select this frequency when needed. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -285,6 +288,19 @@
 <div class='hint' id='txt_hpf_cut_hint'>High-pass cutoff in Hz.</div>
 </td>
 </tr>
+<tr><td class='k'><label for='noise_mode'>Adaptive noise reduction</label><span class='badge'>Experimental</span></td>
+<td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
+<p id='noise_status' class='section-note' role='status'>Off</p></td></tr>
+<tr><td colspan='2'><p class='section-note'>Reduces steady hiss and hum after High-pass. May affect faint or continuous bird calls; improved BirdNET recognition is not yet verified. When on, Listen, RTSP and SD recordings all receive processed audio. Uses more CPU and memory and may shorten battery life. At low CPU frequencies, including 80 MHz, processing may be too slow.</p>
+<details id='noise_details' class='advanced'><summary>Noise reduction details</summary>
+<table><tr><td class='k'><label for='noise_floor'>Maximum reduction</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>6 dB</option><option value='12'>12 dB</option><option value='20'>20 dB</option></select></div></td></tr>
+<tr><td class='k'><label for='noise_adapt'>Adaptation</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
+<p class='section-note'>Normal is the starting point. Fast follows changing background sooner but may treat long songs as noise. Slow offers more protection for continuous songs. The profile learns again after restart or a change to the preceding audio settings; initially audio passes without reduction.</p>
+<p id='noise_metrics' class='section-note'></p>
+<canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
+<p class='section-note'>Blue: live level · Orange: estimated floor · Green: learned profile. Frequency in kHz, level in dBFS per frequency band. These curves include environmental sounds and do not measure the microphone’s self-noise alone.</p>
+</details><div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
+<p class='section-note'>Stop and save recording before changing noise reduction. If resources are insufficient, audio remains unfiltered and the reason appears above. CPU frequency is never raised by this filter.</p></td></tr>
 </table><details id='audioadvanced' class='advanced'><summary>Advanced audio settings</summary><table>
 <tr>
 <td class='k'>
@@ -1074,6 +1090,7 @@ BAT− / GND ──────┘</pre>
 <script><!-- @include "js/wifi-ap.js" --></script>
 <script><!-- @include "js/app.js" --></script>
 <script><!-- @include "js/microphone-bindings.js" --></script>
+<script><!-- @include "js/noise-reduction.js" --></script>
 <script><!-- @include "js/ota-notice.js" --></script>
 
 <script id='antenna_script'><!-- @include "js/antenna.js" --></script>

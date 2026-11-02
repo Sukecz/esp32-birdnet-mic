@@ -134,3 +134,11 @@ reports and per-board memory reports remain in `tmp/test-results/` and `tmp/buil
 See [UI source instructions](../esp32-birdnet-mic/webui/README.md) for editing and
 generation. Recording, Battery, SD logging and power use the common settings
 engine; Wi-Fi/AP-password/antenna flows keep their explicit access/reboot handling.
+
+Before a release, briefly review the main guide, device guide, flasher introduction
+and feature help for current behavior and validation limits. Run
+`python3 tools/check_release_texts.py` after packaging. The installation sentence
+has no hardcoded version; the release badge reads the manifest. Public release
+verification checks the served landing-page copy as well as firmware payloads.
+Device configuration JavaScript now assembles from `webui/src/js/setup.js` and
+shares the draft engine in `settings/fields.js`; regenerate assets before testing.

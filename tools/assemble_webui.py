@@ -31,12 +31,13 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--check', action='store_true')
     args = p.parse_args()
-    expected = assemble().encode('utf-8')
-    if args.check:
-        if not OUTPUT.is_file() or OUTPUT.read_bytes() != expected:
-            raise SystemExit('Stale webui/index.html; run esp32-birdnet-mic/tools/gen_webui_gzip_header.sh')
-    elif not OUTPUT.is_file() or OUTPUT.read_bytes() != expected:
-        OUTPUT.write_bytes(expected)
+    for entry, output in [('index.html', OUTPUT), ('js/setup.js', SOURCE.parent / 'setup.js')]:
+        expected = assemble(entry=entry).encode('utf-8')
+        if args.check:
+            if not output.is_file() or output.read_bytes() != expected:
+                raise SystemExit('Stale UI source assembly: ' + output.name)
+        elif not output.is_file() or output.read_bytes() != expected:
+            output.write_bytes(expected)
 
 
 if __name__ == '__main__':

@@ -275,4 +275,6 @@ if (web_dir / "firmware-c6.bin").read_bytes() != (web_dir / "firmware.bin").read
     raise SystemExit("C6 merged compatibility alias does not match firmware-c6.bin")
 PY
 
+python3 "$ROOT_DIR/tools/check_release_texts.py"
+
 echo "Built and packaged firmware $version for C3/S3/C5/C6."

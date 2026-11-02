@@ -24,6 +24,7 @@
 #include "RecordingPins.h"
 #include <ESPmDNS.h>
 #include "WebUI.h"
+#include "NoiseShadow.h"
 #include "AudioDiagnostics.h"
 #include "MicrophoneSignal.h"
 #include "BrowserAudio.h"
@@ -172,6 +173,7 @@ static void httpOtaJs() {
 
 // OTA service implementation is owned by OtaService.cpp.
 
+static String detectionJson();
 static String setupStatusJson() {
     String json = "{\"ok\":true,\"complete\":" + String(devicesetup::complete() ? "true" : "false");
     json += ",\"default_mode\":\"" + String(devicesetup::defaultRecording() ? "recording" : "streaming") + "\"";
@@ -187,11 +189,19 @@ static String setupStatusJson() {
     json += ",\"board_name\":\"" + jsonEscape(FW_BOARD_NAME_STR) + "\"";
     json += ",\"s3_board_supported\":" + String(s3BoardSelectionSupported() ? "true" : "false");
     json += ",\"s3_board\":" + String(s3BoardVariant);
+    json += ",\"detection\":" + detectionJson();
+    json += ",\"mic_format\":" + String(micFormat);
     json += ",\"battery_enabled\":" + String(devicesetup::batteryMonitoring() ? "true" : "false");
     json += ",\"battery_supported\":" + String(battery::pins(s3BoardVariant).supported ? "true" : "false");
     json += ",\"antenna_supported\":" + String(antenna::supported() ? "true" : "false");
     json += ",\"antenna\":\"" + String(antenna::external() ? "external" : "internal") + "\"}";
     return json;
+}
+static String detectionJson() {
+    return String("{\"mic_auto\":")+(micAutoDetect?"true":"false")+
+        ",\"board_auto\":"+(s3BoardAutoDetect?"true":"false")+
+        ",\"detected_format\":"+String(microphoneDetectedFormat)+
+        ",\"note\":\""+jsonEscape(microphoneDetectionNote)+"\"}";
 }
 static void httpSetupStatus() { apiSendJSON(setupStatusJson()); }
 static void httpSetupAccess() {
@@ -356,6 +366,8 @@ static void httpAudioStatus() {
 #endif
     json += "\"audio_dsp\":\"integer\",";
     json += "\"i2s_shift\":" + String(i2sShiftBits) + ",";
+    json += "\"detection\":" + detectionJson() + ",";
+    json += "\"noise\":" + noiseshadow::statusJson(false) + ",";
     json += "\"mic_format\":" + String(micFormat) + ",";
     json += "\"s3_board_supported\":" + String(s3BoardSelectionSupported() ? "true" : "false") + ",";
     json += "\"s3_board\":" + String(s3BoardVariant) + ",";
@@ -797,7 +809,7 @@ static bool applyAndSaveAudio(uint32_t newRate, float newGain, uint16_t newBuffe
 }
 
 static bool applyAndSaveMicFormat(uint8_t newFormat) {
-    if (applyMicFormatConfig(newFormat)) {
+    if (applyMicrophoneChoice(newFormat)) {
         saveAudioSettings();
         return true;
     }
@@ -828,12 +840,13 @@ static void httpSaveMicProfile() {
     if (!requireMutationAuth()) return;
     uint32_t format;
     const String mode = web.arg("settings");
-    if (!parseUInt32Strict(web.arg("format"), format) || format > 2 ||
+    if (!parseUInt32Strict(web.arg("format"), format) || format > 3 ||
+        (format == 3 && mode == "recommended") ||
         (mode != "recommended" && mode != "keep")) {
         apiSendJSON(F("{\"ok\":false,\"error\":\"invalid_value\"}"));
         return;
     }
-    if (!applyMicProfileConfig(uint8_t(format), mode == "recommended")) {
+    if (!applyMicrophoneChoice(uint8_t(format), mode == "recommended")) {
         apiSendJSON(F("{\"ok\":false,\"error\":\"i2s_restart_failed\"}"));
         return;
     }
@@ -844,11 +857,11 @@ static void httpSaveMicProfile() {
 static void httpSaveS3Board() {
     if (!requireMutationAuth()) return;
     uint32_t variant;
-    if (!s3BoardSelectionSupported() || !parseUInt32Strict(web.arg("variant"), variant) || variant > 2) {
+    if (!s3BoardSelectionSupported() || !parseUInt32Strict(web.arg("variant"), variant) || variant > 3) {
         apiSendJSON(F("{\"ok\":false,\"error\":\"invalid_value\"}"));
         return;
     }
-    if (!applyS3BoardConfig(uint8_t(variant))) {
+    if (!applyBoardChoice(uint8_t(variant))) {
         apiSendJSON(F("{\"ok\":false,\"error\":\"i2s_restart_failed\"}"));
         return;
     }
@@ -951,7 +964,7 @@ static void httpSet() {
     else if (key == "mic_format") {
         handled = true;
         uint8_t v;
-        if (argToUChar(v) && v <= 2) {
+        if (argToUChar(v) && v <= 3) {
             applied = applyAndSaveMicFormat(v);
         }
     }
@@ -1322,14 +1335,17 @@ static void httpSetupSave() {
     if (!requireMutationAuth()) return;
     const String mode = web.arg("mode"), connection = web.arg("connection");
     const String batteryChoice = web.arg("battery");
-    uint32_t variant = s3BoardVariant;
-    if ((mode != "streaming" && mode != "recording") ||
+    uint32_t variant = s3BoardAutoDetect ? 3 : s3BoardVariant;
+    uint32_t microphone = micAutoDetect ? 3 : micFormat;
+    const bool hasMicrophone = web.hasArg("microphone");
+    if ((hasMicrophone && (!parseUInt32Strict(web.arg("microphone"), microphone) || microphone > 3)) ||
+        (mode != "streaming" && mode != "recording") ||
         (connection != "home" && connection != "direct") ||
         (mode == "streaming" && connection == "direct") ||
-        (s3BoardSelectionSupported() && (!parseUInt32Strict(web.arg("variant"), variant) || variant > s3boards::AtomS3U)) ||
-        (mode == "recording" && !recordingpins::resolve(variant).supported) ||
+        (s3BoardSelectionSupported() && (!parseUInt32Strict(web.arg("variant"), variant) || variant > 3)) ||
+        (mode == "recording" && !recordingpins::resolve(variant == 3 ? s3BoardVariant : variant).supported) ||
         (batteryChoice.length() && batteryChoice != "0" && batteryChoice != "1") ||
-        (batteryChoice == "1" && !battery::pins(variant).supported) ||
+        (batteryChoice == "1" && !battery::pins(variant == 3 ? s3BoardVariant : variant).supported) ||
         (antenna::supported() && web.arg("antenna") != "external" && web.arg("antenna") != "internal")) {
         web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid board, mode or connection choice.\"}");
         return;
@@ -1341,15 +1357,26 @@ static void httpSetupSave() {
         String(devicesetup::connectionState()) != "connected" && web.arg("allow_offline") != "1") {
         web.send(409, "application/json", "{\"ok\":false,\"error\":\"Connect to Wi-Fi first, or choose Finish later.\"}"); return;
     }
-    if (fieldpower::settings().guardEnabled && (batteryChoice == "0" || !battery::pins(variant).supported)) {
+    if (fieldpower::settings().guardEnabled && (batteryChoice == "0" || !battery::pins(variant == 3 ? s3BoardVariant : variant).supported)) {
         web.send(409, "application/json", "{\"ok\":false,\"error\":\"Disable low-battery protection before disabling monitoring.\"}"); return;
     }
     const bool first = !devicesetup::complete();
     const auto oldBoard = getS3BoardConfig();
-    if (s3BoardSelectionSupported() && !applyS3BoardConfig(variant)) {
+    if (s3BoardSelectionSupported() && !applyBoardChoice(variant)) {
         apiSendJSON(F("{\"ok\":false,\"error\":\"Could not apply board. Select Streaming before choosing AtomS3U.\"}")); return;
     }
-    const bool boardChanged = s3BoardSelectionSupported() && oldBoard.variant != variant;
+    if (hasMicrophone && !applyMicrophoneChoice(microphone)) {
+        restoreS3BoardConfig(oldBoard);
+        apiSendJSON(F("{\"ok\":false,\"error\":\"Could not apply microphone; previous settings restored.\"}")); return;
+    }
+    if ((mode=="recording" && !recordingHardwareSupported()) ||
+        (batteryChoice=="1" && !battery::pins(s3BoardVariant).supported)) {
+        restoreS3BoardConfig(oldBoard);
+        web.send(400,"application/json","{\"ok\":false,\"error\":\"Detected board does not support the selected recording or battery settings. Choose a board manually.\"}"); return;
+    }
+    const bool boardChanged = oldBoard.variant!=s3BoardVariant || oldBoard.format!=micFormat ||
+        oldBoard.autoBoard!=s3BoardAutoDetect || oldBoard.autoMic!=micAutoDetect ||
+        oldBoard.rate!=currentSampleRate || oldBoard.gain!=currentGainFactor || oldBoard.cpu!=cpuFrequencyMhz;
     const auto rollbackBoard = [&]() {
         if (!boardChanged) return true;
         const bool restored = restoreS3BoardConfig(oldBoard);
@@ -1516,6 +1543,20 @@ static void httpUpdateSpacePrepare() {
 }
 #endif
 
+static void httpNoiseStatus() { apiSendJSON(noiseshadow::statusJson(web.arg("spectra")=="1")); }
+static void httpNoiseSave() {
+    if(!requireMutationAuth()) return;
+    uint32_t mode,floor,adapt;
+    if(!parseUInt32Strict(web.arg("mode"),mode) || !parseUInt32Strict(web.arg("floor"),floor) ||
+       !parseUInt32Strict(web.arg("adapt"),adapt) || mode>1 ||
+       (floor!=6 && floor!=12 && floor!=20) || (adapt!=4 && adapt!=15 && adapt!=60)) {
+        web.send(400,"application/json","{\"ok\":false,\"error\":\"invalid_value\"}"); return;
+    }
+    if(!noiseshadow::save(mode,floor,adapt)) {
+        web.send(500,"application/json","{\"ok\":false,\"error\":\"Could not save noise reduction settings.\"}"); return;
+    }
+    apiSendJSON(F("{\"ok\":true}"));
+}
 void webui_begin() {
     web.on("/", HTTP_GET, httpIndex);
     web.on("/setup", HTTP_GET, httpSetupPage);
@@ -1566,6 +1607,8 @@ void webui_begin() {
     web.on("/api/action/factory_reset", HTTP_POST, httpActionFactoryReset);
     web.on("/api/set", HTTP_POST, httpSet);
     web.on("/api/settings/microphone", HTTP_POST, httpSaveMicProfile);
+    web.on("/api/noise", HTTP_GET, httpNoiseStatus);
+    web.on("/api/noise/set", HTTP_POST, httpNoiseSave);
     web.on("/api/settings/s3_board", HTTP_POST, httpSaveS3Board);
     web.on("/api/settings/schedule", HTTP_POST, httpSaveSchedule);
     web.on("/api/settings/mqtt", HTTP_POST, httpSaveMqtt);

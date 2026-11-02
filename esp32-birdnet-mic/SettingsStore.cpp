@@ -2,6 +2,7 @@
 #include "SettingsStore.h"
 #include "FirmwareDefaults.h"
 #include "MqttService.h"
+#include "RecordingPins.h"
 #include "TimeZoneSchedule.h"
 #include <esp_timer.h>
 #include <math.h>
@@ -16,7 +17,11 @@ void loadAudioSettings() {
     currentBufferSize = audioPrefs.getUShort("bufferSize", DEFAULT_BUFFER_SIZE);
     // (1) respect compile-time default 12 on first boot
     i2sShiftBits = audioPrefs.getUChar("shiftBits", i2sShiftBits);
+    microphoneGainConfigured = audioPrefs.isKey("gainFactor");
+    micAutoDetect = audioPrefs.isKey("micAuto") ? audioPrefs.getBool("micAuto", false) : !audioPrefs.isKey("micFormat");
+    s3BoardAutoDetect = audioPrefs.isKey("boardAuto") ? audioPrefs.getBool("boardAuto", false) : !audioPrefs.isKey("s3Board");
     micFormat = audioPrefs.getUChar("micFormat", DEFAULT_MIC_FORMAT);
+    recordingpins::senseSdPresent = audioPrefs.getBool("senseSd", false);
     s3BoardVariant = audioPrefs.getUChar("s3Board", s3boards::External);
     if (!s3BoardSelectionSupported() || !s3boards::valid(s3BoardVariant)) {
         if (s3BoardVariant != s3boards::External) settingsRepaired = true;
@@ -195,6 +200,9 @@ void saveAudioSettings() {
     audioPrefs.putFloat("gainFactor", currentGainFactor);
     audioPrefs.putUShort("bufferSize", currentBufferSize);
     audioPrefs.putUChar("shiftBits", i2sShiftBits);
+    audioPrefs.putBool("micAuto", micAutoDetect);
+    audioPrefs.putBool("boardAuto", s3BoardAutoDetect);
+    audioPrefs.putBool("senseSd", recordingpins::senseSdPresent);
     audioPrefs.putUChar("micFormat", micFormat);
     audioPrefs.putUChar("s3Board", s3BoardVariant);
     audioPrefs.putBool("autoRecovery", autoRecoveryEnabled);

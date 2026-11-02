@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0,str(__import__("pathlib").Path(__file__).resolve().parents[1]/"tools"))
 import hashlib
 import importlib.util
 import json
@@ -23,6 +25,7 @@ class ReleaseVerificationTest(unittest.TestCase):
 
     def check(self):
         def read(url):
+            if url == "http://public/": return b'Install BirdNETMic from your browser. <span id="fw-version-chip"></span>'
             if "api.github.com" in url:
                 return json.dumps(self.metadata).encode()
             return self.files[url.rsplit("/", 1)[1]]
@@ -79,6 +82,7 @@ class BridgedReleaseVerificationTest(unittest.TestCase):
             {'name':name,'size':len(data),'digest':'sha256:'+hashlib.sha256(data).hexdigest()}
             for name,data in files.items()]}
         def read(url):
+            if url == "http://public/": return b'Install BirdNETMic from your browser. <span id="fw-version-chip"></span>'
             if 'api.github.com' in url: return json.dumps(metadata).encode()
             path=url.removeprefix('http://public/')
             if path.startswith('updates/'): return files[path.removeprefix('updates/')]

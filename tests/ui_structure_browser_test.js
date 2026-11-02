@@ -60,7 +60,7 @@ const fixture=require('./fixtures/ui-state.json');
   assert(await page.locator('#btn_thermal_notice_ack').isDisabled());
   await page.locator('#thermal_notice a').click();assert(await page.locator('#sel_cpu').isVisible());
   fixture.audio_status.mic_signal='ok';fixture.thermal.notice=false;fixture.thermal.latched_persist=false;
-  failAudio=true;await page.evaluate(()=>refreshAll());assert.match(await page.locator('#connection_status').textContent(),/out of date/);
+  failAudio=true;await page.evaluate(()=>refreshAll());assert.equal(await page.locator('#connection_status').textContent(),'');await page.evaluate(()=>refreshAll());assert.match(await page.locator('#connection_status').textContent(),/out of date/);
   failAudio=false;await page.evaluate(()=>refreshAll());assert.equal(await page.locator('#connection_status').textContent(),'');
   for(const width of [320,390,768,1280]){
    await page.setViewportSize({width,height:900});

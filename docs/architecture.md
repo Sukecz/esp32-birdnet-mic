@@ -41,3 +41,14 @@ to their component. `StreamTypes.h` replaces duplicated cross-module layouts;
 `FirmwareDefaults.h` and `AudioSettings.h` centralize existing defaults/policy.
 Legacy hardware fragment fixtures follow actual owner files through explicit
 compatibility views; new policy tests include production modules directly.
+
+Automatic board/microphone choices are persisted separately from effective GPIO
+and format values (`MicrophoneDetection.h`, capture's bounded hardware probes).
+No failed probe can force a saved board identity. Device setup rolls back board,
+format, CPU, gain, rate and both Auto preferences together on failure.
+
+`NoiseShadow.cpp` owns the optional adaptive filter's lifecycle and saved settings;
+`NoiseSignature.h` is the contributor-derived pure DSP engine. Capture exclusively
+owns its working memory. HTTP reads copied telemetry and spectra. A busy telemetry
+reader skips only a telemetry update, never an audio block. Memory failure or
+sustained missed processing budgets bypasses reduction without raising CPU frequency.

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.06 — Automatic audio setup and experimental noise reduction
+
+- New installations default to independent Auto choices for microphone format and
+  supported S3 board variants. Existing saved manual selections are retained.
+  Unconfirmed detection preserves the previous configuration and manual selection
+  remains available. Auto retains tuned gain; only fresh PDM setup gets a starting gain.
+- Optional experimental adaptive noise reduction in Audio, after High-pass.
+  It processes Listen, RTSP and SD audio, defaults Off and learns again after
+  relevant changes. DSP based on a contributor's fixed-point spectral subtraction
+  implementation. Better BirdNET recognition is not yet established.
+- Noise settings use the shared draft/save/discard lifecycle. Spectrum and CPU
+  diagnostics are under details. Memory/CPU failures keep unfiltered audio flowing;
+  the filter never raises CPU frequency. Low-frequency CPU operation needs qualification.
+- Device configuration offers independent Auto/manual board and microphone choices.
+- Web flasher installation copy uses the manifest version badge. Packaging and
+  public verification check current release copy. Poll warnings require two
+  consecutive failures from the same endpoint.
+- Validation scope and remaining hardware limitations: [2.06 record](../release-notes/2.06-validation.md).
+
 ## 2.05 - 2026-11-02
 
 - **Settings:** Recording, SD logging, Battery and power settings share draft tracking, polling preservation, discard and scoped saves. Failed saves retain edits; a confirmed save does not discard a newer draft or edits from another group.

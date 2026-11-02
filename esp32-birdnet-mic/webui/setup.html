@@ -19,7 +19,11 @@
 <h2>1. Board</h2>
 <p id="board_name">Loading…</p>
 <label id="variant_field" hidden>Board variant
-<select id="variant"><option value="0">XIAO ESP32-S3</option><option value="1">XIAO ESP32-S3 Sense</option><option value="2">M5Stack AtomS3U</option></select></label>
+<select id="variant"><option value="3">Auto-detect board</option><option value="0">XIAO ESP32-S3</option><option value="1">XIAO ESP32-S3 Sense</option><option value="2">M5Stack AtomS3U</option></select></label>
+<label for="microphone">Microphone format</label>
+<div class="field"><select id="microphone"><option value="3">Auto-detect microphone</option><option value="0">ICS-43434 / INMP441 (Philips I2S)</option><option value="1">SPH0645 (MSB I2S)</option><option value="2">PDM</option></select></div>
+<p id="detection_note" class="note"></p>
+<p class="note">New devices use Auto. Existing selections are retained. If detection is uncertain, previous settings are kept and manual selection remains available.</p>
 <label id="antenna_field" hidden>Wi-Fi antenna
 <select id="antenna"><option value="external">External</option><option value="internal">Internal (built-in)</option></select>
 <small>External antenna must be connected. Changing antennas restarts the device.</small></label>
@@ -69,7 +73,8 @@
 <p class="note" id="battery_note">Show estimated charge and voltage at the top of the main UI in both modes.</p>
 <button id="battery_help" type="button" aria-haspopup="dialog">Battery wiring</button>
 </section>
-<div class="actions"><button id="finish" type="submit">Finish setup</button><button id="later" type="button">Finish later</button><a id="cancel" href="/" hidden>Back to controls</a></div>
+<div class="actions"><button id="discard_choices" type="button" hidden>Discard unsaved changes</button>
+<button id="finish" type="submit">Finish setup</button><button id="later" type="button">Finish later</button><a id="cancel" href="/" hidden>Back to controls</a></div>
 </fieldset>
 <p id="feedback" class="status" role="status" aria-live="polite">Loading settings…</p>
 </form>

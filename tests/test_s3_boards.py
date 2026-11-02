@@ -43,7 +43,11 @@ class S3BoardsTests(unittest.TestCase):
 #include <cassert>
 #include <cstring>
 #include <vector>
-uint8_t s3BoardVariant=0,micFormat=0;
+uint8_t s3BoardVariant=0,micFormat=0,cpuFrequencyMhz=160;
+float currentGainFactor=1.5f;
+bool s3BoardAutoDetect=false,micAutoDetect=true;
+namespace recordingpins { inline bool senseSdPresent=false; }
+bool setCpuFrequencyMhz(uint8_t){return true;}
 constexpr uint8_t MIC_FORMAT_PDM=2;
 constexpr uint32_t PDM_SAMPLE_RATE=48000;
 uint32_t currentSampleRate=96000,minAcceptableRate=33;
@@ -152,14 +156,14 @@ struct {String value;String arg(const char*){return value;}} web;
 bool auth=true,supported=true,applyOk=true;int calls=0,saves=0;uint8_t applied=99,s3BoardVariant=0;
 bool requireMutationAuth(){return auth;}
 bool s3BoardSelectionSupported(){return supported;}
-bool applyS3BoardConfig(uint8_t v){++calls;applied=v;if(applyOk)s3BoardVariant=v;return applyOk;}
+bool applyBoardChoice(uint8_t v){++calls;applied=v;if(applyOk)s3BoardVariant=v;return applyOk;}
 void saveAudioSettings(){++saves;}
 void apiSendJSON(const char*){}
 ''' + parser + function(WEB, 'static void httpSaveS3Board()') + r'''
 int main(){
  web.value="1";auth=false;httpSaveS3Board();assert(!calls&&!saves);auth=true;
  supported=false;httpSaveS3Board();assert(!calls&&!saves);supported=true;
- for(const char* bad:{"3","-1","256","1x","","999999999999999999999"}){web.value=bad;httpSaveS3Board();assert(!calls&&!saves);}
+ for(const char* bad:{"4","-1","256","1x","","999999999999999999999"}){web.value=bad;httpSaveS3Board();assert(!calls&&!saves);}
  web.value="2";applyOk=false;httpSaveS3Board();assert(calls==1&&!saves);
  applyOk=true;httpSaveS3Board();assert(calls==2&&saves==1&&applied==2);
  recording::active=true;web.value="1";httpSaveS3Board();

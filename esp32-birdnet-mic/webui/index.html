@@ -9,6 +9,7 @@
 <style>:root{color-scheme:light dark;--bg:#f6f7fb;--bg2:#eef2f8;--fg:#0f172a;--muted:#526079;--card:rgba(255,255,255,.88);--card2:rgba(255,255,255,.72);--border:rgba(15,23,42,.12);--acc:#0ea5e9;--acc2:#10b981;--warn:#f59e0b;--bad:#ef4444;--shadow:0 14px 34px rgba(15,23,42,.10);--shadow2:0 8px 18px rgba(15,23,42,.08);--row:rgba(15,23,42,.03);--row2:rgba(15,23,42,.05);--field:rgba(255,255,255,.70)}@media (prefers-color-scheme:dark){:root{--bg:#070a14;--bg2:#0b1632;--fg:#e8eefc;--muted:#a7b3cb;--card:rgba(15,23,42,.70);--card2:rgba(15,23,42,.55);--border:rgba(226,232,240,.14);--shadow:0 18px 44px rgba(0,0,0,.55);--shadow2:0 10px 22px rgba(0,0,0,.40);--row:rgba(255,255,255,.04);--row2:rgba(255,255,255,.06);--field:rgba(255,255,255,.04)}}:root[data-theme='light']{color-scheme:light;--bg:#f6f7fb;--bg2:#eef2f8;--fg:#0f172a;--muted:#526079;--card:rgba(255,255,255,.88);--card2:rgba(255,255,255,.72);--border:rgba(15,23,42,.12);--shadow:0 14px 34px rgba(15,23,42,.10);--shadow2:0 8px 18px rgba(15,23,42,.08);--row:rgba(15,23,42,.03);--row2:rgba(15,23,42,.05);--field:rgba(255,255,255,.70)}:root[data-theme='dark']{color-scheme:dark;--bg:#070a14;--bg2:#0b1632;--fg:#e8eefc;--muted:#a7b3cb;--card:rgba(15,23,42,.70);--card2:rgba(15,23,42,.55);--border:rgba(226,232,240,.14);--shadow:0 18px 44px rgba(0,0,0,.55);--shadow2:0 10px 22px rgba(0,0,0,.40);--row:rgba(255,255,255,.04);--row2:rgba(255,255,255,.06);--field:rgba(255,255,255,.04)}*{box-sizing:border-box}body{font-size:14px;line-height:1.5;font-family:ui-rounded,"SF Pro Rounded","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;margin:0;color:var(--fg);background:radial-gradient(1100px 700px at 12% -10%,rgba(14,165,233,.18),transparent 60%),radial-gradient(900px 700px at 90% -20%,rgba(16,185,129,.16),transparent 55%),linear-gradient(180deg,var(--bg),var(--bg2));min-height:100vh}a{color:inherit}.page{max-width:1000px;margin:0 auto;padding:18px 16px 24px}.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin:0;box-shadow:var(--shadow2);backdrop-filter:blur(10px)}.page>.card{margin-bottom:14px}.top{position:static}.hero{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:0;flex-wrap:wrap}.hero>div:first-child{min-width:0;flex:1 1 300px}.brand{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}.title{font-weight:850;font-size:18px;line-height:1.3}.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--row);color:var(--muted);padding:4px 10px;border-radius:999px;font-size:12px}details.card>summary.sum{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0;margin:0;border:0}details.card>summary.sum::-webkit-details-marker{display:none}.chev{width:26px;height:26px;border-radius:999px;border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;color:var(--muted);background:var(--row);font-weight:900;line-height:1}.chev:before{content:'+'}details[open]>summary.sum .chev:before{content:'−'}summary.sum:hover .chev{border-color:rgba(14,165,233,.55);background:var(--row2)}table{width:100%;border-collapse:separate;border-spacing:0 8px}td{padding:10px 10px;background:var(--row);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}tr td:first-child{border-left:1px solid var(--border);border-top-left-radius:12px;border-bottom-left-radius:12px}tr td:last-child{border-right:1px solid var(--border);border-top-right-radius:12px;border-bottom-right-radius:12px}td.k{color:var(--muted);width:44%;font-size:14px}td.v{font-weight:750;font-size:14px}button,select,input{font:inherit;padding:9px 11px;border-radius:12px;border:1px solid var(--border);background:var(--field);color:var(--fg)}option{background:#fff;color:#0f172a}button{background:var(--row);cursor:pointer;font-weight:800}button:hover{border-color:rgba(14,165,233,.55);background:var(--row2)}button:disabled{opacity:.55;cursor:not-allowed}button.active{background:rgba(14,165,233,.18);border-color:rgba(14,165,233,.55);color:var(--fg)}button.danger{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35)}button.danger:hover{border-color:rgba(239,68,68,.55);background:rgba(239,68,68,.16)}button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid rgba(14,165,233,.35);outline-offset:2px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}#adv{font-size:14px;color:var(--muted);line-height:1.4}.ok{color:var(--acc2)} .warn{color:var(--warn)} .bad{color:var(--bad)}span.ok,span.warn,span.bad{display:inline-flex;align-items:center;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--row);font-size:12px;font-weight:800}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}td.v .mono{overflow-wrap:anywhere;word-break:break-word}input[type=number]{width:130px} select{min-width:110px} .muted{color:var(--muted)}.field{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.unit{color:var(--muted);font-size:12px}.help{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1px solid rgba(14,165,233,.55);border-radius:999px;font-size:12px;color:var(--fg);margin-left:8px;background:rgba(14,165,233,.08);cursor:pointer}.help:hover{filter:brightness(1.05)}.hint{margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--card2);color:var(--fg);font-size:14px;line-height:1.4;box-shadow:none}.dirty{border-color:rgba(239,68,68,.65)!important;box-shadow:0 0 0 3px rgba(239,68,68,.16);background:rgba(239,68,68,.10)}.gh{margin-right:10px;color:var(--acc);text-decoration:none;border:1px solid var(--border);background:var(--row);padding:6px 10px;border-radius:999px;font-size:14px}.gh:hover{border-color:rgba(14,165,233,.55);background:var(--row2)}.stream-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:760px){.stream-grid{grid-template-columns:1fr}}.stream-sub{background:var(--row);border:1px solid var(--border);border-radius:14px;padding:12px}.stream-sub h3{font-size:12px;margin:0 0 8px;color:var(--acc);font-weight:800;letter-spacing:.1em;text-transform:uppercase}.lang{display:flex;align-items:center;gap:8px;white-space:nowrap;color:var(--muted);font-size:14px;flex-wrap:wrap;justify-content:flex-end}@media (max-width:760px){.page{padding:12px 10px 18px}.lang{width:100%;justify-content:flex-start;white-space:normal}.lang select{min-width:92px}.gh{margin-right:0}}pre{white-space:pre-wrap;word-break:break-word;background:var(--row);border:1px solid var(--border);border-radius:14px;padding:12px;overflow:auto;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)} pre#logs{height:45vh}.overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:9999}.overlay .box{background:var(--card);border:1px solid var(--border);padding:16px 20px;border-radius:16px;color:var(--fg);text-align:center;min-width:260px;box-shadow:var(--shadow)}.thermal-alert{border:2px solid var(--bad);background:var(--card);padding:18px;border-radius:14px;margin:12px 0}.thermal-alert strong{color:var(--bad);font-size:1.1rem}.thermal-alert p{margin:10px 0;overflow-wrap:anywhere}.thermal-alert button{white-space:normal}
 #mic_dialog{color:var(--fg);background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:20px;width:min(560px,calc(100% - 32px));max-height:85dvh;overflow:auto;box-sizing:border-box}
 #mic_dialog::backdrop{background:#0009}#mic_dialog h2{margin-top:0}#mic_dialog table{display:table;width:100%;table-layout:fixed}#mic_dialog tbody{display:table-row-group}#mic_dialog tr{display:table-row}#mic_dialog th,#mic_dialog td{padding:7px 4px;overflow-wrap:anywhere;text-align:left}#mic_dialog .actions{display:flex;flex-wrap:wrap;gap:8px}#mic_dialog .actions button{flex:1 1 180px;white-space:normal}
+#noise_spectrum{display:block;width:100%;height:240px;border:1px solid var(--border);border-radius:12px;background:var(--row)}
 </style>
 <style>
 #audio_settings{table-layout:fixed}
@@ -258,12 +259,13 @@
 <td class='k'><label for='sel_s3_board'>S3 board</label></td>
 <td class='v'><div class='field'>
 <select id='sel_s3_board'>
-<option value='0'>XIAO ESP32-S3 / Plus (default)</option>
+<option value='3'>Auto-detect board</option>
+<option value='0'>XIAO ESP32-S3</option>
 <option value='1'>XIAO ESP32-S3 Sense</option>
 <option value='2'>M5Stack AtomS3U</option>
 </select>
 <button id='btn_s3_board_apply' onclick='saveS3Board()'>Apply board</button>
-</div><div class='hint'>AtomS3U: contributor-tested with BirdNET-Go; built-in PDM microphone. Sense: Experimental — needs more testing; PDM uses its built-in microphone, I2S uses an external microphone. Recording uses its built-in microSD slot. Default: external microphone. Applying restarts audio and saves the board.</div></td>
+</div><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -273,16 +275,17 @@
 <td class='v'>
 <div class='field'>
 <select id='sel_mic_format'>
+<option value='3'>Auto-detect microphone</option>
 <option value='0'>ICS-43434 / INMP441 (Philips I2S)</option>
 <option value='1'>Adafruit SPH0645 (MSB / left-justified)</option>
 <option value='2' id='opt_pdm'>PDM microphone (IM73D122)</option>
 </select>
 <button id='btn_mic_apply' onclick="chooseMicSettings()">Apply</button><button id='btn_mic_recommended' onclick="chooseMicSettings(true)">Recommended settings</button><small id='mic_format_label' class='muted'></small>
-</div>
+</div><p id='mic_detection_note' class='section-note'></p>
 </td>
 </tr>
 <tr id='row_mic_format_hint' style='display:none'>
-<td colspan='2'><div class='hint'>Philips I2S is the default for existing installations. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
+<td colspan='2'><div class='hint'>Existing installations retain their saved format. New installations start in Auto. Auto identifies the signal format, not the exact microphone model, and retains your tuned gain. Software PDM requires at least 160 MHz; Auto may select this frequency when needed. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -353,6 +356,19 @@
 <div class='hint' id='txt_hpf_cut_hint'>High-pass cutoff in Hz.</div>
 </td>
 </tr>
+<tr><td class='k'><label for='noise_mode'>Adaptive noise reduction</label><span class='badge'>Experimental</span></td>
+<td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
+<p id='noise_status' class='section-note' role='status'>Off</p></td></tr>
+<tr><td colspan='2'><p class='section-note'>Reduces steady hiss and hum after High-pass. May affect faint or continuous bird calls; improved BirdNET recognition is not yet verified. When on, Listen, RTSP and SD recordings all receive processed audio. Uses more CPU and memory and may shorten battery life. At low CPU frequencies, including 80 MHz, processing may be too slow.</p>
+<details id='noise_details' class='advanced'><summary>Noise reduction details</summary>
+<table><tr><td class='k'><label for='noise_floor'>Maximum reduction</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>6 dB</option><option value='12'>12 dB</option><option value='20'>20 dB</option></select></div></td></tr>
+<tr><td class='k'><label for='noise_adapt'>Adaptation</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
+<p class='section-note'>Normal is the starting point. Fast follows changing background sooner but may treat long songs as noise. Slow offers more protection for continuous songs. The profile learns again after restart or a change to the preceding audio settings; initially audio passes without reduction.</p>
+<p id='noise_metrics' class='section-note'></p>
+<canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
+<p class='section-note'>Blue: live level · Orange: estimated floor · Green: learned profile. Frequency in kHz, level in dBFS per frequency band. These curves include environmental sounds and do not measure the microphone’s self-noise alone.</p>
+</details><div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
+<p class='section-note'>Stop and save recording before changing noise reduction. If resources are insufficient, audio remains unfiltered and the reason appears above. CPU frequency is never raised by this filter.</p></td></tr>
 </table><details id='audioadvanced' class='advanced'><summary>Advanced audio settings</summary><table>
 <tr>
 <td class='k'>
@@ -1472,8 +1488,8 @@ $('health_stop').textContent=j.last_stop_time ? (j.last_stop_stream?'Stream '+j.
 async function saveS3Board(){
  if(micDialogLoading||micDialogState||sectionBusy.has('audiosec'))return;
  const variant=Number($('sel_s3_board').value);
+ if(!differsFromSaved('s3_board'))return;
  const keys=['s3_board'];
- if(variant!==0)keys.push('mic_format','rate','hp_cutoff');
  await saveValues('/api/settings/s3_board',{variant},keys,'audiosec','Board saved. Audio restarted. Check the signal level and adjust Gain if needed.');
 }
 let micDialogState=null,micDialogLoading=false;
@@ -1481,12 +1497,13 @@ const micProfileKeys=['mic_format','rate','gain','buffer','shift','hp_enable','h
 async function chooseMicSettings(force=false){
  if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
  const format=Number($('sel_mic_format').value),label=$('sel_mic_format').selectedOptions[0]?.textContent||'';
+ if(format===3){if(!differsFromSaved('mic_format'))return;await saveValues('/api/settings/microphone',{format:3,settings:'keep'},['mic_format'],'audiosec','Auto microphone selection saved. Check the detection result and signal level.');return;}
  micDialogLoading=true;
  try{
   const [p,a,t]=await Promise.all([fetchJSON('/api/microphone_profile?format='+format),fetchJSON('/api/audio_status'),fetchJSON('/api/thermal')]);
   if(!p.ok||p.mic_format!==format)throw new Error('profile');
   if(Number($('sel_mic_format').value)!==format||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
-  if(!force&&a.mic_format===format){feedback('audiosec','This microphone is already selected. Use Recommended settings to review its defaults.');return;}
+  if(!force&&a.mic_format===format&&!a.detection?.mic_auto){feedback('audiosec','This microphone is already selected. Use Recommended settings to review its defaults.');return;}
   const rows=$('mic_dialog_rows');rows.replaceChildren();
   const add=(label,old,value)=>{const tr=document.createElement('tr');for(const text of [label,old,value]){const td=document.createElement('td');td.textContent=String(text);tr.append(td);}rows.append(tr);};
   add('Sample rate',a.sample_rate+' Hz',p.sample_rate+' Hz');
@@ -1519,15 +1536,17 @@ function renderMicFormat(j){
   const row=document.getElementById('row_s3_board');
   if(row){
     row.style.display=j.s3_board_supported===true?'':'none';
-    syncInput(document.getElementById('sel_s3_board'),'s3_board',String(j.s3_board??0));
+    syncInput(document.getElementById('sel_s3_board'),'s3_board',String(j.detection?.board_auto?3:(j.s3_board??0)));
   }
   const locked=j.s3_board_supported===true&&Number(j.s3_board)===2;
   const apply=document.getElementById('btn_mic_apply');
-  if(apply)apply.disabled=locked;
+  if(apply)apply.disabled=false;
 
   const select=document.getElementById('sel_mic_format');
   const now=Date.now();
-  if(select){select.disabled=locked;syncInput(select,'mic_format',String(j.mic_format));}
+  if(select){select.disabled=false;syncInput(select,'mic_format',String(j.detection?.mic_auto?3:j.mic_format));}
+  $('mic_detection_note').textContent=j.detection?.note||'';
+  $('btn_mic_recommended').disabled=select?.value==='3';
   if(select){toggleDirty(select,'mic_format');document.getElementById('mic_format_label').textContent=select.selectedOptions[0]?.textContent||'';}
   const option=document.getElementById('opt_pdm');
   if(option){
@@ -1542,7 +1561,7 @@ function renderMicFormat(j){
     if(el){el.disabled=pdm; el.title=pdm?'PDM uses 48 kHz PCM; I2S Shift is unused.':'';}
   }
 }
-function loadAudio(){return fetchJSON('/api/audio_status').then(j=>{ const r=$('in_rate'); const g=$('in_gain'); const sb=$('sel_buf'); const s=$('in_shift'); const hp=$('sel_hp'); const hpc=$('in_hp_cutoff'); const now=Date.now(); syncInput(r,'rate',j.sample_rate); syncInput(g,'gain',j.gain.toFixed(2)); syncInput(sb,'buffer',j.buffer_size); syncInput(s,'shift',j.i2s_shift); syncInput(hp,'hp_enable',j.hp_enable?'on':'off'); syncInput(hpc,'hp_cutoff',j.hp_cutoff_hz); $('lat').textContent=j.latency_ms.toFixed(1)+' ms'; $('profile').textContent=profileText(j.buffer_size); renderMicFormat(j); renderAudioLevel(j); updateStreamHealth(j); updateOverview('audio',j); updateAdvice(j); })}function updateAdvice(a){const L=T[lang]; let tips=[]; if(a.buffer_size_recommended===512){if(a.buffer_size!==512) tips.push('Use 512 samples on this board to leave RAM for Wi-Fi.');}else{if(a.buffer_size<512) tips.push(L.adv_buf512); if(a.buffer_size<1024) tips.push(L.adv_buf1024);} if(a.gain>20) tips.push(a.mic_format===2?'High PDM gain may clip. Reduce Gain if needed.':L.adv_gain); $('adv').textContent=tips.join(' ');}function loadPerf(){return fetchJSON('/api/perf_status').then(j=>{ const now=Date.now(); const el=$('in_auto'); syncInput(el,'auto_recovery',j.auto_recovery?'on':'off'); const thr=$('in_thr'); const chk=$('in_chk'); const mode=$('in_thr_mode'); const sch=$('in_sched'); const hrs=$('in_hours'); syncInput(mode,'thr_mode',j.auto_threshold?'auto':'manual'); syncInput(thr,'min_rate',j.restart_threshold_pkt_s); syncInput(chk,'check_interval',j.check_interval_min); syncInput(sch,'sched_reset',j.scheduled_reset?'on':'off'); syncInput(hrs,'reset_hours',j.reset_hours); $('row_min_rate').style.display=j.auto_threshold?'none':''; })}let thermalAutoPending=false;
+function loadAudio(){return fetchJSON('/api/audio_status').then(j=>{ const r=$('in_rate'); const g=$('in_gain'); const sb=$('sel_buf'); const s=$('in_shift'); const hp=$('sel_hp'); const hpc=$('in_hp_cutoff'); const now=Date.now(); syncInput(r,'rate',j.sample_rate); syncInput(g,'gain',j.gain.toFixed(2)); syncInput(sb,'buffer',j.buffer_size); syncInput(s,'shift',j.i2s_shift); syncInput(hp,'hp_enable',j.hp_enable?'on':'off'); syncInput(hpc,'hp_cutoff',j.hp_cutoff_hz); $('lat').textContent=j.latency_ms.toFixed(1)+' ms'; $('profile').textContent=profileText(j.buffer_size); renderMicFormat(j); if(window.renderNoiseSettings)renderNoiseSettings(j.noise); renderAudioLevel(j); updateStreamHealth(j); updateOverview('audio',j); updateAdvice(j); })}function updateAdvice(a){const L=T[lang]; let tips=[]; if(a.buffer_size_recommended===512){if(a.buffer_size!==512) tips.push('Use 512 samples on this board to leave RAM for Wi-Fi.');}else{if(a.buffer_size<512) tips.push(L.adv_buf512); if(a.buffer_size<1024) tips.push(L.adv_buf1024);} if(a.gain>20) tips.push(a.mic_format===2?'High PDM gain may clip. Reduce Gain if needed.':L.adv_gain); $('adv').textContent=tips.join(' ');}function loadPerf(){return fetchJSON('/api/perf_status').then(j=>{ const now=Date.now(); const el=$('in_auto'); syncInput(el,'auto_recovery',j.auto_recovery?'on':'off'); const thr=$('in_thr'); const chk=$('in_chk'); const mode=$('in_thr_mode'); const sch=$('in_sched'); const hrs=$('in_hours'); syncInput(mode,'thr_mode',j.auto_threshold?'auto':'manual'); syncInput(thr,'min_rate',j.restart_threshold_pkt_s); syncInput(chk,'check_interval',j.check_interval_min); syncInput(sch,'sched_reset',j.scheduled_reset?'on':'off'); syncInput(hrs,'reset_hours',j.reset_hours); $('row_min_rate').style.display=j.auto_threshold?'none':''; })}let thermalAutoPending=false;
 function renderThermalRecovery(j){
  thermalAutoPending=!!j.auto_resume_pending;
  const stop=$('b_srv_off'); if(stop&&thermalAutoPending) stop.disabled=false;
@@ -1616,12 +1635,13 @@ function downloadLogs(){ fetch('/api/logs?download=1',{cache:'no-store'}).then(r
  pollBusy=true;const now=Date.now(),jobs=[['status',loadStatus],['audio',loadAudio]];
  if(force||now-lastSlowPoll>=POLL_SLOW_MS){lastSlowPoll=now;jobs.push(['perf',loadPerf],['thermal',loadTherm],['wifi',loadWifiAp]);}
  if(logsOpen()&&(force||now-lastLogPoll>=POLL_SLOW_MS)){lastLogPoll=now;jobs.push(['logs',loadLogs]);}
- pollPromise=Promise.allSettled(jobs.map(async([key,load])=>{try{await load();delete pollErrors[key];}catch(error){pollErrors[key]=true;throw error;}})).then(()=>{
+ pollPromise=Promise.allSettled(jobs.map(async([key,load])=>{try{await load();delete pollErrors[key];}catch(error){pollErrors[key]=(pollErrors[key]||0)+1;throw error;}})).then(()=>{
   if(wifiOffIntent)return;
-  $('connection_status').textContent=Object.keys(pollErrors).length?'Some device data could not be refreshed. Displayed values may be out of date.':'';
-  if(pollErrors.status){$('device_mode_status').textContent='Device status unavailable';$('device_mode_status').className='muted';$('overview_streams').textContent='RTSP: unavailable';$('overview_wifi').textContent='Wi-Fi: unavailable';}
-  if(pollErrors.audio){$('overview_mic').textContent='Microphone: unavailable';$('overview_mic').className='muted';}
-  if(pollErrors.thermal){$('overview_temp').textContent='Temperature: unavailable';$('overview_temp').className='muted';}
+  const failing=key=>(pollErrors[key]||0)>=2;
+  $('connection_status').textContent=Object.keys(pollErrors).some(failing)?'Some device data could not be refreshed. Displayed values may be out of date.':'';
+  if(failing('status')){$('device_mode_status').textContent='Device status unavailable';$('device_mode_status').className='muted';$('overview_streams').textContent='RTSP: unavailable';$('overview_wifi').textContent='Wi-Fi: unavailable';}
+  if(failing('audio')){$('overview_mic').textContent='Microphone: unavailable';$('overview_mic').className='muted';}
+  if(failing('thermal')){$('overview_temp').textContent='Temperature: unavailable';$('overview_temp').className='muted';}
   updateDependencies();
  }).finally(()=>{pollBusy=false;pollPromise=null;});return pollPromise;
 }
@@ -1652,6 +1672,42 @@ window.addEventListener('beforeunload',event=>{if(Object.keys(edits).length||wif
   trackEdit(document.getElementById('sel_s3_board'),'s3_board');
   trackEdit(document.getElementById('sel_mic_format'),'mic_format');document.getElementById('sel_mic_format').addEventListener('change',()=>{document.getElementById('mic_format_label').textContent=document.getElementById('sel_mic_format').selectedOptions[0]?.textContent||'';});
 })();
+</script>
+<script>const noiseFields=[['noise_mode','noise_mode','mode'],['noise_floor','noise_floor','floor_db'],['noise_adapt','noise_adapt','adapt_s']];
+for(const [id,key] of noiseFields){trackEdit($(id),key);$(id).addEventListener('change',updateNoiseSave);}
+function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_save').disabled=busy||sectionBusy.has('audiosec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
+function renderNoiseSettings(s){
+ if(!s)return;
+ for(const [id,key,field] of noiseFields)syncInput($(id),key,String(s[field]));
+ $('noise_status').textContent=s.error||(s.mode?(s.active?(s.learned?'Running':'Learning noise profile: '+s.learn_pct+'%'):'Starting…'):'Off — original audio');
+ $('noise_status').className='section-note '+(s.error?'warn':'');
+ $('noise_metrics').textContent=s.active?`Processing: ${s.cpu_pct}% of audio time · Peak: ${s.cpu_peak_pct}% · Estimated reduction: ${s.est_reduction_db} dB · Working memory: ${s.engine_psram?'PSRAM':'internal RAM'}`:'';
+ updateNoiseSave();
+}
+async function saveNoiseSettings(){
+ if(!noiseFields.some(([,key])=>differsFromSaved(key)))return;
+ await saveValues('/api/noise/set',{mode:$('noise_mode').value,floor:$('noise_floor').value,adapt:$('noise_adapt').value},noiseFields.map(([,key])=>key),'audiosec','Noise reduction settings saved.');updateNoiseSave();
+}
+let noiseGraphBusy=false;
+async function updateNoiseSpectrum(){
+ if(!$('noise_details').open||!$('audiosec').open||noiseGraphBusy)return;
+ noiseGraphBusy=true;
+ try{
+  const s=await fetchJSON('/api/noise?spectra=1');renderNoiseSettings(s);
+  const canvas=$('noise_spectrum'),ctx=canvas.getContext('2d'),w=canvas.clientWidth,h=240,dpr=window.devicePixelRatio||1;
+  canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);ctx.font=getComputedStyle(canvas).font;ctx.fillStyle=getComputedStyle(document.body).color;
+  if(!s.active||!s.level){ctx.fillText('Enable noise reduction',12,30);ctx.fillText('to view its spectrum.',12,52);return;}
+  const db=q=>(q-14514.409)*3.0103/256;
+  const x=k=>48+k*(w-64)/256,y=q=>Math.max(12,Math.min(h-30,12+(-db(q))*(h-42)/120));
+  ctx.strokeStyle=getComputedStyle(canvas).borderColor;ctx.lineWidth=1;
+  for(const level of [0,-30,-60,-90,-120]){const yy=12-level*(h-42)/120;ctx.fillText(String(level),4,yy+5);ctx.beginPath();ctx.moveTo(48,yy);ctx.lineTo(w-16,yy);ctx.stroke();}
+  for(const k of [0,64,128,192,256])ctx.fillText((k*s.sample_rate/512000).toFixed(0),x(k)-6,h-8);
+  for(const [key,color] of [['level','#3b82f6'],['floor','#f59e0b'],['signature','#10b981']]){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();s[key].forEach((q,k)=>k?ctx.lineTo(x(k),y(q)):ctx.moveTo(x(k),y(q)));ctx.stroke();}
+ }catch(_){$('noise_metrics').textContent='Spectrum unavailable. Retrying while details are open.';}finally{noiseGraphBusy=false;}
+}
+$('noise_details').addEventListener('toggle',updateNoiseSpectrum);
+setInterval(updateNoiseSpectrum,3000);
 </script>
 <script>
 (function(){

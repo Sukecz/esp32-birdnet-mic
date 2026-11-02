@@ -7,6 +7,7 @@ No uploads, installs, restarts or notification messages are performed.
 import argparse
 import hashlib
 import json
+from check_release_texts import check as check_release_copy
 import re
 import urllib.request
 
@@ -56,6 +57,7 @@ def verify(repo, version, base):
             raise ValueError("Public/GitHub mismatch: " + name)
     if public["ota-version.txt"].decode().strip() != version:
         raise ValueError("OTA feed advertises another version")
+    check_release_copy(read(base.rstrip("/")+"/").decode(), version)
     manifest = json.loads(public["manifest.json"])
     if manifest["version"] != version:
         raise ValueError("Manifest advertises another version")

@@ -152,8 +152,8 @@ $('health_stop').textContent=j.last_stop_time ? (j.last_stop_stream?'Stream '+j.
 async function saveS3Board(){
  if(micDialogLoading||micDialogState||sectionBusy.has('audiosec'))return;
  const variant=Number($('sel_s3_board').value);
+ if(!differsFromSaved('s3_board'))return;
  const keys=['s3_board'];
- if(variant!==0)keys.push('mic_format','rate','hp_cutoff');
  await saveValues('/api/settings/s3_board',{variant},keys,'audiosec','Board saved. Audio restarted. Check the signal level and adjust Gain if needed.');
 }
 let micDialogState=null,micDialogLoading=false;
@@ -161,12 +161,13 @@ const micProfileKeys=['mic_format','rate','gain','buffer','shift','hp_enable','h
 async function chooseMicSettings(force=false){
  if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
  const format=Number($('sel_mic_format').value),label=$('sel_mic_format').selectedOptions[0]?.textContent||'';
+ if(format===3){if(!differsFromSaved('mic_format'))return;await saveValues('/api/settings/microphone',{format:3,settings:'keep'},['mic_format'],'audiosec','Auto microphone selection saved. Check the detection result and signal level.');return;}
  micDialogLoading=true;
  try{
   const [p,a,t]=await Promise.all([fetchJSON('/api/microphone_profile?format='+format),fetchJSON('/api/audio_status'),fetchJSON('/api/thermal')]);
   if(!p.ok||p.mic_format!==format)throw new Error('profile');
   if(Number($('sel_mic_format').value)!==format||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
-  if(!force&&a.mic_format===format){feedback('audiosec','This microphone is already selected. Use Recommended settings to review its defaults.');return;}
+  if(!force&&a.mic_format===format&&!a.detection?.mic_auto){feedback('audiosec','This microphone is already selected. Use Recommended settings to review its defaults.');return;}
   const rows=$('mic_dialog_rows');rows.replaceChildren();
   const add=(label,old,value)=>{const tr=document.createElement('tr');for(const text of [label,old,value]){const td=document.createElement('td');td.textContent=String(text);tr.append(td);}rows.append(tr);};
   add('Sample rate',a.sample_rate+' Hz',p.sample_rate+' Hz');
@@ -199,15 +200,17 @@ function renderMicFormat(j){
   const row=document.getElementById('row_s3_board');
   if(row){
     row.style.display=j.s3_board_supported===true?'':'none';
-    syncInput(document.getElementById('sel_s3_board'),'s3_board',String(j.s3_board??0));
+    syncInput(document.getElementById('sel_s3_board'),'s3_board',String(j.detection?.board_auto?3:(j.s3_board??0)));
   }
   const locked=j.s3_board_supported===true&&Number(j.s3_board)===2;
   const apply=document.getElementById('btn_mic_apply');
-  if(apply)apply.disabled=locked;
+  if(apply)apply.disabled=false;
 
   const select=document.getElementById('sel_mic_format');
   const now=Date.now();
-  if(select){select.disabled=locked;syncInput(select,'mic_format',String(j.mic_format));}
+  if(select){select.disabled=false;syncInput(select,'mic_format',String(j.detection?.mic_auto?3:j.mic_format));}
+  $('mic_detection_note').textContent=j.detection?.note||'';
+  $('btn_mic_recommended').disabled=select?.value==='3';
   if(select){toggleDirty(select,'mic_format');document.getElementById('mic_format_label').textContent=select.selectedOptions[0]?.textContent||'';}
   const option=document.getElementById('opt_pdm');
   if(option){
@@ -222,7 +225,7 @@ function renderMicFormat(j){
     if(el){el.disabled=pdm; el.title=pdm?'PDM uses 48 kHz PCM; I2S Shift is unused.':'';}
   }
 }
-function loadAudio(){return fetchJSON('/api/audio_status').then(j=>{ const r=$('in_rate'); const g=$('in_gain'); const sb=$('sel_buf'); const s=$('in_shift'); const hp=$('sel_hp'); const hpc=$('in_hp_cutoff'); const now=Date.now(); syncInput(r,'rate',j.sample_rate); syncInput(g,'gain',j.gain.toFixed(2)); syncInput(sb,'buffer',j.buffer_size); syncInput(s,'shift',j.i2s_shift); syncInput(hp,'hp_enable',j.hp_enable?'on':'off'); syncInput(hpc,'hp_cutoff',j.hp_cutoff_hz); $('lat').textContent=j.latency_ms.toFixed(1)+' ms'; $('profile').textContent=profileText(j.buffer_size); renderMicFormat(j); renderAudioLevel(j); updateStreamHealth(j); updateOverview('audio',j); updateAdvice(j); })}function updateAdvice(a){const L=T[lang]; let tips=[]; if(a.buffer_size_recommended===512){if(a.buffer_size!==512) tips.push('Use 512 samples on this board to leave RAM for Wi-Fi.');}else{if(a.buffer_size<512) tips.push(L.adv_buf512); if(a.buffer_size<1024) tips.push(L.adv_buf1024);} if(a.gain>20) tips.push(a.mic_format===2?'High PDM gain may clip. Reduce Gain if needed.':L.adv_gain); $('adv').textContent=tips.join(' ');}function loadPerf(){return fetchJSON('/api/perf_status').then(j=>{ const now=Date.now(); const el=$('in_auto'); syncInput(el,'auto_recovery',j.auto_recovery?'on':'off'); const thr=$('in_thr'); const chk=$('in_chk'); const mode=$('in_thr_mode'); const sch=$('in_sched'); const hrs=$('in_hours'); syncInput(mode,'thr_mode',j.auto_threshold?'auto':'manual'); syncInput(thr,'min_rate',j.restart_threshold_pkt_s); syncInput(chk,'check_interval',j.check_interval_min); syncInput(sch,'sched_reset',j.scheduled_reset?'on':'off'); syncInput(hrs,'reset_hours',j.reset_hours); $('row_min_rate').style.display=j.auto_threshold?'none':''; })}let thermalAutoPending=false;
+function loadAudio(){return fetchJSON('/api/audio_status').then(j=>{ const r=$('in_rate'); const g=$('in_gain'); const sb=$('sel_buf'); const s=$('in_shift'); const hp=$('sel_hp'); const hpc=$('in_hp_cutoff'); const now=Date.now(); syncInput(r,'rate',j.sample_rate); syncInput(g,'gain',j.gain.toFixed(2)); syncInput(sb,'buffer',j.buffer_size); syncInput(s,'shift',j.i2s_shift); syncInput(hp,'hp_enable',j.hp_enable?'on':'off'); syncInput(hpc,'hp_cutoff',j.hp_cutoff_hz); $('lat').textContent=j.latency_ms.toFixed(1)+' ms'; $('profile').textContent=profileText(j.buffer_size); renderMicFormat(j); if(window.renderNoiseSettings)renderNoiseSettings(j.noise); renderAudioLevel(j); updateStreamHealth(j); updateOverview('audio',j); updateAdvice(j); })}function updateAdvice(a){const L=T[lang]; let tips=[]; if(a.buffer_size_recommended===512){if(a.buffer_size!==512) tips.push('Use 512 samples on this board to leave RAM for Wi-Fi.');}else{if(a.buffer_size<512) tips.push(L.adv_buf512); if(a.buffer_size<1024) tips.push(L.adv_buf1024);} if(a.gain>20) tips.push(a.mic_format===2?'High PDM gain may clip. Reduce Gain if needed.':L.adv_gain); $('adv').textContent=tips.join(' ');}function loadPerf(){return fetchJSON('/api/perf_status').then(j=>{ const now=Date.now(); const el=$('in_auto'); syncInput(el,'auto_recovery',j.auto_recovery?'on':'off'); const thr=$('in_thr'); const chk=$('in_chk'); const mode=$('in_thr_mode'); const sch=$('in_sched'); const hrs=$('in_hours'); syncInput(mode,'thr_mode',j.auto_threshold?'auto':'manual'); syncInput(thr,'min_rate',j.restart_threshold_pkt_s); syncInput(chk,'check_interval',j.check_interval_min); syncInput(sch,'sched_reset',j.scheduled_reset?'on':'off'); syncInput(hrs,'reset_hours',j.reset_hours); $('row_min_rate').style.display=j.auto_threshold?'none':''; })}let thermalAutoPending=false;
 function renderThermalRecovery(j){
  thermalAutoPending=!!j.auto_resume_pending;
  const stop=$('b_srv_off'); if(stop&&thermalAutoPending) stop.disabled=false;
@@ -296,12 +299,13 @@ function downloadLogs(){ fetch('/api/logs?download=1',{cache:'no-store'}).then(r
  pollBusy=true;const now=Date.now(),jobs=[['status',loadStatus],['audio',loadAudio]];
  if(force||now-lastSlowPoll>=POLL_SLOW_MS){lastSlowPoll=now;jobs.push(['perf',loadPerf],['thermal',loadTherm],['wifi',loadWifiAp]);}
  if(logsOpen()&&(force||now-lastLogPoll>=POLL_SLOW_MS)){lastLogPoll=now;jobs.push(['logs',loadLogs]);}
- pollPromise=Promise.allSettled(jobs.map(async([key,load])=>{try{await load();delete pollErrors[key];}catch(error){pollErrors[key]=true;throw error;}})).then(()=>{
+ pollPromise=Promise.allSettled(jobs.map(async([key,load])=>{try{await load();delete pollErrors[key];}catch(error){pollErrors[key]=(pollErrors[key]||0)+1;throw error;}})).then(()=>{
   if(wifiOffIntent)return;
-  $('connection_status').textContent=Object.keys(pollErrors).length?'Some device data could not be refreshed. Displayed values may be out of date.':'';
-  if(pollErrors.status){$('device_mode_status').textContent='Device status unavailable';$('device_mode_status').className='muted';$('overview_streams').textContent='RTSP: unavailable';$('overview_wifi').textContent='Wi-Fi: unavailable';}
-  if(pollErrors.audio){$('overview_mic').textContent='Microphone: unavailable';$('overview_mic').className='muted';}
-  if(pollErrors.thermal){$('overview_temp').textContent='Temperature: unavailable';$('overview_temp').className='muted';}
+  const failing=key=>(pollErrors[key]||0)>=2;
+  $('connection_status').textContent=Object.keys(pollErrors).some(failing)?'Some device data could not be refreshed. Displayed values may be out of date.':'';
+  if(failing('status')){$('device_mode_status').textContent='Device status unavailable';$('device_mode_status').className='muted';$('overview_streams').textContent='RTSP: unavailable';$('overview_wifi').textContent='Wi-Fi: unavailable';}
+  if(failing('audio')){$('overview_mic').textContent='Microphone: unavailable';$('overview_mic').className='muted';}
+  if(failing('thermal')){$('overview_temp').textContent='Temperature: unavailable';$('overview_temp').className='muted';}
   updateDependencies();
  }).finally(()=>{pollBusy=false;pollPromise=null;});return pollPromise;
 }

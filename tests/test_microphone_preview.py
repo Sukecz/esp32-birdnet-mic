@@ -25,7 +25,8 @@ class MicrophonePreviewTests(unittest.TestCase):
 #include <cstring>
 #include <vector>
 bool pdm = false, MIC_PDM_HARDWARE = false, highpassEnabled = false;
-uint8_t i2sShiftBits = 12;
+uint8_t i2sShiftBits = 12, micFormat=0;
+namespace noiseshadow {struct Chain {uint32_t sampleRate;uint8_t format,shift;bool highpass;uint16_t cutoff;int32_t gain;}; inline void process(int16_t*,int,const Chain&){} }
 float currentGainFactor = 0;
 int samplesRead = 5;
 int32_t input[5]; int32_t* i2s_32bit_buffer = input;

@@ -151,7 +151,7 @@ bool authorized=true,applyOk=true;int calls=0,saves=0;uint8_t lastFormat=99;bool
 bool requireMutationAuth(){return authorized;}
 void apiSendJSON(const char* s){reply=s;}
 void saveAudioSettings(){++saves;}
-bool applyMicProfileConfig(uint8_t f,bool r){++calls;lastFormat=f;lastRecommended=r;return applyOk;}
+bool applyMicrophoneChoice(uint8_t f,bool r){++calls;lastFormat=f;lastRecommended=r;return applyOk;}
 ''' + parse + function(WEB, 'static void httpSaveMicProfile()') + r'''
 int main(){
  web.args={{"format","2"},{"settings","recommended"}};authorized=false;httpSaveMicProfile();assert(!calls&&!saves);authorized=true;

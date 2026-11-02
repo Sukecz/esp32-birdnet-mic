@@ -1,3 +1,54 @@
+const $=id=>document.getElementById(id);
+const locks={},edits={},dirtyEls={},confirmedValues={},editVersions={},savingKeys=new Set(),pendingSyncKeys=new Set();
+function updateDiscard(){const b=$('discard_choices');if(b)b.hidden=!Object.keys(edits).length;}
+function fieldValue(el,value=el.type==='checkbox'?el.checked:el.value){
+ if(el.type==='checkbox')return !!value;
+ const text=String(value??'');
+ if(el.type==='number'&&text.trim()!==''&&Number.isFinite(Number(text.replace(',','.'))))return Number(text.replace(',','.'));
+ return el.type==='password'?text:text.trim();
+}
+function differsFromSaved(key){
+ return (dirtyEls[key]||[]).some(el=>fieldValue(el)!==confirmedValues[key]);
+}
+function reconcileEdit(key){
+ if(differsFromSaved(key)||pendingSyncKeys.has(key))edits[key]=Infinity;
+ else{delete edits[key];delete locks[key];}
+ (dirtyEls[key]||[]).forEach(el=>toggleDirty(el,key));
+}
+function syncInput(el,key,value){
+ if(!el)return;
+ if(savingKeys.has(key)){toggleDirty(el,key);return;}
+ const editing=!!edits[key],locked=locks[key]&&Date.now()<locks[key];
+ confirmedValues[key]=fieldValue(el,value);pendingSyncKeys.delete(key);
+ if(locked&&!editing){toggleDirty(el,key);return;}
+ if(!editing){if(el.type==='checkbox')el.checked=!!value;else el.value=value;}
+ reconcileEdit(key);
+}
+function trackEdit(el,key){
+ if(!el)return; el.dataset.dirtyKey=key;
+ if(!dirtyEls[key]) dirtyEls[key]=[];
+ if(!dirtyEls[key].includes(el)) dirtyEls[key].push(el);
+ if(!Object.hasOwn(confirmedValues,key))confirmedValues[key]=fieldValue(el);
+ const bump=()=>{editVersions[key]=(editVersions[key]||0)+1;reconcileEdit(key);};
+ el.addEventListener('input',bump);el.addEventListener('change',bump);
+}
+function markDirty(key){edits[key]=Infinity; (dirtyEls[key]||[]).forEach(el=>toggleDirty(el,key));}
+function clearDirty(key){delete edits[key];delete locks[key];(dirtyEls[key]||[]).forEach(el=>toggleDirty(el,key));}
+function toggleDirty(el,key){
+ if(!el)return; const dirty=!!edits[key]&&differsFromSaved(key); el.classList.toggle('dirty',dirty);
+ if(el.type==='checkbox')el.closest('label')?.classList.toggle('dirty',dirty);
+ const field=el.closest('.field');
+ if(field){let note=field.querySelector('.edit-note');if(!note){note=document.createElement('span');note.className='edit-note';field.append(note);}note.textContent=dirty?'Unsaved':'';}
+ if(!field&&el.id&&el.parentElement){let note=el.parentElement.querySelector('[data-draft-note="'+el.id+'"]');if(!note){note=document.createElement('span');note.className='edit-note';note.dataset.draftNote=el.id;el.after(note);}note.textContent=dirty?'Unsaved':'';el.setAttribute('aria-label',(el.labels?.[0]?.textContent||el.id)+(dirty?' — Unsaved':''));}
+ updateDiscard(el.closest('details.card'));
+}
+
+const setupChoiceFields=['variant','microphone','mode','connection','antenna','battery_enabled'];
+function syncSetupChoices(s){
+ const values={variant:String(s.detection?.board_auto?3:s.s3_board),microphone:String(s.detection?.mic_auto?3:(s.mic_format??0)),mode:s.default_mode,connection:s.connection,antenna:s.antenna,battery_enabled:!!s.battery_enabled};
+ for(const id of setupChoiceFields)syncInput($(id),id,values[id]);
+ $('detection_note').textContent=s.detection?.note||'';
+}
 'use strict';
 const node=id=>document.getElementById(id);
 let state=null,accessKey='',working=false,testing=false,scanning=false,finished=false,networkEdited=false,polling=false;
@@ -15,7 +66,7 @@ async function request(path,values){
 function message(id,text,error=false){node(id).textContent=text;node(id).classList.toggle('error',error);}
 function controls(){
  if(!state)return;
- const atom=state.s3_board_supported&&node('variant').value==='2';
+ const atom=state.s3_board_supported&&(node('variant').value==='2'||node('variant').value==='3'&&state.s3_board===2);
  const batterySupported=!atom&&(state.s3_board_supported||state.battery_supported!==false);
  node('battery_enabled').disabled=working||!batterySupported;
  if(!batterySupported)node('battery_enabled').checked=false;
@@ -42,6 +93,7 @@ function controls(){
  }
  node('finish').disabled=testing||(!direct&&(networkEdited||(!state.ssid&&state.test_state!=='connected')));
  node('later').hidden=direct||state.complete;
+ for(const id of setupChoiceFields)reconcileEdit(id);
 }
 async function poll(){
  if(finished||polling||scanning)return;
@@ -57,7 +109,8 @@ async function poll(){
    node('board_name').textContent=next.board_name;
    node('variant_field').hidden=!next.s3_board_supported;
    node('board_name').hidden=next.s3_board_supported;
-   node('variant').value=String(next.s3_board);
+   node('variant').value=String(next.detection?.board_auto?3:next.s3_board);
+   node('microphone').value=String(next.detection?.mic_auto?3:(next.mic_format??0));
    node('antenna_field').hidden=!next.antenna_supported;
    node('antenna').value=next.antenna;
    node('battery_enabled').checked=!!next.battery_enabled;
@@ -80,6 +133,7 @@ async function poll(){
     testing=false;networkEdited=true;message('wifi_status',next.test_error==='trial_expired'?'Connection test expired. Test Wi-Fi again before saving.':'Could not connect. Check the network and password, then retry.',true);
    }else message('wifi_status','Connecting… If disconnected, rejoin the device Wi-Fi and reopen this page.');
   }
+  syncSetupChoices(next);
   controls();
  }catch(_){if(!state)message('feedback','Could not load settings. Retrying…',true);else if(testing)message('wifi_status',`Reconnecting… If needed, join ${state.ap_name} and open 192.168.4.1.`);}
  finally{polling=false;}
@@ -135,9 +189,10 @@ async function finish(later=false){
  if(!state||working||testing||apEditor.busy())return;
  if(apEditor.dirty()){message('feedback','Save or cancel the device Wi-Fi password change first.',true);return;}
  if(!accessKey){message('feedback','Reload to get your direct Wi-Fi password before finishing.',true);return;}
+ if(state.complete&&!networkEdited&&state.test_state!=='connected'&&!setupChoiceFields.some(id=>differsFromSaved(id))){message('feedback','No settings changed.');return;}
  working=true;controls();message('feedback','Saving…');
  try{
-  const result=await request('/api/setup',{mode:node('mode').value,connection:node('connection').value,variant:node('variant').value,antenna:node('antenna').value,battery:node('battery_enabled').checked?'1':'0',allow_offline:later?'1':'0'});
+  const result=await request('/api/setup',{mode:node('mode').value,connection:node('connection').value,variant:node('variant').value,microphone:node('microphone').value,antenna:node('antenna').value,battery:node('battery_enabled').checked?'1':'0',allow_offline:later?'1':'0'});
   finished=true;node('setup_form').hidden=true;node('done').hidden=false;
   node('done_note').textContent=(result.reboot_required?'Restarting. ':'')+(state.complete?'Your default mode is saved for the next power-on.':'Setup complete. Other settings are in the main UI.');
   const direct=result.use_ap===undefined?node('connection').value==='direct':result.use_ap;
@@ -180,3 +235,7 @@ node('copy_access').onclick=async()=>{
 node('scan').onclick=scan;node('connect').onclick=connect;
 node('setup_form').onsubmit=e=>{e.preventDefault();finish();};node('later').onclick=()=>finish(true);
 poll().finally(()=>setInterval(poll,1500));
+
+for(const id of setupChoiceFields)trackEdit($(id),id);
+$('discard_choices').onclick=()=>{for(const id of setupChoiceFields){clearDirty(id);const el=$(id);if(el.type==='checkbox')el.checked=!!confirmedValues[id];else el.value=confirmedValues[id];}controls();updateDiscard();message('feedback','Changes discarded.');};
+window.addEventListener('beforeunload',event=>{if(!finished&&Object.keys(edits).length){event.preventDefault();event.returnValue='';}});

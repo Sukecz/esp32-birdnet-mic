@@ -344,7 +344,10 @@ int main(){
 namespace fieldpower { struct Config{bool guardEnabled=false;};inline Config settings(){return {};} }
 bool auth=true,boardSupport=true,antennaSupport=false,saveOk=true,applyOk=true;
 int mutations=0,reboots=0,modeChanges=0,lastCode=200;
-uint8_t s3BoardVariant=0,micFormat=0;
+uint8_t s3BoardVariant=0,micFormat=0,cpuFrequencyMhz=160;
+float currentGainFactor=1.5f;
+bool s3BoardAutoDetect=false,micAutoDetect=true;
+bool setCpuFrequencyMhz(uint8_t){return true;}
 uint32_t currentSampleRate=32000,minAcceptableRate=30;
 uint16_t highpassCutoffHz=12000;
 bool autoThresholdEnabled=true;
@@ -352,7 +355,7 @@ constexpr uint8_t MIC_FORMAT_PDM=2;
 constexpr uint32_t PDM_SAMPLE_RATE=48000;
 s3boards::Config persistedBoard{0,0,32000,30,12000};
 std::vector<std::string> operations;
-struct {std::map<std::string,String> args;String arg(const char* n){return args[n];}void send(int code,const char*,const char*){lastCode=code;}} web;
+struct {std::map<std::string,String> args;bool hasArg(const char* n){return args.count(n); }String arg(const char* n){return args[n];}void send(int code,const char*,const char*){lastCode=code;}} web;
 bool requireMutationAuth(){return auth;}
 void apiSendJSON(const String&){}
 namespace recording {
@@ -360,7 +363,7 @@ namespace recording {
  bool resumePending(){return pending;}bool mode(){return active;}bool busy(){return working;}
  bool checkCard(bool supported,uint8_t){++checks;working=true;return supported;}
 }
-namespace recordingpins {struct Pins{bool supported;};Pins resolve(uint8_t v){return {v!=2};}}
+namespace recordingpins {inline bool senseSdPresent=false;struct Pins{bool supported;};Pins resolve(uint8_t v){return {v!=2};}}
 namespace devicesetup {
  bool done=false,busy=false;String ssid="",state="idle";bool startup=false,direct=false;
  bool complete(){return done;}bool connectionBusy(){return busy;}
@@ -384,6 +387,8 @@ void simplePrintln(const char*){}
     's3boards::Config getS3BoardConfig()',
     'bool restoreS3BoardConfig(const s3boards::Config& saved)',
     'bool applyS3BoardConfig(uint8_t variant)')) + r'''
+bool applyBoardChoice(uint8_t v){return applyS3BoardConfig(v);}
+bool applyMicrophoneChoice(uint8_t){return true;}
 void saveAudioSettings(){++mutations;operations.push_back("board");persistedBoard=getS3BoardConfig();}
 bool setDeviceMode(bool rec){++modeChanges;recording::active=rec;return true;}
 void scheduleReboot(bool,uint32_t){++reboots;}
@@ -449,7 +454,7 @@ int main(){
 #include "SetupConfig.h"
 bool auth=true,active=false,pending=false,allowed=true,writeOk=true;int writes=0,lastCode=200;
 String current="OLDKEY12",reply;
-struct {std::map<std::string,String> args;bool hasArg(const char* n){return args.count(n);}String arg(const char* n){return args[n];}void send(int code,const char*,const char* body){lastCode=code;reply=body;}} web;
+struct {std::map<std::string,String> args;bool hasArg(const char* n){return args.count(n); }String arg(const char* n){return args[n];}void send(int code,const char*,const char* body){lastCode=code;reply=body;}} web;
 bool requireMutationAuth(){return auth;}
 String jsonEscape(const String& s){return s;}
 void apiSendJSON(const String& s){lastCode=200;reply=s;}
