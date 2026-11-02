@@ -7,17 +7,19 @@ reliability or battery runtime from a successful compile or a C6 observation.
 | Target | Required build checks | Physical state |
 | --- | --- | --- |
 | C3 | Standard target, app/partition/ELF budgets | Unavailable; qualification pending |
-| S3 | PSRAM and disabled-PSRAM builds, memory regressions | Available on older firmware without microphone/SD; web/memory diagnostics only |
+| S3 | PSRAM and disabled-PSRAM builds, memory regressions | 2.05 startup/web/PSRAM checked without microphone/SD; audio/storage pending |
 | C5 | PSRAM and disabled-PSRAM builds, memory regressions | Unavailable; SD/battery/PDM qualification pending |
 | C6 | Standard target and budgets | Available; qualify the observed Streaming/RTSP/Listen workload |
 
 Run a read-only observation from the repository root:
 
 ```sh
-python3 tools/qualify_runtime.py http://DEVICE --board c6 --seconds 600 --listen --output tmp/qualification/c6.json
+python3 tools/qualify_runtime.py http://DEVICE --board c6 --seconds 60 --listen --output tmp/qualification/c6.json
 ```
 
-Use longer durations (for example 86,400 seconds) for a day-long soak. The tool
+Use 30-60 seconds for routine smoke checks. Longer observations are targeted
+diagnostics, not a default release step; choose their duration for a concrete
+question or an explicitly requested soak. The tool
 verifies identity before opening Listen, drains audio without storing PCM, reads
 capture/time/memory status, and saves only selected non-secret telemetry. It never
 changes settings, modes, Wi-Fi, reboot state or firmware. Listen temporarily uses
@@ -45,5 +47,5 @@ settings. C6's external antenna must remain selected.
 
 For the currently available S3, `--microphone-absent --sd-absent` selects a
 web/memory observation with explicit missing-peripheral expectations. It never
-qualifies audio or storage and does not authorize firmware installation. Preserve
-the distinction between diagnostics on an older firmware and candidate validation.
+qualifies audio or storage and does not authorize firmware installation. Record the actual tested firmware; startup/web/memory validation without these
+peripherals does not qualify candidate audio or recording.

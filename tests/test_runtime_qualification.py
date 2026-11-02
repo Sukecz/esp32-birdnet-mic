@@ -32,6 +32,8 @@ class RuntimeQualificationTests(unittest.TestCase):
         status['psram_total_kb'] = 0; audio['rb_drops'] += 1
         self.assertFalse(summarize([a, sample(status, audio, target('c6'))])['ok'])
         self.assertFalse(summarize([])['ok'])
+        middle = {**a, 'streaming': False}
+        self.assertFalse(summarize([a, middle, sample(status, audio, target('c6'))])['ok'])
 
     def test_missing_microphone_is_explicitly_not_audio_qualification(self):
         status, audio = self.fixture()

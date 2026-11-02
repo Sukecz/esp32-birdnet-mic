@@ -20,7 +20,8 @@ def sample(status, audio, board, microphone_absent=False, sd_absent=False):
         errors.append('Unexpected ready SD card in a peripherals-absent test')
     result = {'microphone': audio.get('mic_signal'), 'uptime': status.get('uptime'), 'streaming': status.get('streaming'),
               'firmware': status.get('fw_version'), 'i2s_errors': audio.get('i2s_error_count'),
-              'rb_drops': audio.get('rb_drops'), 'dma_overruns': audio.get('dma_overruns_total')}
+              'rb_drops': audio.get('rb_drops'), 'dma_overruns': audio.get('dma_overruns_total'),
+              'rtsp_write_failures': audio.get('rtsp_write_failures'), 'rtsp_write_timeouts': audio.get('rtsp_write_timeouts')}
     for key in ('internal_heap_free', 'internal_heap_min', 'internal_heap_largest', 'psram_total', 'psram_free'):
         value = status.get(key + '_kb')
         if not isinstance(value, (int, float)) or value < 0:
@@ -43,18 +44,19 @@ def summarize(samples):
         errors.append('No samples collected')
     if len({s.get('firmware') for s in samples}) > 1:
         errors.append('Firmware changed during observation')
-    for key in ('i2s_errors', 'dma_overruns'):
+    for key in ('i2s_errors', 'dma_overruns', 'rtsp_write_failures', 'rtsp_write_timeouts'):
         values = [s[key] for s in samples if isinstance(s.get(key), (float, int))]
         if values and max(values) > min(values):
             errors.append(key + ' increased')
-    if samples and all(s.get('streaming') for s in samples):
-        values = [s['rb_drops'] for s in samples if isinstance(s.get('rb_drops'), int)]
+    if any(s.get('streaming') for s in samples):
+        values = [s['rb_drops'] for s in samples if s.get('streaming') and isinstance(s.get('rb_drops'), int)]
         if values and max(values) > min(values):
             errors.append('RTSP ring drops increased while streaming')
     minima = {key: min(s[key] for s in samples if key in s) for key in
               ('internal_heap_free_bytes', 'internal_heap_min_bytes', 'internal_heap_largest_bytes', 'psram_free_bytes')
               if any(key in s for s in samples)}
     return {'ok': not errors, 'errors': errors, 'minima': minima,
+            'streaming_interruptions': sum(samples[i-1].get('streaming') is True and samples[i].get('streaming') is False for i in range(1,len(samples))),
             'streaming_all_samples': bool(samples) and all(s.get('streaming') for s in samples)}
 
 
@@ -62,7 +64,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('url')
     p.add_argument('--board', required=True, choices=[b['id'] for b in boards()])
-    p.add_argument('--seconds', type=float, default=300)
+    p.add_argument('--seconds', type=float, default=60)
     p.add_argument('--interval', type=float, default=2)
     p.add_argument('--listen', action='store_true')
     p.add_argument('--microphone-absent', action='store_true', help='Validate web/memory with no microphone; never qualifies audio')

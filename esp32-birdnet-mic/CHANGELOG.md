@@ -5,7 +5,7 @@
 - **Settings:** Recording, SD logging, Battery and power settings share draft tracking, polling preservation, discard and scoped saves. Failed saves retain edits; a confirmed save does not discard a newer draft or edits from another group.
 - **Firmware structure:** separate audio capture, RTSP, MQTT, settings storage, OTA and mode control into focused components. Preserve existing settings keys, defaults, audio buffers and upgrade paths.
 - **Validation and releases:** one board registry drives all six build configurations and memory checks. Record source/build hashes and Git revision; publish matching firmware from a verified release snapshot. Reuse checked builds for packaging and avoid recompilation when generated UI is unchanged.
-- **Hardware scope:** physical validation targets C6. C3/C5 and SD/battery hardware remain unqualified; the available S3 has no microphone/SD adapter and is limited to read-only diagnostics on its existing firmware.
+- **Hardware scope:** C6 candidate capture/time/UI checks and S3 candidate startup/web/PSRAM checks passed with settings retained. C3/C5 and SD/battery hardware remain unqualified; S3 has no microphone/SD adapter, so its audio/storage checks remain pending.
 
 ## 2.04 - 2026-10-31
 
