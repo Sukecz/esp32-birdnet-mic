@@ -208,7 +208,7 @@ function renderMicFormat(j){
 
   const select=document.getElementById('sel_mic_format');
   const now=Date.now();
-  if(select){select.disabled=false;syncInput(select,'mic_format',String(j.detection?.mic_auto?3:j.mic_format));}
+  if(select){select.disabled=false;for(const option of select.options||[])if(Number(option.value)<2)option.disabled=locked;syncInput(select,'mic_format',String(j.detection?.mic_auto?3:j.mic_format));}
   $('mic_detection_note').textContent=j.detection?.note||'';
   $('btn_mic_recommended').disabled=select?.value==='3';
   if(select){toggleDirty(select,'mic_format');document.getElementById('mic_format_label').textContent=select.selectedOptions[0]?.textContent||'';}

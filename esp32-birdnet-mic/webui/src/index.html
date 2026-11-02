@@ -197,7 +197,7 @@
 <option value='2'>M5Stack AtomS3U</option>
 </select>
 <button id='btn_s3_board_apply' onclick='saveS3Board()'>Apply board</button>
-</div><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
+</div><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -300,7 +300,7 @@
 <canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
 <p class='section-note'>Blue: live level · Orange: estimated floor · Green: learned profile. Frequency in kHz, level in dBFS per frequency band. These curves include environmental sounds and do not measure the microphone’s self-noise alone.</p>
 </details><div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
-<p class='section-note'>Stop and save recording before changing noise reduction. If resources are insufficient, audio remains unfiltered and the reason appears above. CPU frequency is never raised by this filter.</p></td></tr>
+<p class='section-note'>Stop and save recording before changing noise reduction. If resources are insufficient, audio remains unfiltered and the reason appears above. CPU frequency is never raised by this filter. After resolving a resource warning, turn reduction Off and On to retry.</p></td></tr>
 </table><details id='audioadvanced' class='advanced'><summary>Advanced audio settings</summary><table>
 <tr>
 <td class='k'>
