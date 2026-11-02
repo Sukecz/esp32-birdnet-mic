@@ -73,7 +73,8 @@ const {chromium}=require('playwright-core');
   await page.waitForFunction(()=>document.querySelector('#audiosec>.feedback')?.textContent==='Saving…');
   await page.selectOption('#sel_s3_board','0');release();
   await page.waitForFunction(()=>document.querySelector('#audiosec>.feedback')?.textContent.startsWith('Board saved.'));
-  await page.waitForFunction(()=>document.querySelector('#sel_mic_format').disabled);
+  await page.waitForFunction(()=>document.querySelector('#sel_mic_format').value==='2');
+  assert.equal(await page.locator('#sel_mic_format').isEnabled(),true); // Auto/manual PDM remains selectable.
   assert.equal(fixture.audio_status.s3_board,2);assert.equal(await page.locator('#sel_s3_board').inputValue(),'0');
   pause=false;await page.locator('#btn_s3_board_apply').click();
   await page.waitForFunction(()=>!document.querySelector('#sel_mic_format').disabled);

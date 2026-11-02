@@ -41,7 +41,7 @@ const {chromium}=require('playwright-core');
   });
   await page.goto('http://ui.test/');await page.waitForFunction(()=>document.querySelector('#in_gain').value==='1.50');
   await page.evaluate(()=>openSection('audiosec'));
-  assert.equal(await page.locator('#sel_mic_format option').count(),3); // ICS/INMP remain one model group.
+  assert.equal(await page.locator('#sel_mic_format option').count(),4); // Auto plus three signal formats; ICS/INMP remain one group.
   // Merely selecting a microphone, cancelling or pressing Escape sends no writes.
   await page.selectOption('#sel_mic_format','2');await page.locator('#btn_mic_apply').click();
   await page.waitForFunction(()=>document.querySelector('#mic_dialog').open);
