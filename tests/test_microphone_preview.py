@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """Exercise the signal detector, preview queue and actual nonblocking HTTP sender."""
 import pathlib
 import subprocess
@@ -9,11 +10,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 class MicrophonePreviewTests(unittest.TestCase):
     def test_actual_producer_before_gain_and_filter_for_i2s_and_both_pdm_paths(self):
-        source = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+        source = firmware_source(ROOT)
         start = source.index('        // Hardware PDM is packed int16.', source.index('void audioProducerTask('))
         end = source.index('        if (lastPeakAbs16 > peakHoldAbs16)', start)
         helper_start = source.index('void updateHighpassCoeffs() {')
-        helper_end = source.index('// Uptime ->', helper_start)
+        helper_end = source.index('static inline void* audioWorkAlloc', helper_start)
         helper = source[helper_start:helper_end]
         code = r'''
 #include "MicrophoneSignal.h"

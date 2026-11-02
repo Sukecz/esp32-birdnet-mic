@@ -91,35 +91,46 @@ test. Read the local device inventory before selecting a physical target; C6
 streaming validation does not qualify C5 SD recording. Preserve settings and the
 C6 external antenna. Publication/OTA authority follows AGENTS.md.
 
-## Incremental architecture plan
+## Implementation status
 
-1. **Validation foundation (implemented):** shared board registry, independent
-   development builds, memory boundary checks, timed test runner, browser CI and
-   versioned packaging. Establish measured timings before optimizing further.
-2. **Release provenance (partly implemented):** source/configuration and artifact
-   hashes now reject stale `--skip-build` outputs. Add source commit identity. Publish the same
-   verified artifacts. Add immutable release staging before replacing public files.
-3. **Shared UI state (source extraction implemented):** readable CSS/JS and settings
-   fragments now live in `esp32-birdnet-mic/webui/src/`; generation reproduces the
-   existing page byte for byte. Direct module tests cover the existing settings
-   engine. Continue consolidating feature-specific draft adapters into that engine. Migrate one
-   settings group at a time with polling and source/embedded visual checks.
-4. **Settings and application state:** extract validated settings and mode transitions
-   behind explicit C++ interfaces. Replace source-slicing regressions with tests
-   against actual production modules. Keep refactoring separate from behavior changes.
-5. **Network/audio boundaries:** keep Web API handlers thin; give capture, processing,
-   consumers and lifecycle explicit ownership. Avoid new allocations/virtual layers
-   in realtime paths. Retain internal DMA allocation and PSRAM fallback tests.
-6. **Measured runtime budgets:** qualify each available board/workload, including
-   no-PSRAM fallbacks; automate soak reports and agree release gates from evidence.
+The planned software foundation is implemented: the board registry, six-target
+build/memory gates, shared settings field/save/discard behavior, readable UI
+sources, firmware service boundaries, source/commit/artifact receipts and verified
+release snapshots. `AppRuntime.h` preserves the existing shared configuration
+interface while each service owns its transport, worker or driver state.
 
-Each extraction should be reviewable independently and retain current defaults,
-saved settings, API and OTA compatibility. A short module map and tests should
-make the next feature require less repository context. Track iteration time,
-test time, clean/warm build time and per-board flash growth as the improvement
-metrics. Hardware coverage gaps remain explicit rather than inferred from builds.
+Native policy tests include production modules; existing hardware fragment
+fixtures remain as compatibility coverage during extraction. This is not a claim
+that every legacy test has become an isolated unit test or that all future
+architecture work is finished.
 
-See [UI source instructions](../esp32-birdnet-mic/webui/README.md) for the module map
-and generation commands. Edit the fragments, then regenerate; the runner rejects
-stale assembled HTML before running host/browser suites. A source-only extraction
-with byte-identical output does not require a new firmware release.
+Release workflow (commit reviewed sources first so build receipts identify a
+clean source revision):
+
+```sh
+python3 tools/test.py host
+python3 tools/test.py browser
+python3 tools/build.py --all --matrix
+python3 tools/promote_builds.py
+tools/package_firmware.sh --skip-build
+python3 tools/test.py release
+```
+
+Promotion checks all four standard builds before copying exported files into the
+packaging layout, so packaging does not compile a second time. Commit the reviewed
+artifacts/validation record before publication. The local publication helper
+creates a snapshot using `tools/release_stage.py create`, then both GitHub upload
+and the deployment helper consume that same snapshot. Hash verification rejects
+changed or stale inputs. The snapshot records the clean source commit and the
+publication commit separately; source ZIP builds remain supported but are not
+accepted as provenance for this maintainer publication path.
+
+The physical qualification matrix remains open where hardware is unavailable.
+Only C6 is available for this release. Use `tools/qualify_runtime.py` and
+[hardware qualification](hardware-qualification.md) for repeatable observations;
+never replace runtime measurements with total SRAM/PSRAM capacities. Timing JSON
+reports and per-board memory reports remain in `tmp/test-results/` and `tmp/build/`.
+
+See [UI source instructions](../esp32-birdnet-mic/webui/README.md) for editing and
+generation. Recording, Battery, SD logging and power use the common settings
+engine; Wi-Fi/AP-password/antenna flows keep their explicit access/reboot handling.

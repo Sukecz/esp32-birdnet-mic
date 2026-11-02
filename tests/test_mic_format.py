@@ -1,11 +1,16 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
 import pathlib
 import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SKETCH = (ROOT / "esp32-birdnet-mic" / "esp32-birdnet-mic.ino").read_text(encoding="utf-8")
-WEBUI_CPP = (ROOT / "esp32-birdnet-mic" / "WebUI.cpp").read_text(encoding="utf-8")
+SKETCH = firmware_source(ROOT)
+WEBUI_CPP = webui_source(ROOT)
 WEBUI_HTML = (ROOT / "esp32-birdnet-mic" / "webui" / "index.html").read_text(encoding="utf-8")
+
+
+SKETCH += (ROOT / 'esp32-birdnet-mic/StreamTypes.h').read_text() + (ROOT / 'esp32-birdnet-mic/SettingsStore.cpp').read_text()
 
 
 class MicFormatContractTest(unittest.TestCase):

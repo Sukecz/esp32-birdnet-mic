@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from board_registry import ROOT
 
@@ -42,7 +43,13 @@ def record(directory, expected_source=None):
     source = source_digest()
     if expected_source is not None and source != expected_source:
         raise ValueError('Sources changed during compilation; compile again')
+    try:
+        revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
+        dirty = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True))
+    except (OSError, subprocess.CalledProcessError):
+        revision, dirty = None, None  # Source ZIP builds remain supported.
     receipt = {'schema_version': 1, 'source_sha256': source,
+               'source_commit': revision, 'working_tree_dirty': dirty,
                'artifacts': artifacts(directory)}
     (directory / 'build-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
 

@@ -1,3 +1,5 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
 """Run production SD allocation against the field C5 heap and allocator faults."""
 from pathlib import Path
 import subprocess
@@ -121,8 +123,8 @@ int main(){
                 end += 1
             return source[start:end]
 
-        sketch = (ROOT/'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
-        webui = (ROOT/'esp32-birdnet-mic/WebUI.cpp').read_text()
+        sketch = firmware_source(ROOT)
+        webui = webui_source(ROOT)
         guards = r"""
 namespace battery { struct Reading {}; Reading reading(bool,uint8_t){return {};}}
 namespace devicesetup {bool batteryMonitoring(){return true;}}

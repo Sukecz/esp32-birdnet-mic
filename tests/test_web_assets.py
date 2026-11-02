@@ -1,3 +1,4 @@
+from webui_source import webui_source
 """Verify reproducible minified/gzip payloads and render the real OTA page states."""
 import gzip
 import json
@@ -13,7 +14,7 @@ SKETCH = ROOT / 'esp32-birdnet-mic'
 
 class WebAssetsTests(unittest.TestCase):
     def test_actual_ota_partition_size_boundaries(self):
-        source = (SKETCH / 'WebUI.cpp').read_text()
+        source = webui_source(ROOT)
         start = source.index('static bool validateOtaImageSize(')
         end = source.index('static bool isSafeOtaUrl(', start)
         code = r'''
@@ -62,7 +63,7 @@ int main() {
         subprocess.run([str(SKETCH / 'tools/gen_webui_gzip_header.sh'), '--check'], check=True, timeout=30)
 
     def test_actual_ota_html_states_and_dynamic_escaping(self):
-        source = (SKETCH / 'WebUI.cpp').read_text()
+        source = webui_source(ROOT)
         escape = source[source.index('static String htmlEscape('):source.index('static void sendOtaPage(')]
         page = source[source.index('static void sendOtaPage('):source.index('static bool isLikelyMergedFirmwareName(')]
         code = r'''

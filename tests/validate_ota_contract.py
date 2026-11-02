@@ -1,3 +1,4 @@
+from webui_source import webui_source
 #!/usr/bin/env python3
 import json
 import pathlib
@@ -17,7 +18,7 @@ def require(condition, message):
 
 
 sketch = SKETCH.read_text(encoding="utf-8")
-webui = WEBUI.read_text(encoding="utf-8")
+webui = webui_source(ROOT)
 version_match = re.search(r'^\s*#define\s+FW_VERSION\s+"([^"]+)"', sketch, re.M)
 require(version_match, "FW_VERSION not found")
 version = version_match.group(1)

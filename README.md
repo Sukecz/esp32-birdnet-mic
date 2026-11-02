@@ -15,8 +15,8 @@ to BirdNET-Go, BirdNET-Pi, VLC or ffmpeg; **Recording** saves WAV files to a mic
 card, even away from your home Wi-Fi. Use **Listen** for a quick sound check in either mode.
 Bird identification runs on the receiving computer, not on the ESP32.
 
-> **Firmware 2.04** — makes Listen smoother and preserves buffered audio after preview overflow.
-> [Validation and hardware limits](release-notes/2.04-validation.md).
+> **Firmware 2.05** — unifies settings editing and makes future updates easier to validate.
+> [Validation and hardware limits](release-notes/2.05-validation.md).
 
 **[Boards](#supported-boards) · [Quick start](#quick-start) · [Modes](#streaming-and-recording) · [Battery](#battery) · [Features](#features) · [Wiring](#microphones-and-wiring) · [Help](#everyday-use-and-troubleshooting)**
 

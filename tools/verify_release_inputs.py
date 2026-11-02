@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Verify packaged firmware against source-bound local builds before publication."""
-from pathlib import Path
 from board_registry import ROOT, boards
 from build_receipt import digest, verify
 

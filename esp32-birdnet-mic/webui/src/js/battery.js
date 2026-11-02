@@ -42,6 +42,7 @@ async function batteryAction(action){
  }
  batteryPending=true;renderBattery(batteryDevice);n('battery_feedback').textContent='Saving…';
  try{
+  if(action==='enable'){await saveValues('/api/battery',data,['battery_monitor'],'batterysec','Monitoring saved.',{feedbackId:'battery_feedback',refresh:loadStatus,rawErrors:true});return;}
   const response=await mutationFetch('/api/battery',new URLSearchParams(data).toString()),result=await response.json();
   if(!response.ok||!result.ok)throw Error(result.error||'Could not save. Try again.');
   if(action==='enable')batteryDraft=null;

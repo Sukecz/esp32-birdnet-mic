@@ -1,3 +1,4 @@
+from webui_source import webui_source
 """Actual coordinator, partition bytes, flash failures and migration interlocks."""
 from pathlib import Path
 import subprocess
@@ -103,8 +104,8 @@ int main(){
 ''')
 
     def test_mutation_gate_preserves_csrf_and_blocks_competing_actions(self):
-        source = (SKETCH / 'WebUI.cpp').read_text()
-        gate = source[source.index('static bool requireMutationAuth('):source.index('// Static browser assets')]
+        source = webui_source(ROOT)
+        gate = source[source.index('bool requireMutationAuth('):source.index('// Static browser assets')]
         self.native(r'''
 #include "Platform.h"
 bool auth=false;

@@ -1,3 +1,5 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
 """Run diagnostics helpers and the actual ISR/API integration on the host."""
 import json
 import pathlib
@@ -6,8 +8,8 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
-WEB = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
+SOURCE = firmware_source(ROOT)
+WEB = webui_source(ROOT)
 
 
 def function(source, signature):
@@ -115,7 +117,7 @@ esp_err_t i2s_channel_register_event_callback(i2s_chan_handle_t, const i2s_event
 esp_err_t i2s_channel_enable(i2s_chan_handle_t) { calls.push_back(2); return enableResult; }
 '''
         for signature in ['static bool IRAM_ATTR onI2sDmaOverrun(i2s_chan_handle_t, i2s_event_data_t*, void*)',
-                          'static void setI2sDmaCounting(bool enabled)', 'static uint32_t getI2sDmaOverrunTotal()',
+                          'static void setI2sDmaCounting(bool enabled)', 'uint32_t getI2sDmaOverrunTotal()',
                           'static void registerI2sDiagnostics()', 'static esp_err_t enableI2sReceiverWithDiagnostics()',
                           'DmaOverrunStatus getI2sDmaStatus()', 'void updateAudioDiagnostics()']:
             code += function(SOURCE, signature) + '\n'

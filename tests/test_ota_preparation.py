@@ -1,3 +1,5 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
 """Execute production OTA handlers; block before flash and preserve the old bridge."""
 from pathlib import Path
 import subprocess
@@ -5,8 +7,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
-SKETCH = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+WEB = webui_source(ROOT)
+SKETCH = firmware_source(ROOT)
 
 
 def function(source, signature):

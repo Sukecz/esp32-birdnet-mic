@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+SOURCE = (ROOT / 'esp32-birdnet-mic/MqttService.cpp').read_text()
 
 
 def function(signature):

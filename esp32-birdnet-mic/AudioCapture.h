@@ -1,0 +1,12 @@
+#pragma once
+#include <stdint.h>
+bool allocateAudioBuffers();
+bool setup_i2s_driver();
+bool startAudioProducer();
+void stopAudioProducer();
+void pauseAudioCapture();
+void resetAudioDmaWindow();
+void updateAudioDiagnostics();
+void checkMicrophoneSignal();
+void updateHighpassCoeffs();
+uint32_t getI2sDmaOverrunTotal();

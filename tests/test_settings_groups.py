@@ -1,3 +1,5 @@
+from webui_source import webui_source
+from validation_fixture import uint_parser
 """Run the real grouped settings handlers: validation must precede every write."""
 from pathlib import Path
 import subprocess
@@ -9,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class SettingsGroupsTests(unittest.TestCase):
     def test_actual_group_handlers(self):
-        source = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
-        parse = source[source.index('static bool parseUInt32Strict('):source.index('static bool parseInt32Strict(')]
+        source = webui_source(ROOT)
+        parse = uint_parser()
         handlers = source[source.index('// Validate the whole group'):source.index('static void httpSet()')]
         code = r'''
 #include <string>

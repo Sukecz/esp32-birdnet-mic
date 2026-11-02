@@ -29,7 +29,7 @@ not rewritten, preserving timestamps and avoiding needless firmware recompilatio
 | `src/js/app.js` | Existing application integration, polling, status rendering and bindings |
 | `src/js/settings/fields.js` | Value normalization, confirmed values, edit tracking, polling preservation and dirty rendering |
 | `src/js/settings/groups.js` | Group saving, request feedback, concurrent edit protection and discard |
-| `src/js/draft-highlights.js` | Existing Recording/Battery/power draft adapters; migrate these gradually to the common settings engine |
+| `src/js/draft-highlights.js` | Recording/Battery/power field mapping into the shared settings engine |
 | `src/js/recording.js`, `battery.js`, `antenna.js`, `wifi-ap.js` | Existing feature UI behavior |
 | `src/js/browser-audio.js` | Listen playback and recovery |
 | Other `src/js/` files | Setup, notices and feature-specific bindings |
@@ -41,6 +41,7 @@ settings fragments in a VM; browser tests verify the assembled and embedded page
 When changing a fragment, run generation before browser tests. The test runner
 fails early if the assembled output is stale.
 
-The initial extraction deliberately produces byte-identical `index.html` and
-embedded headers. Subsequent behavior changes should be separate commits with
-regressions, all-board builds and the project's release/device validation workflow.
+The initial extraction retained byte-identical output. Version 2.05 then migrates
+Recording/Battery/logging/power to the shared saved/draft/save/discard lifecycle.
+Behavior changes require regressions, all-board builds and the project's
+release/device validation workflow.

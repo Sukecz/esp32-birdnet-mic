@@ -6,14 +6,14 @@
 
 Two modes: live **RTSP Streaming** or standalone **microSD WAV Recording**.
 Start with the [beginner guide](../README.md) and [field recording guide](../docs/field-recording.md).
-Current firmware: **2.04** ([validation record](../release-notes/2.04-validation.md)).
+Current firmware: **2.05** ([validation record](../release-notes/2.05-validation.md)).
 For new builds we recommend **XIAO ESP32-C5 + IM73D122 PDM**, with an Adafruit BFF for SD.
 
 Arduino firmware for Seeed Studio XIAO ESP32 and M5Stack AtomS3U, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Current firmware: **v2.04** — Smoother Listen playback and less audio loss after preview overflow.
+- Current firmware: **v2.05** — Consistent settings drafts and safer update validation.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
@@ -98,7 +98,7 @@ Reads are staged in the app loop and reported in `/api/status`, independently
 of the browser. See the
 [battery guide](../docs/battery-monitoring.md) for GPIOs, APIs and validation limits.
 
-## Audio memory by board (v2.04)
+## Audio memory by board (v2.05)
 
 The build helper enables S3's 8 MB OPI PSRAM (`PSRAM=opi`) and C5's 8 MB
 PSRAM (`PSRAM=enabled`). Streaming puts its normally 64 KiB RTSP reserve there;

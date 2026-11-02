@@ -1,3 +1,4 @@
+from webui_source import webui_source
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,7 +14,7 @@ class AntennaTests(unittest.TestCase):
                                 str(ROOT/'esp32-birdnet-mic/Antenna.cpp'),'-o',str(binary)],check=True)
                 subprocess.run([str(binary)],check=True)
     def test_actual_http_validation_and_deferred_reboot(self):
-        source=(ROOT/'esp32-birdnet-mic/WebUI.cpp').read_text()
+        source=webui_source(ROOT)
         start=source.index('static void httpSaveAntenna() {')
         end=source.index('{',start)+1
         depth=1

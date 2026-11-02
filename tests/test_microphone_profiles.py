@@ -1,3 +1,6 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
+from validation_fixture import uint_parser
 """Profiles, actual capture transaction, CPU limits and authenticated group save."""
 from pathlib import Path
 import subprocess
@@ -5,8 +8,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SKETCH = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
-WEB = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
+SKETCH = firmware_source(ROOT)
+WEB = webui_source(ROOT)
 
 
 def function(source, signature):
@@ -133,7 +136,7 @@ int main(){
 ''')
 
     def test_actual_authenticated_microphone_save(self):
-        parse = WEB[WEB.index('static bool parseUInt32Strict('):WEB.index('static bool parseInt32Strict(')]
+        parse = uint_parser()
         self.native(r'''
 #include <string>
 #include <map>

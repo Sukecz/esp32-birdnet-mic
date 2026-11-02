@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """Compile production health and MQTT paths against regression scenarios."""
 import pathlib
 import subprocess
@@ -5,17 +6,19 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+SOURCE = firmware_source(ROOT)
 
 
 def function(signature):
-    start = SOURCE.index(signature)
-    brace = SOURCE.index('{', start)
+    source = (ROOT / 'esp32-birdnet-mic/MqttService.cpp').read_text() if 'mqtt' in signature else SOURCE
+    signature=signature.replace('static bool mqttPublishState','bool mqttPublishState')
+    start = source.index(signature)
+    brace = source.index('{', start)
     depth, end = 1, brace + 1
     while depth:
-        depth += (SOURCE[end] == '{') - (SOURCE[end] == '}')
+        depth += (source[end] == '{') - (source[end] == '}')
         end += 1
-    return SOURCE[start:end]
+    return source[start:end]
 
 
 class StreamHealthTests(unittest.TestCase):

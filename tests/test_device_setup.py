@@ -1,3 +1,6 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
+from validation_fixture import uint_parser
 """Run the production provisioning state machine with simulated Wi-Fi and NVS.
 
 No router/device is changed. The real loop, credential commit and AP policy run
@@ -256,7 +259,7 @@ int main(int argc,char** argv){
 
 class DeviceSetupTests(unittest.TestCase):
     def test_real_scan_handlers_include_all_networks_before_configuration(self):
-        web = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
+        web = webui_source(ROOT)
 
         def function(signature):
             start = web.index(signature + ' {')
@@ -322,7 +325,7 @@ int main(){
             subprocess.run([str(tmp / 'test')], check=True, timeout=10)
 
     def test_real_setup_endpoints_validate_before_writing(self):
-        web = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
+        web = webui_source(ROOT)
 
         def function(signature):
             start = web.index(signature + ' {')
@@ -384,7 +387,7 @@ void simplePrintln(const char*){}
 void saveAudioSettings(){++mutations;operations.push_back("board");persistedBoard=getS3BoardConfig();}
 bool setDeviceMode(bool rec){++modeChanges;recording::active=rec;return true;}
 void scheduleReboot(bool,uint32_t){++reboots;}
-''' + function('static bool parseUInt32Strict(const String& input, uint32_t& out)') + '\n' + function('static void httpSetupSave()') + '\n' + function('static void httpSetupConnect()') + r'''
+''' + uint_parser() + '\n' + function('static void httpSetupSave()') + '\n' + function('static void httpSetupConnect()') + r'''
 int main(){
  web.args={{"mode","recording"},{"connection","direct"},{"variant","1"},{"antenna","external"}};
  auth=false;httpSetupSave();httpSetupConnect();assert(!mutations);auth=true;
@@ -430,7 +433,7 @@ int main(){
 
     @staticmethod
     def sketch_function(signature):
-        source = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+        source = firmware_source(ROOT)
         start = source.index(signature + ' {')
         end, depth = source.index('{', start) + 1, 1
         while depth:
@@ -439,7 +442,7 @@ int main(){
         return source[start:end]
 
     def test_ap_password_endpoint(self):
-        source = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
+        source = webui_source(ROOT)
         handler = 'static void httpSetupAccess() {' + source.split('static void httpSetupAccess() {', 1)[1].split('\nstatic void httpStatus()', 1)[0]
         code = r'''
 #include "Arduino.h"

@@ -1,3 +1,5 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
 """Simulate the actual OTA lifecycle and temperature-driver failure modes."""
 import pathlib
 import subprocess
@@ -5,7 +7,7 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+SOURCE = firmware_source(ROOT)
 
 
 def function(signature):
@@ -138,7 +140,7 @@ int main() {
         self.run_cpp(code)
 
     def test_every_update_transport_uses_pause_and_failure_recovery(self):
-        webui = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
+        webui = webui_source(ROOT)
         self.assertIn('ArduinoOTA.onStart([] { beginOtaUpdate(); });', SOURCE)
         self.assertIn('ArduinoOTA.onError([](ota_error_t) { endOtaUpdate(false); });', SOURCE)
         pull = webui[webui.index('static bool installOtaFromUrl('):webui.index('static void httpOtaPage(')]

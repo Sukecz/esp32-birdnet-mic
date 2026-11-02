@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """Exercise thermal policy and the actual firmware shutdown/recovery functions."""
 import pathlib
 import subprocess
@@ -5,7 +6,7 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+SOURCE = firmware_source(ROOT)
 
 
 def function(signature):

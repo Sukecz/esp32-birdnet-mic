@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """Exercise the firmware consumer against byte-buffer batching and wraparound.
 
 ESP-IDF byte buffers merge adjacent writes. The fake implements that documented
@@ -167,7 +168,7 @@ int main() {
 
 class AudioBufferTests(unittest.TestCase):
     def test_reserve_capacity_keeps_large_packet_policy(self):
-        source = (ROOT / "esp32-birdnet-mic/esp32-birdnet-mic.ino").read_text()
+        source = firmware_source(ROOT)
         start = source.index("static size_t computeAudioRingBufferCapacity()")
         end = source.index("void flushAudioRingBuffer()", start)
         with tempfile.TemporaryDirectory() as temp:
@@ -194,7 +195,7 @@ int main() {
             subprocess.run([str(binary)], check=True)
 
     def test_firmware_preserves_queued_samples(self):
-        source = (ROOT / "esp32-birdnet-mic/esp32-birdnet-mic.ino").read_text()
+        source = firmware_source(ROOT)
         with tempfile.TemporaryDirectory() as temp:
             cpp = pathlib.Path(temp) / "audio_test.cpp"
             binary = pathlib.Path(temp) / "audio_test"

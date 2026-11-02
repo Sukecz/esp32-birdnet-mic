@@ -1,3 +1,4 @@
+from webui_source import webui_source
 """Compile the production SNTP callback/configuration/scheduler with a fake network.
 
 No live NTP or device is needed. The fake clock never becomes synchronized merely
@@ -127,7 +128,7 @@ int main(int argc,char** argv){
 
 class TimeSyncTests(unittest.TestCase):
     def test_manual_endpoint_reports_a_request_not_sync_completion(self):
-        production = function((ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text(), 'httpActionTimeSync')
+        production = function(webui_source(ROOT), 'httpActionTimeSync')
         code = r'''
 #include "Arduino.h"
 #define F(value) value

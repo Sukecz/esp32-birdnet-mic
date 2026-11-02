@@ -1,11 +1,11 @@
 # BirdNETMic Web Flasher — ESP32 Microphone USB Installation and OTA Updates
 
-> **Firmware 2.04:** Smoother Listen playback and less audio loss after preview overflow. Streaming and standalone Recording. See the [main guide](../README.md).
+> **Firmware 2.05:** Consistent settings drafts and safer update validation. Streaming and standalone Recording. See the [main guide](../README.md).
 
 
-Firmware artifacts: **v2.04**. See [validation and hardware limits](../release-notes/2.04-validation.md).
+Firmware artifacts: **v2.05**. See [validation and hardware limits](../release-notes/2.05-validation.md).
 
-**Current firmware: 2.04**.
+**Current firmware: 2.05**.
 
 Install using [esp32mic.msmeteo.cz](https://esp32mic.msmeteo.cz) in desktop **Chrome or Edge**
 with a USB **data** connection (AtomS3U plugs directly into USB-A). The flasher detects the ESP chip family and chooses the image for
@@ -27,7 +27,7 @@ Keeping saved values preserves the packet size; **Recommended settings** applies
 | Purpose | File | Notes |
 |---|---|---|
 | Update through the device's OTA page | `firmware-app-<board>.bin` | App-only; choose c3, s3, c5 or c6 |
-| Exact 2.04 OTA image | `firmware-app-<board>-2.04.bin` | Current versioned app-only image |
+| Exact 2.05 OTA image | `firmware-app-<board>-2.05.bin` | Current versioned app-only image |
 | USB web installation | `manifest.json` and its referenced parts | Let the web flasher handle offsets |
 | Manual full USB flash | `firmware-<board>.bin` | Merged image; can overwrite settings; never upload through OTA |
 | Legacy unsuffixed files | `firmware-app.bin`, `firmware.bin` | **C6 only** |

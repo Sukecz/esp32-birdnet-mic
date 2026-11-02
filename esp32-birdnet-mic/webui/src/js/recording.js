@@ -17,11 +17,16 @@ function renderRecordingLog(r){
  recordingNode('recording_log_status').textContent=r.logging.error||(!r.logging.sd_enabled?'SD logging disabled.':'SD log: '+r.logging.file+' · '+friendlyBytes(r.logging.bytes)+' · limit '+friendlyBytes(r.logging.max_kib*1024)+' per file.');
  recordingLogDraftChanged();
 }
+async function saveRecordingGroup(url,values,keys,section,feedbackId,success){
+ if(recordingPending||wifiOffIntent)return false;
+ recordingPending=true;if(recordingState)renderRecording({recording:recordingState,field_power:fieldPowerState});
+ try{return await saveValues(url,values,keys,section,success,{feedbackId,refresh:loadStatus,rawErrors:true});}
+ finally{recordingPending=false;if(recordingState)renderRecording({recording:recordingState,field_power:fieldPowerState});}
+}
 async function saveRecordingLogSettings(){
  const v=recordingLogValues();const n=Number(v.max_kib);
  if(!Number.isInteger(n)||n<64||n>16384){recordingNode('recording_log_feedback').textContent='Choose a log limit from 0.07 to 16.78 MB.';return;}
- if(await recordingPost('/api/recording/log/settings',v)){recordingLogDirty=false;recordingNode('recording_log_feedback').textContent='Log settings saved.';}
- await loadStatus();
+ await saveRecordingGroup('/api/recording/log/settings',v,draftGroups[1],'logssec','recording_log_feedback','Log settings saved.');
 }
 let fieldPowerState=null,fieldPowerDirty=false,fieldPowerPending=false;
 const fieldPowerIds=['field_wifi_delay','field_guard','field_cutoff','field_confirm','field_hysteresis','field_sleep'];
@@ -68,9 +73,7 @@ async function saveFieldPowerSettings(wifiOnly=false){
  if(!Object.values(v).every(Number.isInteger)||v.wifi_delay_seconds<0||v.wifi_delay_seconds>60||v.cutoff_mv<3000||v.cutoff_mv>4200||v.confirm_seconds<0||v.confirm_seconds>300||v.hysteresis_mv<0||v.hysteresis_mv>300){feedback.textContent='Check the voltage and time ranges.';return;}
  fieldPowerPending=true;renderFieldPower({field_power:fieldPowerState});feedback.textContent='Saving…';
  try{
-  const response=await fetch('/api/field_power',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-ESP32MIC-CSRF':'1'},body:new URLSearchParams(wifiOnly?{wifi_delay_seconds:v.wifi_delay_seconds}:Object.fromEntries(Object.entries(v).filter(([k])=>k!=='wifi_delay_seconds'))),signal:AbortSignal.timeout(15000)});
-  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Could not save');
-  feedback.textContent='Power settings saved.';await loadStatus();
+  await saveValues('/api/field_power',wifiOnly?{wifi_delay_seconds:v.wifi_delay_seconds}:Object.fromEntries(Object.entries(v).filter(([k])=>k!=='wifi_delay_seconds')),ids,'recording_panel','Power settings saved.',{feedbackId:wifiOnly?'field_wifi_feedback':'field_power_feedback',refresh:loadStatus,rawErrors:true});
  }catch(e){feedback.textContent=e.message;}
  finally{fieldPowerPending=false;renderFieldPower({field_power:fieldPowerState});}
 }
@@ -218,6 +221,5 @@ async function saveRecordingSettings(){
  const rawMinutes=Number(recordingNode('recording_hours').value);
  const minutes=Math.abs(rawMinutes-Math.round(rawMinutes))<1e-8?Math.round(rawMinutes):rawMinutes;
  if(!Number.isInteger(minutes)||minutes<0||minutes>10080||(recordingNode('recording_duration_mode').value==='1'&&minutes===0)){recordingNode('recording_feedback').textContent='Choose a duration from 0 to 10080 minutes.';return;}
- if(await recordingPost('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').checked?'1':'0'}))recordingDirty=false;
- await loadStatus();
+ await saveRecordingGroup('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').checked?'1':'0'},draftGroups[0],'recording_panel','recording_feedback','Recording settings saved.');
 }

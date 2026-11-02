@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """Exercise the actual disabled-RTSP main-loop branch, including Listen gating."""
 from pathlib import Path
 import subprocess
@@ -9,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class RecordingLifecycleTests(unittest.TestCase):
     def test_recording_preserves_listen_with_rtsp_off(self):
-        source = (ROOT/'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+        source = firmware_source(ROOT)
         start = source.index('    } else if (!recording::mode()) {', source.index('// RTSP client management'))
         end = source.index('    uint32_t rateNow', start)
         code = r'''

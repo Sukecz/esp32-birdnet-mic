@@ -1260,25 +1260,27 @@ async function discardChanges(id){
  if(id==='networksec'&&window.deviceApPassword?.busy())return;
  if(id==='networksec')window.deviceApPassword?.cancel();
  if(sectionBusy.has(id))return;
- $(id).querySelectorAll('[data-dirty-key]').forEach(el=>{const k=el.dataset.dirtyKey;pendingSyncKeys.delete(k);clearDirty(k);if(el.type==='password')el.value='';if(el.type==='checkbox')el.checked=false;});
+ $(id).querySelectorAll('[data-dirty-key]').forEach(el=>{const k=el.dataset.dirtyKey;pendingSyncKeys.delete(k);clearDirty(k);if(Object.hasOwn(confirmedValues,k)){if(el.type==='checkbox')el.checked=!!confirmedValues[k];else el.value=confirmedValues[k];}else if(el.type==='password')el.value='';el.dispatchEvent(new Event(el.type==='checkbox'||el.tagName==='SELECT'?'change':'input',{bubbles:true}));});
  feedback(id,'Changes discarded.');await refreshAll();updateDependencies();
 }
 const saveErrors={invalid_value:'The device rejected this value. Check its range and the selected microphone.',invalid_schedule:'Use different start and end times. Sleep requires an enabled schedule.',invalid_mqtt:'Check the broker address, port and password settings.',thermal_latched:'Thermal protection is active. Wait for cooling and acknowledge the warning.',i2s_restart_failed:'The microphone could not restart. Check its wiring and format.'};
-async function saveValues(url,values,keys,section,success='Saved.'){
+async function saveValues(url,values,keys,section,success='Saved.',options={}){
  if(sectionBusy.has(section))return false;
+ const report=(text,kind='muted')=>options.feedbackId?($(options.feedbackId).textContent=text):feedback(section,text,kind);
+ const refresh=options.refresh||refreshAll;
  const versions=keys.map(k=>editVersions[k]||0);
  keys.forEach(k=>{savingKeys.add(k);pendingSyncKeys.add(k);markDirty(k);});
- sectionBusy.add(section);updateDiscard($(section));feedback(section,'Saving…');
+ sectionBusy.add(section);updateDiscard($(section));report('Saving…');
  try{
   const response=await mutationFetch(url,new URLSearchParams(values).toString());
   const result=await response.json();
-  if(!response.ok||!result.ok)throw new Error(saveErrors[result.error]||'The device could not apply the change. Try again.');
+  if(!response.ok||!result.ok)throw new Error(saveErrors[result.error]||(options.rawErrors&&result.error)||'The device could not apply the change. Try again.');
   // Let older status requests finish while drafts are still protected.
   if(pollPromise)await pollPromise;
   keys.forEach((k,i)=>{if((editVersions[k]||0)===versions[i])clearDirty(k);});
   keys.forEach(k=>savingKeys.delete(k));
-  feedback(section,success,'ok');await refreshAll();return true;
- }catch(error){feedback(section,error.message&&saveErrors&&Object.values(saveErrors).includes(error.message)?error.message:'Could not confirm the change. Your edits are kept; check the connection and try again.','bad');return false;}
+  report(success,'ok');await refresh();return true;
+ }catch(error){report(error.message&&(options.rawErrors||Object.values(saveErrors).includes(error.message))?error.message:'Could not confirm the change. Your edits are kept; check the connection and try again.','bad');return false;}
  finally{
   // A response started before the write must not become the new saved baseline.
   if(pollPromise)await pollPromise;
@@ -1358,6 +1360,7 @@ function toggleDirty(el,key){
  if(!el)return; const dirty=!!edits[key]&&differsFromSaved(key); el.classList.toggle('dirty',dirty);
  const field=el.closest('.field');
  if(field){let note=field.querySelector('.edit-note');if(!note){note=document.createElement('span');note.className='edit-note';field.append(note);}note.textContent=dirty?'Unsaved':'';}
+ if(!field&&el.id&&el.parentElement){let note=el.parentElement.querySelector('[data-draft-note="'+el.id+'"]');if(!note){note=document.createElement('span');note.className='edit-note';note.dataset.draftNote=el.id;el.after(note);}note.textContent=dirty?'Unsaved':'';el.setAttribute('aria-label',(el.labels?.[0]?.textContent||el.id)+(dirty?' — Unsaved':''));}
  updateDiscard(el.closest('details.card'));
 }
 function setToggleState(on){const onb=$('b_srv_on'), offb=$('b_srv_off'); if(onb&&offb){onb.classList.toggle('active',on); offb.classList.toggle('active',!on); onb.disabled=on; offb.disabled=!on&&!thermalAutoPending;}}function renderTimeRows(j){
@@ -1786,6 +1789,7 @@ async function batteryAction(action){
  }
  batteryPending=true;renderBattery(batteryDevice);n('battery_feedback').textContent='Saving…';
  try{
+  if(action==='enable'){await saveValues('/api/battery',data,['battery_monitor'],'batterysec','Monitoring saved.',{feedbackId:'battery_feedback',refresh:loadStatus,rawErrors:true});return;}
   const response=await mutationFetch('/api/battery',new URLSearchParams(data).toString()),result=await response.json();
   if(!response.ok||!result.ok)throw Error(result.error||'Could not save. Try again.');
   if(action==='enable')batteryDraft=null;
@@ -1815,11 +1819,16 @@ function renderRecordingLog(r){
  recordingNode('recording_log_status').textContent=r.logging.error||(!r.logging.sd_enabled?'SD logging disabled.':'SD log: '+r.logging.file+' · '+friendlyBytes(r.logging.bytes)+' · limit '+friendlyBytes(r.logging.max_kib*1024)+' per file.');
  recordingLogDraftChanged();
 }
+async function saveRecordingGroup(url,values,keys,section,feedbackId,success){
+ if(recordingPending||wifiOffIntent)return false;
+ recordingPending=true;if(recordingState)renderRecording({recording:recordingState,field_power:fieldPowerState});
+ try{return await saveValues(url,values,keys,section,success,{feedbackId,refresh:loadStatus,rawErrors:true});}
+ finally{recordingPending=false;if(recordingState)renderRecording({recording:recordingState,field_power:fieldPowerState});}
+}
 async function saveRecordingLogSettings(){
  const v=recordingLogValues();const n=Number(v.max_kib);
  if(!Number.isInteger(n)||n<64||n>16384){recordingNode('recording_log_feedback').textContent='Choose a log limit from 0.07 to 16.78 MB.';return;}
- if(await recordingPost('/api/recording/log/settings',v)){recordingLogDirty=false;recordingNode('recording_log_feedback').textContent='Log settings saved.';}
- await loadStatus();
+ await saveRecordingGroup('/api/recording/log/settings',v,draftGroups[1],'logssec','recording_log_feedback','Log settings saved.');
 }
 let fieldPowerState=null,fieldPowerDirty=false,fieldPowerPending=false;
 const fieldPowerIds=['field_wifi_delay','field_guard','field_cutoff','field_confirm','field_hysteresis','field_sleep'];
@@ -1866,9 +1875,7 @@ async function saveFieldPowerSettings(wifiOnly=false){
  if(!Object.values(v).every(Number.isInteger)||v.wifi_delay_seconds<0||v.wifi_delay_seconds>60||v.cutoff_mv<3000||v.cutoff_mv>4200||v.confirm_seconds<0||v.confirm_seconds>300||v.hysteresis_mv<0||v.hysteresis_mv>300){feedback.textContent='Check the voltage and time ranges.';return;}
  fieldPowerPending=true;renderFieldPower({field_power:fieldPowerState});feedback.textContent='Saving…';
  try{
-  const response=await fetch('/api/field_power',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-ESP32MIC-CSRF':'1'},body:new URLSearchParams(wifiOnly?{wifi_delay_seconds:v.wifi_delay_seconds}:Object.fromEntries(Object.entries(v).filter(([k])=>k!=='wifi_delay_seconds'))),signal:AbortSignal.timeout(15000)});
-  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Could not save');
-  feedback.textContent='Power settings saved.';await loadStatus();
+  await saveValues('/api/field_power',wifiOnly?{wifi_delay_seconds:v.wifi_delay_seconds}:Object.fromEntries(Object.entries(v).filter(([k])=>k!=='wifi_delay_seconds')),ids,'recording_panel','Power settings saved.',{feedbackId:wifiOnly?'field_wifi_feedback':'field_power_feedback',refresh:loadStatus,rawErrors:true});
  }catch(e){feedback.textContent=e.message;}
  finally{fieldPowerPending=false;renderFieldPower({field_power:fieldPowerState});}
 }
@@ -2016,8 +2023,7 @@ async function saveRecordingSettings(){
  const rawMinutes=Number(recordingNode('recording_hours').value);
  const minutes=Math.abs(rawMinutes-Math.round(rawMinutes))<1e-8?Math.round(rawMinutes):rawMinutes;
  if(!Number.isInteger(minutes)||minutes<0||minutes>10080||(recordingNode('recording_duration_mode').value==='1'&&minutes===0)){recordingNode('recording_feedback').textContent='Choose a duration from 0 to 10080 minutes.';return;}
- if(await recordingPost('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').checked?'1':'0'}))recordingDirty=false;
- await loadStatus();
+ await saveRecordingGroup('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').checked?'1':'0'},draftGroups[0],'recording_panel','recording_feedback','Recording settings saved.');
 }
 </script>
 <script id='browser_audio_script'>
@@ -2158,9 +2164,14 @@ const draftGroups=[['recording_duration_mode','recording_hours','recording_segme
 function highlightNewDrafts(){
  if(!recordingState||!fieldPowerState||!batteryState)return;
  const saved={recording_duration_mode:recordingState.duration_minutes?1:0,recording_hours:recordingState.duration_minutes,recording_segment:recordingState.segment_minutes,recording_auto:recordingState.auto_start,recording_log_level:Number(recordingLogState?.detailed),recording_log_sd:recordingLogState?.sd_enabled,recording_log_max:Number(((recordingLogState?.max_kib||0)*1024/1e6).toFixed(2)),field_wifi_delay:fieldPowerState.wifi_delay_seconds,field_guard:fieldPowerState.enabled,field_cutoff:fieldPowerState.cutoff_mv/1000,field_confirm:fieldPowerState.confirm_seconds,field_hysteresis:fieldPowerState.hysteresis_mv/1000,field_sleep:Number(fieldPowerState.sleep_after_save),battery_monitor:batteryState.enabled};
- for(const rootId of ['recording_panel','batterysec','logssec']){const root=document.getElementById(rootId);let button=root.querySelector('[data-discard-drafts]');if(!button){button=document.createElement('button');button.dataset.discardDrafts='1';button.className='discard';button.textContent='Discard unsaved changes';root.append(button);}button.disabled=recordingPending||fieldPowerPending||batteryPending||recordingLogPending;button.onclick=()=>{for(const ids of draftGroups)for(const id of ids){const e=document.getElementById(id);if(!root.contains(e))continue;if(e.type==='checkbox')e.checked=!!saved[id];else e.value=saved[id];e.dispatchEvent(new Event(e.type==='checkbox'||e.tagName==='SELECT'?'change':'input',{bubbles:true}));}highlightNewDrafts();};button.hidden=!draftGroups.flat().some(id=>{const e=document.getElementById(id);return root.contains(e)&&((e.type==='checkbox'?e.checked:Number(e.value))!==saved[id]||(e.type==='number'&&!e.value.trim()));});}
- for(const ids of draftGroups)for(const id of ids){const e=document.getElementById(id),v=e.type==='checkbox'?e.checked:Number(e.value);const dirty=v!==saved[id]||(e.type==='number'&&!e.value.trim());let note=e.parentElement.querySelector('[data-draft-note="'+id+'"]');if(!note){note=document.createElement('span');note.className='edit-note';note.dataset.draftNote=id;e.after(note);}note.textContent=dirty?'Unsaved':'';e.classList.toggle('dirty',dirty);e.setAttribute('aria-label',(e.labels?.[0]?.textContent||id)+(dirty?' — Unsaved':''));}
+ for(const ids of draftGroups)for(const id of ids)syncInput(document.getElementById(id),id,saved[id]);
+ for(const rootId of ['recording_panel','batterysec','logssec']){
+  const root=document.getElementById(rootId);updateDiscard(root);
+  const button=root.querySelector(':scope > .discard');button.dataset.discardDrafts='1';
+  button.disabled=sectionBusy.has(rootId)||recordingPending||fieldPowerPending||batteryPending||recordingLogPending;
+ }
 }
+for(const ids of draftGroups)for(const id of ids)trackEdit(document.getElementById(id),id);
 document.addEventListener('input',highlightNewDrafts);document.addEventListener('change',highlightNewDrafts);
 for(const name of ['renderRecording','renderBattery','renderFieldPower','renderRecordingLog']){const original=window[name];window[name]=function(...args){const result=original(...args);highlightNewDrafts();return result;};}
 

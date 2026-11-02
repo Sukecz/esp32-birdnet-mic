@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.05 - 2026-11-02
+
+- **Settings:** Recording, SD logging, Battery and power settings share draft tracking, polling preservation, discard and scoped saves. Failed saves retain edits; a confirmed save does not discard a newer draft or edits from another group.
+- **Firmware structure:** separate audio capture, RTSP, MQTT, settings storage, OTA and mode control into focused components. Preserve existing settings keys, defaults, audio buffers and upgrade paths.
+- **Validation and releases:** one board registry drives all six build configurations and memory checks. Record source/build hashes and Git revision; publish matching firmware from a verified release snapshot. Reuse checked builds for packaging and avoid recompilation when generated UI is unchanged.
+- **Hardware scope:** physical validation targets C6. C3/S3/C5 and SD/battery hardware remain unqualified in this release while those devices are unavailable.
+
 ## 2.04 - 2026-10-31
 
 - **Smoother Listen:** schedule incoming PCM continuously instead of inserting small gaps or dropping ordinary network bursts. Start with a 500 ms browser-side reserve and increase it after playback starvation, with bounded buffering and memory.

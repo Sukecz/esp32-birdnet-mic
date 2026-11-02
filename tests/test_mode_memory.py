@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """Execute production mode/allocation paths across all four XIAO memory profiles."""
 from pathlib import Path
 import subprocess
@@ -5,7 +6,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+SOURCE = firmware_source(ROOT)
 
 
 def function(signature):
@@ -156,7 +157,12 @@ bool startAudioProducer(){
  ringBytes=recording::active?0:65536;capture=true;return true;
 }
 void simplePrintln(const char*){}
-''' + function('bool setDeviceMode(bool recordingMode)') + r'''
+''' + r'''
+#define BIRDNET_APP_RUNTIME_H
+bool applicationUpdateInProgress(){return otaInProgress;}
+void cancelRecordingAutoStart(){recordingAutoStartPending=false;}
+#include "ApplicationMode.cpp"
+'''+r'''
 int main(){
  for(int n=0;n<50;++n){
   assert(setDeviceMode(true));assert(capture&&!ringBytes&&!rtspServerEnabled&&devicesetup::current);

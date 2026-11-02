@@ -84,8 +84,8 @@ int main() {
 
 class RtspParserTests(unittest.TestCase):
     def test_replies_follow_pending_frame_and_buffered_commands_resume(self):
-        source = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
-        start = source.index('void processRTSP(')
+        source = (ROOT / 'esp32-birdnet-mic/RtspService.cpp').read_text()
+        start = source.index('void processRTSP(ClientSession &session, uint8_t clientIdx) {')
         end = source.index('static int findFreeClientSlot', start)
         with tempfile.TemporaryDirectory() as temp:
             cpp = pathlib.Path(temp) / 'parser.cpp'

@@ -1,3 +1,6 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
+from validation_fixture import uint_parser
 """Battery policy, persisted configuration, and actual save-before-sleep loop."""
 from pathlib import Path
 import subprocess
@@ -9,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def function(signature):
-    source = (ROOT/'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+    source = firmware_source(ROOT)
     start = source.index(signature+' {')
     end, depth = source.index('{',start)+1, 1
     while depth:
@@ -145,7 +148,7 @@ int main(){
         self.run_cpp(code)
 
     def test_real_settings_endpoint_validation_and_mutation_guards(self):
-        source=(ROOT/'esp32-birdnet-mic/WebUI.cpp').read_text()
+        source=webui_source(ROOT)
         def web_function(signature):
             start=source.index(signature+' {');end=source.index('{',start)+1;depth=1
             while depth:
@@ -171,7 +174,7 @@ namespace flashlayout {bool busy(){return false;}}
 namespace devicesetup {inline bool monitor=true;bool batteryMonitoring(){return monitor;}}
 uint8_t s3BoardVariant=0;
 void apiSendJSON(const String& s){web.send(200,"application/json",s);}
-"""+web_function('static bool requireMutationAuth(bool preparation = false)')+web_function('static bool parseUInt32Strict(const String& input, uint32_t& out)')+web_function('static void httpFieldPowerSettings()')+r"""
+"""+web_function('bool requireMutationAuth(bool preparation = false)')+uint_parser()+web_function('static void httpFieldPowerSettings()')+r"""
 int main(){
  fieldpower::begin();web.args={{"enabled","1"}};const auto initial=nvs;
  auth=false;httpFieldPowerSettings();assert(web.code==403&&nvs==initial);auth=true;

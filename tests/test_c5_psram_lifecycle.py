@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """Exercise the firmware's allocation, fallback, restart and cleanup paths."""
 from pathlib import Path
 import subprocess
@@ -5,7 +6,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+SOURCE = firmware_source(ROOT)
 
 
 def function(signature):

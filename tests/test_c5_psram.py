@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """XIAO S3/C5 PSRAM: larger listening queue, internal fallbacks, and the build helper's PSRAM option."""
 import os
 import pathlib
@@ -7,7 +8,7 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SKETCH = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+SKETCH = firmware_source(ROOT)
 BROWSER = (ROOT / 'esp32-birdnet-mic/BrowserAudio.cpp').read_text()
 
 

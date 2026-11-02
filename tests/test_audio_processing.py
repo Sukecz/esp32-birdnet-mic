@@ -1,3 +1,4 @@
+from firmware_source import firmware_source
 """Numerical DSP reference and memory/rate regressions for the PDM integration."""
 import pathlib
 import subprocess
@@ -41,7 +42,7 @@ int main() {
 ''')
 
     def test_actual_c5_reserve_selection_boot_reconfigure_and_exhaustion(self):
-        source = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
+        source = firmware_source(ROOT)
         start = source.index('    const size_t requested =', source.index('bool startAudioProducer() {'))
         end = source.index('    audioRingBuffer = createInternalAudioRing', start)
         for c5 in (False, True):

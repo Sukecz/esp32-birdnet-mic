@@ -1,3 +1,6 @@
+from webui_source import webui_source
+from firmware_source import firmware_source
+from validation_fixture import uint_parser
 """Shared S3 image: routing, atomic switching, saved selection and API validation."""
 from pathlib import Path
 import subprocess
@@ -5,8 +8,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SKETCH = (ROOT / 'esp32-birdnet-mic/esp32-birdnet-mic.ino').read_text()
-WEB = (ROOT / 'esp32-birdnet-mic/WebUI.cpp').read_text()
+SKETCH = firmware_source(ROOT)
+WEB = webui_source(ROOT)
 
 
 def function(source, signature):
@@ -135,7 +138,7 @@ int main(){
         self.assertIn('putUChar("s3Board", s3BoardVariant)', SKETCH)
 
     def test_actual_endpoint_auth_strict_input_and_no_save_on_failure(self):
-        parser = WEB[WEB.index('static bool parseUInt32Strict('):WEB.index('static bool parseInt32Strict(')]
+        parser = uint_parser()
         self.native(r'''
 #include <string>
 #include <map>
