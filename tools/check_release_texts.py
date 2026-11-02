@@ -17,7 +17,7 @@ def check(html, version):
 def main():
     version=json.loads((ROOT/'web-flasher/manifest.json').read_text())['version']
     check((ROOT/'web-flasher/index.html').read_text(),version)
-    for name in ['README.md','esp32-birdnet-mic/README.md','web-flasher/README.md']:
+    for name in ['README.md','esp32-birdnet-mic/README.md','web-flasher/README.md','manual-ota-firmware/README.md']:
         text=(ROOT/name).read_text()
         if not re.search(r'(?:Firmware|firmware):?\s*\*{0,2}v?'+re.escape(version)+r'\b',text[:4000]):
             raise ValueError('Current firmware text missing: '+name)

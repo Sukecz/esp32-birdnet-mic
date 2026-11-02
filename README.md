@@ -20,6 +20,13 @@ Bird identification runs on the receiving computer, not on the ESP32.
 
 **[Boards](#supported-boards) · [Quick start](#quick-start) · [Modes](#streaming-and-recording) · [Battery](#battery) · [Features](#features) · [Wiring](#microphones-and-wiring) · [Help](#everyday-use-and-troubleshooting)**
 
+New installations start with independent **Auto** choices for microphone format
+and supported S3 board variants. Existing saved manual choices are retained after
+updating. Manual selection remains available in **Audio** and **Device configuration**.
+Optional **Adaptive noise reduction (Experimental)** is in Audio after High-pass;
+it defaults Off and affects RTSP, Listen and SD recordings when enabled. Its
+benefit for BirdNET recognition still needs comparison on real recordings.
+
 ## Start with the right hardware
 
 **For a new build, choose XIAO ESP32-C5 + an IM73D122 PDM microphone.**
@@ -336,8 +343,9 @@ This pin mapping is used for C3/S3/C5/C6 with the external module.
 **Sense:** use the built-in slot on the expansion board with its factory SD connection
 enabled, a **FAT32 card up to 32 GB**, and the **XIAO ESP32-S3 Sense** profile.
 Its SD CS routing differs from the external module and is selected automatically.
-The camera is not used. Use the default S3 profile for an external PDM microphone;
-the Sense profile routes PDM to the built-in microphone.
+The camera is not used. Auto board selection can retain the Sense SD slot while
+using a detected external microphone. Manual Sense selection routes PDM to its
+built-in microphone; manual standard S3 selection uses the external SD mapping.
 
 ### C6 antenna selection
 
@@ -355,7 +363,7 @@ Other supported boards do not expose this selector.
 | Microphone | Select in Audio → Microphone format | Notes |
 |---|---|---|
 | **Adafruit SPH0645LM4H** | MSB / left-justified | Supported I2S alternative |
-| **ICS-43434** | Philips I2S (default) | Supported I2S reference |
+| **ICS-43434** | Philips I2S | Supported I2S reference |
 | **INMP441** | Philips I2S | Supported I2S microphone |
 
 <picture>
