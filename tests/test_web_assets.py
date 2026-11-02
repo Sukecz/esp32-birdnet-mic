@@ -121,5 +121,5 @@ int main(){
         self.assertIn('Please prepare your device first', pages[6])
         # Browser tests use pages rendered by this actual C++ handler.
         output = ROOT / 'tmp/ota-rendered-pages.json'
-        if output.parent.is_dir():
-            output.write_text(json.dumps(pages))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(pages))

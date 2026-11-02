@@ -51,7 +51,7 @@ runs. Overlapping log reads and process restarts cannot duplicate transfers.
 
 ```sh
 python3 -m unittest discover -s tests -p test_download_stats.py
-NODE_PATH=/tmp/birdnetmic-thermal-ui/node_modules node tests/download_stats_browser_test.js
+python3 tools/test.py browser --filter download_stats
 ssh rpi5 'systemctl status birdnetmic-download-stats.timer birdnetmic-download-stats.service --no-pager'
 ssh rpi5 'journalctl -u birdnetmic-download-stats.service -n 20 --no-pager'
 curl -fsS https://esp32mic.msmeteo.cz/download-stats.json

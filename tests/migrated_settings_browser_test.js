@@ -29,7 +29,10 @@ const {chromium}=require('playwright-core');
    return route.fulfill({json:fixture[path.slice(5)]||{ok:true,available:false}});
   });
   await page.goto('http://groups.test/');await page.waitForFunction(()=>fieldPowerState&&batteryState&&recordingLogState);
-  await page.selectOption('#themeSel',theme);
+  // Feedback and dirty styles change before asynchronous save/discard handlers
+  // finish refreshing. Start the next scenario only after that transaction ends.
+  const settled=()=>page.waitForFunction(()=>!pollBusy&&!recordingPending&&!recordingLogPending&&!batteryPending&&!fieldPowerPending&&!sectionBusy.size);
+  await settled();await page.selectOption('#themeSel',theme);
   const groups=[['recording_auto','recording_save','recording_panel','recording_feedback',false,true],['recording_log_level','recording_log_save','logssec','recording_log_feedback','0','1'],['battery_monitor','battery_save','batterysec','battery_feedback',true,false],['field_wifi_delay','field_wifi_save','recording_panel','field_wifi_feedback','3','5'],['field_cutoff','field_power_save','batterysec','field_power_feedback','3.50','3.60']];
   for(const [id,save,root,feedback,original,changed] of groups){
    if(root!=='recording_panel')await page.evaluate(id=>openSection(id),root);
@@ -42,9 +45,10 @@ const {chromium}=require('playwright-core');
    await change(original);assert(!await input.evaluate(e=>e.classList.contains('dirty')));assert.equal(posts.length,before);
    await change(changed);failure=true;await page.locator('#'+save).click();
    await page.waitForFunction(id=>/kept|fetch|connection|confirm/i.test(document.getElementById(id).textContent),feedback);
-   assert(await input.evaluate(e=>e.classList.contains('dirty')));failure=false;
-   await page.locator('#'+root+'>[data-discard-drafts]').click();await page.waitForFunction(id=>!document.getElementById(id).classList.contains('dirty'),id);
-   await change(changed);await page.locator('#'+save).click();await page.waitForFunction(id=>!document.getElementById(id).classList.contains('dirty'),id);
+   assert(await input.evaluate(e=>e.classList.contains('dirty')));await settled();failure=false;
+   await page.locator('#'+root+'>[data-discard-drafts]').click();await page.waitForFunction(id=>!document.getElementById(id).classList.contains('dirty'),id);await settled();
+   await change(changed);await page.locator('#'+save).click();await page.waitForFunction(id=>!document.getElementById(id).classList.contains('dirty'),id).catch(async error=>{console.error({packed,width,theme,id,feedback:await page.locator('#'+feedback).textContent(),posts:posts.slice(-3),inputs:await page.evaluate(()=>fieldPowerIds.map(id=>{const e=document.getElementById(id);return {id,value:e.value,valid:e.checkValidity(),message:e.validationMessage};}))});throw error;});
+   await settled();
    if(id==='field_wifi_delay')assert.deepEqual(Object.keys(posts.at(-1).v),['wifi_delay_seconds']);
    if(id==='field_cutoff')assert(!Object.hasOwn(posts.at(-1).v,'wifi_delay_seconds'));
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));cases++;

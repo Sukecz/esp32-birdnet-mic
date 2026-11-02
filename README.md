@@ -538,7 +538,10 @@ settings used for the packaged firmware.
 - [Release history](esp32-birdnet-mic/CHANGELOG.md)
 - [Field recording guide](docs/field-recording.md)
 - [Parts and wiring](docs/parts.md)
-- [Proposed 2.00 release](release-notes/2.00.md)
+- [Recording logs and SD journal](docs/recording-logging.md)
+- [Release workflow](RELEASING.md)
+- [Hardware validation scope](docs/hardware-qualification.md)
+- [Website download statistics](deployment/download-statistics.md)
 
 ## Credits and license
 

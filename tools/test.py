@@ -58,10 +58,18 @@ def main():
         if args.suite in ('host', 'all'):
             boards()  # Validate registry before expensive checks.
             run('python + native regressions', [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_*.py'])
-            for name in ('discovery_progress', 'discovery_client', 'time_zone_schedule'):
+            for name in ('discovery_progress', 'discovery_client', 'time_zone_schedule', 'recording_wav'):
                 binary = str(Path(directory) / name)
                 if run(name + ' compile', ['g++', '-std=c++11', '-Wall', '-Wextra', '-Werror', '-Itests/stubs', f'tests/{name}_test.cpp', '-o', binary]):
                     run(name, [binary])
+        if args.suite == 'browser' and any(path.name in
+                ('ota_assets_browser_test.js', 'update_space_browser_test.js') for path in scripts):
+            # Jobs use separate workspaces; render the real handler here instead
+            # of relying on a previous host run's ignored temporary output.
+            if not run('OTA browser fixtures', [sys.executable, '-m', 'unittest',
+                    'discover', '-s', 'tests', '-p', 'test_web_assets.py',
+                    '-k', 'test_actual_ota_html_states_and_dynamic_escaping']):
+                return finish()
         if args.suite in ('host', 'browser', 'all'):
             for path in scripts:
                 run(path.name, ['node', str(path)], timeout=180)
