@@ -197,7 +197,10 @@ void saveAudioSettings() {
     mqttApplyClientSettings(false);
     audioPrefs.begin("audio", false);
     audioPrefs.putUInt("sampleRate", currentSampleRate);
-    audioPrefs.putFloat("gainFactor", currentGainFactor);
+    // A gain saved during this boot is user configuration too. Auto must not
+    // replace it later on a freshly provisioned device.
+    if (audioPrefs.putFloat("gainFactor", currentGainFactor) == sizeof(float))
+        microphoneGainConfigured = true;
     audioPrefs.putUShort("bufferSize", currentBufferSize);
     audioPrefs.putUChar("shiftBits", i2sShiftBits);
     audioPrefs.putBool("micAuto", micAutoDetect);
