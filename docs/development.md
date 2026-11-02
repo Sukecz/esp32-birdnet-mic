@@ -99,8 +99,10 @@ C6 external antenna. Publication/OTA authority follows AGENTS.md.
 2. **Release provenance (partly implemented):** source/configuration and artifact
    hashes now reject stale `--skip-build` outputs. Add source commit identity. Publish the same
    verified artifacts. Add immutable release staging before replacing public files.
-3. **Shared UI state:** extract CSS/JS source modules while retaining compact embedded
-   output. Introduce one saved/draft/save/error/discard implementation. Migrate one
+3. **Shared UI state (source extraction implemented):** readable CSS/JS and settings
+   fragments now live in `esp32-birdnet-mic/webui/src/`; generation reproduces the
+   existing page byte for byte. Direct module tests cover the existing settings
+   engine. Continue consolidating feature-specific draft adapters into that engine. Migrate one
    settings group at a time with polling and source/embedded visual checks.
 4. **Settings and application state:** extract validated settings and mode transitions
    behind explicit C++ interfaces. Replace source-slicing regressions with tests
@@ -116,3 +118,8 @@ saved settings, API and OTA compatibility. A short module map and tests should
 make the next feature require less repository context. Track iteration time,
 test time, clean/warm build time and per-board flash growth as the improvement
 metrics. Hardware coverage gaps remain explicit rather than inferred from builds.
+
+See [UI source instructions](../esp32-birdnet-mic/webui/README.md) for the module map
+and generation commands. Edit the fragments, then regenerate; the runner rejects
+stale assembled HTML before running host/browser suites. A source-only extraction
+with byte-identical output does not require a new firmware release.

@@ -1,0 +1,21 @@
+
+#row_wifi_antenna[hidden]{display:none!important}
+[data-device-mode='recording'] [data-streaming-only]{display:none!important}
+[data-device-mode='streaming'] [data-recording-only]{display:none!important}
+[data-device-mode='recording'] .overview{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(min-width:601px){[data-device-mode='recording'] .overview:has(#overview_battery:not([hidden])){grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:600px){[data-device-mode='recording'] .overview{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#recording_panel{line-height:1.5}#recording_panel>h2{margin:0}#recording_panel>.section-note{margin:4px 0 12px}#recording_panel p{overflow-wrap:anywhere}#recording_file:empty,#recording_feedback:empty{display:none}.recording-settings{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}.recording-settings h3{font-size:14px;margin:0 0 10px}.recording-settings .section-note{margin:8px 0 0}
+.playback{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px 16px;padding:10px 12px;margin:12px 0}
+.mode-controls{display:flex;align-items:center;gap:8px;min-width:0}
+.listen-controls{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}
+.listen-volume{display:grid;grid-template-columns:auto 140px 5ch;align-items:center;gap:8px;min-width:0}
+#listen_volume{width:140px;min-width:0;max-width:none;flex:none}
+#listen_volume_value{display:block;width:5ch;min-width:0;max-width:5ch;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+#listen_button{padding:8px 14px;flex:none;white-space:nowrap}
+#listen_status,#device_mode_feedback{grid-column:1/-1;margin:0;min-width:0;overflow-wrap:anywhere;font-size:12px}
+#device_mode_feedback{color:var(--bad);grid-column:1;grid-row:2}#listen_status{grid-column:2;grid-row:2;justify-self:end;text-align:right;max-width:min(100%,260px)}#listen_status:empty,#device_mode_feedback:empty{display:none}
+.overview>.health-checks{display:flex;flex-direction:column;justify-content:center;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--row);font-weight:750;font-size:13px;min-width:0;overflow-wrap:anywhere}
+.health-checks a{text-decoration:none}#overview_mic:before{content:none}
+@media(max-width:600px){.playback{padding:8px;gap:6px 8px}.mode-controls label,.listen-volume label{display:none}.listen-controls{gap:8px}.listen-volume{grid-template-columns:64px 5ch;gap:5px}#listen_volume{width:64px}#listen_button{padding:8px 10px;min-width:75px}.overview>.health-checks{padding:10px;font-size:12px}}
+@media(max-width:360px){.playback{column-gap:6px}#device_mode{width:96px;font-size:12px;padding:6px}.listen-controls{gap:4px}.listen-volume{grid-template-columns:40px 5ch;gap:3px}#listen_volume{width:40px}#listen_button{min-width:60px;padding:8px 6px}#listen_button:before{display:none}}

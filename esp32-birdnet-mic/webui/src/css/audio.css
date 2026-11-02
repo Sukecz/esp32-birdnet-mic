@@ -1,0 +1,11 @@
+
+#audio_settings{table-layout:fixed}
+#sel_s3_board{flex-basis:100%;width:100%;max-width:420px;min-width:0}
+#sel_mic_format{width:100%;min-width:0;max-width:360px}
+#sel_time_zone_mode{width:min(100%,320px);max-width:100%}
+#in_time_zone_rule{width:min(100%,420px);max-width:100%}
+.gh.ota-ready{color:#fff7ed;background:#c2410c;border-color:#fb923c;box-shadow:0 0 0 3px rgba(251,146,60,.22)}
+.ota-notice{display:none;margin:0 0 14px;padding:15px 18px;border-radius:16px;text-decoration:none;color:#fff7ed;background:linear-gradient(120deg,#c2410c,#ea580c);border:2px solid #fdba74;box-shadow:0 12px 30px rgba(234,88,12,.28);font-size:16px;font-weight:900;text-align:center;letter-spacing:.01em}
+.ota-notice.show{display:block;animation:otaPulse 2.2s ease-in-out infinite}
+.space-notice{margin:0 0 14px;padding:12px 16px;border-radius:12px;border:1px solid var(--acc);background:rgba(14,165,233,.1)}
+@keyframes otaPulse{0%,100%{transform:scale(1);box-shadow:0 12px 30px rgba(234,88,12,.25)}50%{transform:scale(1.008);box-shadow:0 15px 38px rgba(234,88,12,.42)}}

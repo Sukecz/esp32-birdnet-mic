@@ -18,6 +18,9 @@ def source_digest():
     files += [ROOT / name for name in ('boards.json', 'build-dependencies.json',
               'tools/compile_firmware.sh', 'tools/prepare_sd_library.py',
               'tools/board_registry.py', 'tools/build_receipt.py',
+              'tools/assemble_webui.py', 'tools/minify_webui.cjs',
+              'tools/package-lock.json', 'tools/requirements-webui.txt',
+              'esp32-birdnet-mic/tools/gen_webui_assets.py',
               'tools/partitions/birdnet_4mb.csv')]
     fingerprint = hashlib.sha256()
     for path in sorted(files):

@@ -14,7 +14,7 @@ This describes the current layout. The incremental migration plan is in
 | Power and thermal | `Battery.cpp`, `FieldPower.cpp`, `ThermalRecovery.h`, `PowerPolicy.h` | Temporary thermal pause/recovery differs from final recording completion or Wi-Fi shutdown. |
 | Network helpers | `WifiAp.cpp`, `DiscoveryClient.h`, `CooperativeTcpWriter.h`, `MqttDiscovery.h` | Keep reconnect/backpressure bounded and preserve capture responsiveness. |
 | HTTP API and UI serving | `WebUI.cpp`, `WebUI.h` | API validation/authentication and serving assets. Future handlers should delegate to module interfaces. |
-| Browser UI source | `webui/`, `tools/gen_webui_gzip_header.sh` under sketch | Source files generate embedded headers; both forms require tests. Drafts survive polling; saves affect only their logical group. |
+| Browser UI source | `webui/src/`, `tools/gen_webui_gzip_header.sh` under sketch | Fragments assemble into generated `webui/index.html` and embedded headers; both forms require tests. Drafts survive polling; saves affect only their logical group. |
 | OTA layout | `FlashLayout.cpp`, `FlashLayoutTable.h`, `tools/partitions/` | Preserve upgrade compatibility and immutable bridge assets. Flash capacity is distinct from active device partition layout. |
 | Targets and automation | Root `boards.json`, `tools/board_registry.py`, `tools/build.py`, `tools/test.py` | One supported-board registry; development, packaging and publishing are distinct operations. |
 

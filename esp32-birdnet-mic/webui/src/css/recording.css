@@ -1,0 +1,19 @@
+
+/* Compact audio dashboard; uses the existing status polling only. */
+.top{border-top:3px solid var(--acc);background:linear-gradient(125deg,rgba(14,165,233,.09),transparent 65%),var(--card)}
+.top .title{font-size:23px;letter-spacing:-.6px}.top .badge{color:var(--acc)}
+.playback{padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--row);margin:16px 0}
+#listen_button{padding:12px 20px;background:linear-gradient(120deg,#0369a1,#047857);color:white;border:0;box-shadow:0 5px 16px rgba(14,165,233,.2)}
+#listen_button:before{content:'▶';margin-right:9px}#listen_button[aria-pressed=true]:before{content:'■'}
+#listen_button[aria-pressed=true]{box-shadow:0 0 0 3px rgba(16,185,129,.22)}
+#listen_status{font-size:12px}
+.overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.overview>a{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--row);font-weight:750;font-size:13px;min-width:0;overflow-wrap:anywhere}
+.overview>a:before{font-size:10px;letter-spacing:1.3px;color:var(--muted);font-weight:600}
+#overview_mic:before{content:'MICROPHONE'}#overview_streams:before{content:'STREAMING'}#overview_wifi:before{content:'WI-FI'}#overview_temp:before{content:'CHIP TEMPERATURE'}
+.overview>a:hover{background:var(--row2);border-color:var(--acc);text-decoration:none}
+#overview_battery{display:flex;align-items:center;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--row);font-weight:750;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}#overview_battery[hidden]{display:none!important}
+@media(min-width:601px){.overview:has(#overview_battery:not([hidden])){grid-template-columns:repeat(5,minmax(0,1fr))}}
+.audio-strip{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin-top:14px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.audio-strip a{text-decoration:none}#overview_level{color:var(--fg)}
+@media(max-width:600px){.overview{grid-template-columns:repeat(2,minmax(0,1fr))}.top .title{font-size:21px}.playback{padding:12px}.overview>a{padding:10px;font-size:12px}.audio-strip{gap:8px 12px}}

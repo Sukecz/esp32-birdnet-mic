@@ -799,7 +799,9 @@ npm ci --prefix tools --ignore-scripts
 
 Terser minifies inline JavaScript while preserving names used by HTML handlers.
 Zopfli compresses the resulting HTML and the OTA assets with 15 iterations.
-Readable sources stay in `webui/`; decompression happens in the browser. The device
+Edit the main page in `webui/src/index.html`, `webui/src/css/` and `webui/src/js/`;
+`webui/index.html` is generated. See the [UI source map](webui/README.md).
+Other page sources stay in `webui/`; decompression happens in the browser. The device
 does not need a decompressor or internet access. Tests check reproducibility and
 exercise both the source and the actual embedded page.
 
@@ -809,8 +811,9 @@ From the repository root, regenerate after editing any browser asset:
 esp32-birdnet-mic/tools/gen_webui_gzip_header.sh
 ```
 
-This updates `WebUI_gz.h` and `OtaAssets_gz.h` from `webui/index.html`, `webui/ota.css`
-and `webui/ota.js`. Add `--check` to verify that generated headers match without rewriting them.
+This assembles the main page and updates the embedded headers from the UI sources,
+including OTA/setup assets. Add `--check` to verify both assembled HTML and headers
+without rewriting them.
 
 ## Persisted Configuration
 

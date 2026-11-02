@@ -16,6 +16,11 @@ def main():
     p.add_argument('suite', choices=['host', 'browser', 'release', 'all'])
     p.add_argument('--filter', default='', help='Run matching JS filenames only')
     args = p.parse_args()
+    scripts = sorted((ROOT / 'tests').glob('*_test.js'))
+    scripts = [path for path in scripts if args.filter in path.name and
+               (args.suite == 'all' or ('playwright' in path.read_text()) == (args.suite == 'browser'))]
+    if args.filter and (args.suite == 'release' or not scripts):
+        p.error('No JavaScript tests match this suite/filter')
     env = dict(os.environ)
     env['NODE_PATH'] = str(ROOT / 'tools/node_modules') + os.pathsep + env.get('NODE_PATH', '')
     if args.suite in ('browser', 'all') and not env.get('CHROMIUM'):
@@ -38,7 +43,18 @@ def main():
             code = 1
         reports.append({'name': name, 'seconds': round(time.monotonic()-started, 2), 'exit_code': code})
         return code == 0
+    def finish():
+        destination = ROOT / 'tmp/test-results'
+        destination.mkdir(parents=True, exist_ok=True)
+        suffix = '-' + args.filter.replace('/', '_').replace('\\', '_') if args.filter else ''
+        (destination / f'{args.suite}{suffix}.json').write_text(json.dumps(reports, indent=2) + '\n')
+        for report in reports:
+            print(f"{'PASS' if report['exit_code'] == 0 else 'FAIL'} {report['seconds']:7.2f}s {report['name']}")
+        return int(any(r['exit_code'] for r in reports))
     with tempfile.TemporaryDirectory() as directory:
+        if args.suite in ('host', 'browser', 'all'):
+            if not run('UI source assembly', [sys.executable, 'tools/assemble_webui.py', '--check']):
+                return finish()
         if args.suite in ('host', 'all'):
             boards()  # Validate registry before expensive checks.
             run('python + native regressions', [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_*.py'])
@@ -47,22 +63,11 @@ def main():
                 if run(name + ' compile', ['g++', '-std=c++11', '-Wall', '-Wextra', '-Werror', '-Itests/stubs', f'tests/{name}_test.cpp', '-o', binary]):
                     run(name, [binary])
         if args.suite in ('host', 'browser', 'all'):
-            for path in sorted((ROOT / 'tests').glob('*_test.js')):
-                browser = 'playwright' in path.read_text()
-                if args.suite == 'host' and browser or args.suite == 'browser' and not browser:
-                    continue
-                if args.filter not in path.name:
-                    continue
+            for path in scripts:
                 run(path.name, ['node', str(path)], timeout=180)
         if args.suite in ('release', 'all'):
             run('release artifact contract', [sys.executable, 'tests/validate_ota_contract.py'])
-    destination = ROOT / 'tmp/test-results'
-    destination.mkdir(parents=True, exist_ok=True)
-    suffix = '-' + args.filter.replace('/', '_').replace('\\', '_') if args.filter else ''
-    (destination / f'{args.suite}{suffix}.json').write_text(json.dumps(reports, indent=2) + '\n')
-    for report in reports:
-        print(f"{'PASS' if report['exit_code'] == 0 else 'FAIL'} {report['seconds']:7.2f}s {report['name']}")
-    return int(any(r['exit_code'] for r in reports))
+    return finish()
 
 
 if __name__ == '__main__':

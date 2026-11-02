@@ -1,0 +1,1090 @@
+<!doctype html>
+<html>
+<head>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22%230ea5e9%22%2F%3E%3Cpath%20d%3D%22M5%2022l5-7v-3a6%206%200%200%201%2012%200v1l5%202-5%202c-1%207-9%2010-17%205Z%22%20fill%3D%22white%22%2F%3E%3Cpath%20d%3D%22M10%2018q5%205%209-2%22%20fill%3D%22none%22%20stroke%3D%22%230284c7%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2218.5%22%20cy%3D%2211.5%22%20r%3D%221.2%22%20fill%3D%22%230f172a%22%2F%3E%3C%2Fsvg%3E">
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<meta name='color-scheme' content='light dark'>
+<title>BirdNETMic · Streaming & SD recording</title>
+<style><!-- @include "css/base.css" --></style>
+<style><!-- @include "css/audio.css" --></style>
+<style><!-- @include "css/layout.css" --></style>
+<style><!-- @include "css/device-setup.css" --></style>
+<style><!-- @include "css/recording.css" --></style>
+<style><!-- @include "css/overview.css" --></style>
+<script src="/ap-password.js" defer></script>
+</head>
+
+<body>
+<div id='ovr' class='overlay'>
+<div class='box' id='ovr_msg'>Restarting…</div>
+</div>
+<main class='page'>
+<div class='card top'>
+<div class='hero'>
+<div>
+<div class='brand'>
+<div class='title' id='t_title' title='For BirdNET-Go / BirdNET-Pi'>BirdNETMic</div>
+<span class='badge' id='fwv'>
+</span>
+</div>
+</div>
+<div class='lang'>
+<a href='/setup' class='gh' id='device_configuration_link'>Device configuration</a>
+<a href='https://github.com/Sukecz/esp32-birdnet-mic' target='_blank' class='gh'>GitHub</a>
+<a href='/ota' class='gh' id='ota_link'>Firmware update</a>
+<span class='muted' id='t_theme'>Theme</span>
+<select id='themeSel'>
+<option id='opt_theme_auto' value='auto'>Auto</option>
+<option id='opt_theme_light' value='light'>Light</option>
+<option id='opt_theme_dark' value='dark'>Dark</option>
+</select>
+</div>
+</div>
+<div class='playback'>
+<div class='mode-controls' aria-label='Device mode'>
+<label for='device_mode' title='Current mode. Set the startup mode in Device configuration.'>Mode</label>
+<select id='device_mode' onchange='changeDeviceMode(this.value)'><option value='streaming'>Streaming</option><option value='recording'>Recording</option></select>
+</div>
+<div class='listen-controls'>
+<div class='listen-volume'>
+<label for='listen_volume'>Volume</label>
+<input id='listen_volume' type='range' min='0' max='150' step='1' value='60' oninput='setListenVolume(this.value)'>
+<output id='listen_volume_value' for='listen_volume'>60%</output>
+</div>
+<button id='listen_button' onclick='toggleListen()' aria-pressed='false'>Listen</button>
+</div>
+<span id='device_mode_feedback' role='status' aria-live='polite'></span>
+<small id='listen_status' role='status' aria-live='polite'></small>
+</div>
+<div class='overview' aria-label='Device status'>
+<div class='health-checks'>
+<a href='#streamssec' onclick="openSection('streamssec')" id='device_mode_status' role='status' aria-live='polite'>Streaming: Checking…</a>
+<a href='#healthsec' onclick="openSection('healthsec')" id='overview_mic'>Microphone: checking…</a>
+</div>
+<a href='#streamssec' onclick="openSection('streamssec')" id='overview_streams' data-streaming-only>Streams: checking…</a>
+<a href='#networksec' onclick="openSection('networksec')" id='overview_wifi'>Wi-Fi: checking…</a>
+<a href='#thermalsec' onclick="openSection('thermalsec')" id='overview_temp'>Temperature: checking…</a>
+<span id='overview_battery' role='status' aria-live='polite' hidden></span>
+</div>
+<div class='audio-strip'><a href='#audiosec' onclick="openSection('audiosec')" id='overview_level'>Level: —</a><span id='overview_rate'>— Hz</span><a href='#streamssec' onclick="openSection('streamssec')" id='overview_clients' data-streaming-only>Clients: —</a><span id='overview_uptime'>Uptime: —</span></div>
+<div id='connection_status' role='status' aria-live='polite'></div>
+</div>
+<a href='/ota' id='ota_notice' class='ota-notice' aria-live='polite'></a><div id='update_space_notice' class='space-notice' hidden><a href='/ota'>Prepare this device for future firmware updates</a></div><div id='thermal_notice' class='thermal-alert' role='alert' style='display:none'>
+<strong id='thermal_notice_title'></strong>
+<p id='thermal_notice_detail'></p>
+<button id='btn_thermal_notice_ack' class='danger' onclick='clearThermalLatch()'></button>
+<p><a href='#thermalsec' onclick="openSection('thermalsec')">Open Thermal management</a></p></div><div id='microphone_notice' class='thermal-alert' role='alert' hidden><strong>Microphone signal warning</strong><p id='microphone_notice_detail'></p><a href='#audiosec' onclick="openSection('audiosec')">Check Audio settings</a> &middot; <a href='#healthsec' onclick="openSection('healthsec')">Open Stream health</a></div>
+<section id='recording_panel' class='card' hidden>
+<h2 class='section-title'>Recording</h2>
+<p class='section-note'>Listen checks the microphone. SD write status is shown separately below.</p>
+<p id='recording_summary' role='status' aria-live='polite'>Checking card…</p>
+<p id='recording_storage' class='section-note'></p>
+<p id='recording_capacity' class='section-note'></p>
+<p id='recording_file' class='mono'></p>
+<div class='actions'>
+<button id='recording_check' onclick="recordingAction('check')">Check SD card</button>
+<button id='recording_start' onclick="recordingAction('start')">Start recording</button>
+<button id='recording_stop' onclick="recordingAction('stop')">Stop &amp; save</button>
+</div>
+<div class='actions'>
+<label for='recording_duration_mode'>Recording duration</label><select id='recording_duration_mode' onchange='recordingDurationModeChanged()'><option value='0'>Until stopped</option><option value='1'>Set a duration</option></select><label id='recording_minutes_label' for='recording_hours'>Minutes</label>
+<input id='recording_hours' type='number' min='0' max='10080' step='1' required value='0' oninput='recordingDraftChanged()'>
+</div>
+<div class='actions'><label><input id='recording_auto' type='checkbox' onchange='recordingDraftChanged()'> Start recording after power-on</label></div>
+<div class='recording-settings'>
+<h3>Recording settings</h3>
+<div class='field'>
+<label for='recording_segment'>Start a new file every (minutes)</label>
+<input id='recording_segment' type='number' min='1' max='120' step='1' value='60' oninput='recordingDraftChanged()'>
+</div>
+<p class='section-note'>Long recordings are split into separate files. Old recordings are kept; recording stops when the card is full.</p>
+</div>
+<div class='actions'><button id='recording_save' onclick='saveRecordingSettings()' disabled>Save recording settings</button><span id='recording_dirty' class='edit-note'></span></div>
+<p id='recording_feedback' class='feedback' role='status' aria-live='polite'></p>
+<div class='recording-settings'>
+<h3>Wi-Fi power saving</h3>
+<div class='field'><label for='field_wifi_delay'>Wi-Fi switch-off delay (seconds)</label><input id='field_wifi_delay' type='number' min='0' max='60' step='1' value='3' oninput='fieldPowerDraftChanged()'></div>
+<div class='actions'><button id='field_wifi_save' onclick='saveFieldPowerSettings(true)' disabled>Save power settings</button><button id='recording_wifi_off' onclick='switchRecordingWifiOff()' disabled>Turn Wi-Fi off until restart</button></div>
+<p class='section-note'>Start recording, then turn Wi-Fi off to save power. When recording finishes or fails, the device sleeps. Restart the device to reconnect.</p>
+<p id='field_wifi_feedback' class='feedback' role='status' aria-live='polite'></p>
+<p><a href='#batterysec' onclick="openSection('batterysec')">Configure low-battery protection</a></p>
+</div>
+
+
+</section>
+<details id='streamssec' data-streaming-only class='card'>
+<summary class='sum'><span><span class='section-title' id='t_streams'>Streams</span><span class='section-note'>Targets, transport, client connections and URLs</span></span><span class='chev' aria-hidden='true'></span></summary>
+<div class='stream-grid' style='margin-top:10px'>
+<div class='stream-sub'>
+<h3>Stream 1 — /audio1 (legacy /audio)</h3>
+<table>
+<tr><td class='k'>Enabled</td><td class='v'><div class='field'><select id='sel_stream1_enabled'><option value='on'>ON</option><option value='off'>OFF</option></select><button onclick="setv('stream1_enabled',sel_stream1_enabled.value)">Apply</button></div></td></tr>
+<tr><td class='k'>Target system</td><td class='v'><div class='field'><select id='sel_stream1_target'><option value='0'>BirdNET-Go</option><option value='1'>BirdNET-Pi</option></select><button onclick="setv('stream1_target',sel_stream1_target.value)">Apply</button></div></td></tr>
+<tr><td class='k'>Transport</td><td class='v'><span id='s1_transport' class='mono'>TCP</span></td></tr>
+<tr><td class='k'>URL (IP)</td><td class='v'><a id='url_ip' class='mono' target='_blank'></a></td></tr>
+<tr><td class='k'>URL (mDNS)</td><td class='v'><span id='url_mdns_wrap'><a id='url_mdns' class='mono' target='_blank'></a></span></td></tr>
+<tr><td class='k'>Client</td><td class='v' id='s1_client'></td></tr>
+<tr><td class='k'>Streaming</td><td class='v' id='s1_stream'></td></tr>
+<tr><td class='k'>Packet Rate</td><td class='v' id='s1_rate'></td></tr>
+<tr><td class='k'>Last Play</td><td class='v' id='s1_lplay'></td></tr>
+</table>
+</div>
+<div class='stream-sub'>
+<h3>Stream 2 — /audio2</h3>
+<table>
+<tr><td class='k'>Enabled</td><td class='v'><div class='field'><select id='sel_stream2_enabled'><option value='on'>ON</option><option value='off'>OFF</option></select><button onclick="setv('stream2_enabled',sel_stream2_enabled.value)">Apply</button></div></td></tr>
+<tr><td class='k'>Target system</td><td class='v'><div class='field'><select id='sel_stream2_target'><option value='0'>BirdNET-Go</option><option value='1'>BirdNET-Pi</option></select><button onclick="setv('stream2_target',sel_stream2_target.value)">Apply</button></div></td></tr>
+<tr><td class='k'>Transport</td><td class='v'><span id='s2_transport' class='mono'>UDP</span></td></tr>
+<tr><td class='k'>URL (IP)</td><td class='v'><a id='url2_ip' class='mono' target='_blank'></a></td></tr>
+<tr><td class='k'>URL (mDNS)</td><td class='v'><span id='url2_mdns_wrap'><a id='url2_mdns' class='mono' target='_blank'></a></span></td></tr>
+<tr><td class='k'>Client</td><td class='v' id='s2_client'></td></tr>
+<tr><td class='k'>Streaming</td><td class='v' id='s2_stream'></td></tr>
+<tr><td class='k'>Packet Rate</td><td class='v' id='s2_rate'></td></tr>
+<tr><td class='k'>Last Play</td><td class='v' id='s2_lplay'></td></tr>
+</table>
+</div>
+</div><table>
+<tr><td class='k' id='t_rtsp_server'>RTSP Server</td><td class='v' id='srv'></td></tr>
+<tr>
+<td class='k'>
+<span id='t_max_clients'>Max RTSP clients</span>
+<button type='button' class='help' id='h_max_clients' aria-label='Help' aria-expanded='false' title="Maximum number of concurrent RTSP clients. Lower values save memory.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_max_clients'>
+<option>1</option>
+<option selected>2</option>
+<option>3</option>
+</select>
+<button id='btn_max_clients_set' onclick="setv('max_clients',sel_max_clients.value)">Apply</button>
+</div>
+</td>
+</tr>
+</table>
+<p id='max_clients_hint' class='hint' style='display:none'>Maximum simultaneous RTSP clients. Browser listening uses a separate connection.</p><div class='actions'><button onclick="act('server_start')" id='b_srv_on'>Server ON</button><button onclick="act('server_stop')" id='b_srv_off'>Server OFF</button></div>
+<p class='muted'>Both streams share the microphone settings in Audio. Browser listening uses a separate connection.</p></details>
+<details id='healthsec' class='card'>
+<summary class='sum'><span><span class='section-title' id='t_health'>Stream health</span><span class='section-note'>Microphone, audio load and connection diagnostics</span></span><span class='chev' aria-hidden='true'></span></summary>
+<p id='mic_signal_status' role='status'>Microphone signal: checking…</p><table>
+<tr><td class='k' id='t_heap'>Free Heap (min)</td><td class='v' id='heap'></td></tr>
+<tr><td class='k' id='t_uptime'>Uptime</td><td class='v' id='uptime'></td></tr>
+</table>
+<table>
+<tr><td class='k' title='Time spent processing audio, excluding microphone read waits. Scheduling can inflate this estimate. Peak resets when capture restarts.'>Audio processing (estimate)</td><td class='v' id='health_audio_load'>Unavailable</td></tr>
+<tr><td class='k' title='Receive buffers overwritten before capture could read them. Recent count is sampled once a second; total is since boot.'>I2S DMA overruns: last minute / total</td><td class='v' id='health_dma'>Unavailable</td></tr>
+<tr><td class='k'>Capture / I2S errors since boot</td><td class='v' id='health_capture'>Unavailable</td></tr>
+<tr data-streaming-only><td class='k'>Temporary TCP stalls</td><td class='v' id='health_stalls'></td></tr>
+<tr data-streaming-only><td class='k'>Write failures / timeouts</td><td class='v' id='health_failures'></td></tr>
+<tr data-streaming-only><td class='k'>Client TEARDOWN / disconnects</td><td class='v' id='health_clients'></td></tr>
+<tr data-streaming-only><td class='k'>Audio buffer drops / flushes</td><td class='v' id='health_buffer'></td></tr>
+<tr data-streaming-only><td class='k'>Last stream stop</td><td class='v' id='health_stop'></td></tr>
+</table>
+<p data-streaming-only class='muted'>Totals since device boot, across all clients. A temporary stall is not a disconnect. Timeouts are included in write failures. Client TEARDOWN can be intentional. Buffer flushes discard queued audio to resume live playback.</p>
+</details>
+<details id='audiosec' class='card'>
+<summary class='sum'><span><span class='section-title' id='t_audio'>Audio</span><span class='section-note'>Microphone format, signal, gain and packet size</span></span><span class='chev' aria-hidden='true'></span></summary>
+<table id='audio_settings'>
+<tr id='row_s3_board' style='display:none'>
+<td class='k'><label for='sel_s3_board'>S3 board</label></td>
+<td class='v'><div class='field'>
+<select id='sel_s3_board'>
+<option value='0'>XIAO ESP32-S3 / Plus (default)</option>
+<option value='1'>XIAO ESP32-S3 Sense</option>
+<option value='2'>M5Stack AtomS3U</option>
+</select>
+<button id='btn_s3_board_apply' onclick='saveS3Board()'>Apply board</button>
+</div><div class='hint'>AtomS3U: contributor-tested with BirdNET-Go; built-in PDM microphone. Sense: Experimental — needs more testing; PDM uses its built-in microphone, I2S uses an external microphone. Recording uses its built-in microSD slot. Default: external microphone. Applying restarts audio and saves the board.</div></td>
+</tr>
+<tr>
+<td class='k'>
+<span>Microphone format</span>
+<button type='button' class='help' id='h_mic_format' title='Select the format that matches the connected microphone.' aria-label='Help' aria-expanded='false'>?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_mic_format'>
+<option value='0'>ICS-43434 / INMP441 (Philips I2S)</option>
+<option value='1'>Adafruit SPH0645 (MSB / left-justified)</option>
+<option value='2' id='opt_pdm'>PDM microphone (IM73D122)</option>
+</select>
+<button id='btn_mic_apply' onclick="chooseMicSettings()">Apply</button><button id='btn_mic_recommended' onclick="chooseMicSettings(true)">Recommended settings</button><small id='mic_format_label' class='muted'></small>
+</div>
+</td>
+</tr>
+<tr id='row_mic_format_hint' style='display:none'>
+<td colspan='2'><div class='hint'>Philips I2S is the default for existing installations. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_level'>Signal Level</span>
+<button type='button' class='help' id='h_level' aria-label='Help' aria-expanded='false' title="Keep peaks below clipping.">?</button>
+</td>
+<td class='v' id='level'>
+</td>
+</tr>
+<tr id='row_level_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_level_hint'>Keep peaks below clipping.</div>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_gain'>Microphone gain</span>
+<button type='button' class='help' id='h_gain' aria-label='Help' aria-expanded='false' title="Amplifies audio after I2S shift; too high will clip.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_gain' type='number' step='0.01' min='0.1' max='100'>
+<span class='unit'>×</span>
+<button id='btn_gain_set' onclick="setv('gain',in_gain.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_gain_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_gain_hint'>Amplifies audio after I2S shift; too high will clip.</div>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_hpf'>High-pass</span>
+<button type='button' class='help' id='h_hpf' aria-label='Help' aria-expanded='false' title="Cuts low-frequency rumble.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_hp'>
+<option value='off'>OFF</option>
+<option value='on'>ON</option>
+</select>
+<button id='btn_hp_set' onclick="setv('hp_enable',sel_hp.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_hpf_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_hpf_hint'>Cuts low-frequency rumble.</div>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_hpf_cut'>HPF Cutoff</span>
+<button type='button' class='help' id='h_hpf_cut' aria-label='Help' aria-expanded='false' title="High-pass cutoff in Hz.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_hp_cutoff' type='number' step='1' min='10' max='10000'>
+<span class='unit'>Hz</span>
+<button id='btn_hpf_cut_set' onclick="setv('hp_cutoff',in_hp_cutoff.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_hpf_cut_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_hpf_cut_hint'>High-pass cutoff in Hz.</div>
+</td>
+</tr>
+</table><details id='audioadvanced' class='advanced'><summary>Advanced audio settings</summary><table>
+<tr>
+<td class='k'>
+<span id='t_rate'>Sample Rate</span>
+<button type='button' class='help' id='h_rate' aria-label='Help' aria-expanded='false' title="Higher sample rate gives more detail but uses more bandwidth.">?</button>
+<div class='hint' id='rate_hint' style='display:none'>
+</div>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_rate' type='number' step='1' min='8000' max='192000'>
+<span class='unit'>Hz</span>
+<button id='btn_rate_set' onclick="setv('rate',in_rate.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_rate_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_rate_hint'>Higher sample rate gives more detail but uses more bandwidth.</div>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_buf'>Audio buffer size</span>
+<button type='button' class='help' id='h_buf' aria-label='Help' aria-expanded='false' title="Samples per audio block, shared by microphone capture, Listen and recording. Larger blocks add latency and also affect RTSP packet size.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_buf'>
+<option>256</option>
+<option selected>512</option>
+<option>1024</option>
+<option>2048</option>
+<option>4096</option>
+<option>8192</option>
+</select>
+<span class='unit'>samples</span>
+<button id='btn_buf_set' onclick="setv('buffer',sel_buf.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_buf_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_buf_hint'>Samples per audio block, shared by microphone capture, Listen and recording. Larger blocks add latency and also affect RTSP packet size.</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k' id='t_latency' title='Audio duration in one RTP packet; total listening delay also depends on the network and receiver.'>Audio per packet</td>
+<td class='v' id='lat'>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k' id='t_profile'>Profile</td>
+<td class='v' id='profile'>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_shift'>I2S Shift</span>
+<button type='button' class='help' id='h_shift' aria-label='Help' aria-expanded='false' title="Digital right shift before gain scaling.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_shift' type='number' step='1' min='0' max='24'>
+<span class='unit'>bits</span>
+<button id='btn_shift_set' onclick="setv('shift',in_shift.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_shift_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_shift_hint'>Digital right shift before gain scaling.</div>
+</td>
+</tr></table><div id='adv' class='muted'></div></details></details>
+<details id='timesec' class='card'>
+<summary class='sum'><span><span class='section-title' id='t_time'>Time &amp; Schedule</span><span class='section-note'>Clock, time zone and streaming window</span></span><span class='chev' aria-hidden='true'></span></summary>
+<table>
+<tr>
+<td class='k'>
+<span id='t_time_sync_en'>Time Sync</span>
+<button type='button' class='help' id='h_time_sync' aria-label='Help' aria-expanded='false' title="If internet time is unavailable, disable Time Sync to avoid repeated NTP retries.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_time_sync'>
+<option value='on'>ON</option>
+<option value='off'>OFF</option>
+</select>
+<button id='btn_time_sync_set' onclick="setv('time_sync',sel_time_sync.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_time_sync_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_time_sync_hint'>If internet time is unavailable, disable Time Sync to avoid repeated NTP retries.</div>
+</td>
+</tr>
+<tr>
+<td class='k' id='t_time_sync'>Sync Status</td>
+<td class='v' id='time_sync'>
+</td>
+</tr>
+<tr>
+<td class='k' id='t_last_sync'>Last Sync</td>
+<td class='v' id='last_sync'>
+</td>
+</tr>
+<tr>
+<td class='k' id='t_local_time'>Device Local Time</td>
+<td class='v mono' id='local_time'>
+</td>
+</tr>
+<tr>
+<td class='k' id='t_utc_time'>UTC Time</td>
+<td class='v mono' id='utc_time'>
+</td>
+</tr>
+<tr>
+<td class='v' colspan='2'>
+<label for='sel_time_zone_mode'>Where is the microphone?</label>
+<div class='field' style='margin-top:8px'>
+<select id='sel_time_zone_mode'>
+<option value='0'>Other location — set UTC offset</option>
+<optgroup label='Europe'>
+<option value='1'>Prague / Berlin / Paris</option>
+<option value='3'>London</option>
+</optgroup>
+<optgroup label='North America'>
+<option value='4'>New York / Toronto</option>
+<option value='5'>Chicago</option>
+<option value='6'>Denver (not Arizona)</option>
+<option value='7'>Los Angeles / Vancouver</option>
+</optgroup>
+<optgroup label='Oceania'>
+<option value='2'>Auckland / Wellington</option>
+<option value='8'>Sydney / Melbourne</option>
+</optgroup>
+<option value='9'>Other location with summer time — advanced</option>
+</select>
+<button onclick="setv('time_zone_mode',sel_time_zone_mode.value)">Apply</button>
+</div>
+<small>Choose a listed city for automatic summer/winter time changes. If yours is missing, choose Other location.</small>
+</td>
+</tr>
+<tr id='row_custom_time_zone' style='display:none'>
+<td class='v' colspan='2'>
+<label for='in_time_zone_rule'>Advanced time rule</label>
+<div class='field' style='margin-top:8px'>
+<input id='in_time_zone_rule' type='text' maxlength='80' placeholder='EST5EDT,M3.2.0/2,M11.1.0/2'>
+<button id='btn_time_zone_rule_set' onclick="setvRaw('time_zone_rule',in_time_zone_rule.value)">Apply</button>
+</div>
+<small>For advanced users: save a POSIX TZ rule first, then select the advanced location above. Check the local time afterward.</small>
+</td>
+</tr>
+<tr id='row_manual_time_offset' style='display:none'>
+<td class='k'>
+<span id='t_offset'>Time Offset</span>
+<button type='button' class='help' id='h_offset' aria-label='Help' aria-expanded='false' title="Used only in Manual UTC offset mode. Negative = west (UTC-), positive = east (UTC+).">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='sel_offset' type='number' min='-12' max='14' step='0.25' value='0'>
+<span class='unit'>h</span>
+<button id='btn_offset_set' onclick="setOffset()">Apply</button>
+</div>
+<small>This offset stays fixed; change it yourself when local summer time starts or ends.</small>
+</td>
+</tr>
+<tr id='row_offset_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_offset_hint'>Used only in Manual UTC offset mode. Negative = west (UTC-), positive = east (UTC+).</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k'>
+<span id='t_stream_sched_en'>Stream Schedule</span>
+<button type='button' class='help' id='h_stream_sched_en' aria-label='Help' aria-expanded='false' title="Automatically turns RTSP server ON/OFF by local device time. If time is unavailable, fail-open keeps stream allowed.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_stream_sched_en'>
+<option value='on'>ON</option>
+<option value='off'>OFF</option>
+</select>
+
+</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_stream_sched_en_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_stream_sched_en_hint'>Automatically turns RTSP server ON/OFF by local device time. If time is unavailable, fail-open keeps stream allowed.</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k'>
+<span id='t_stream_start'>Stream Start</span>
+<button type='button' class='help' id='h_stream_start' aria-label='Help' aria-expanded='false' title="Start of the allowed streaming window in local device time. Start and stop must differ.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_stream_start' type='time' step='60'>
+
+</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_stream_start_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_stream_start_hint'>Start of the allowed streaming window in local device time. Start and stop must differ.</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k'>
+<span id='t_stream_stop'>Stream Stop</span>
+<button type='button' class='help' id='h_stream_stop' aria-label='Help' aria-expanded='false' title="End of the allowed streaming window in local device time. Cross-midnight windows are supported (for example 22:00-06:00). If start equals stop, the window is empty and stream is blocked.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_stream_stop' type='time' step='60'>
+
+</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_stream_stop_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_stream_stop_hint'>End of the allowed streaming window in local device time. Cross-midnight windows are supported (for example 22:00-06:00). If start equals stop, the window is empty and stream is blocked.</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k' id='t_stream_sched_state'>Schedule Status</td>
+<td class='v' id='stream_sched_state'>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k'>
+<span id='t_deep_sleep_sched'>Deep Sleep (Outside Window)</span>
+<button type='button' class='help' id='h_deep_sleep_sched' aria-label='Help' aria-expanded='false' title="Uses deep sleep only outside the stream window. Requires valid synchronized time and no active client/stream. While sleeping, RTSP, Web UI, API, and OTA are unavailable.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_deep_sleep_sched'>
+<option value='on'>ON</option>
+<option value='off'>OFF</option>
+</select>
+
+</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_deep_sleep_sched_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_deep_sleep_sched_hint'>Uses deep sleep only outside the stream window. Requires valid synchronized time and no active client/stream. While sleeping, RTSP, Web UI, API, and OTA are unavailable.</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k' id='t_deep_sleep_state'>Deep Sleep Status</td>
+<td class='v' id='deep_sleep_state'>
+</td>
+</tr>
+</table>
+<div data-streaming-only class='actions'><button id='btn_schedule_save' onclick='saveSchedule()'>Save schedule</button></div><p data-streaming-only id='schedule_draft_hint' class='muted'>The streaming window uses the device local time. Start and end are saved together.</p>
+<div class='actions'><button onclick="act('time_sync')" id='b_sync_now'>Sync Time Now</button></div>
+</details>
+<details id='networksec' class='card'>
+<summary class='sum'><span><span class='section-title' id='t_network'>Network</span><span class='section-note'>Wi-Fi connection, access point and mDNS</span></span><span class='chev' aria-hidden='true'></span></summary>
+<p id='device_setup_summary' class='section-note'></p>
+<section id='direct_access' aria-labelledby='direct_access_title'>
+<h3 id='direct_access_title'>Device Wi-Fi</h3>
+<p class='muted'>Connect here when home Wi-Fi is unavailable, or for standalone recording.</p>
+<table>
+<tr><td class='k'>Status</td><td class='v' id='direct_access_status'>Loading…</td></tr>
+<tr><td class='k'>Network</td><td class='v' id='direct_access_name'></td></tr>
+<tr><td class='k'>Password</td><td class='v' id='direct_access_password'>Loading…</td></tr>
+<tr><td class='k'>Control page</td><td class='v'><a href='http://192.168.4.1/'>http://192.168.4.1</a></td></tr>
+</table>
+<div id="ap_password_control">
+<button type="button" id="ap_password_change" aria-expanded="false" aria-controls="ap_password_editor">Change password</button>
+<div id="ap_password_editor" hidden>
+<label for="ap_password_input">Device Wi-Fi password</label>
+<div class="field password"><input id="ap_password_input" type="password" maxlength="63" autocomplete="new-password" aria-describedby="ap_password_help ap_password_dirty"><button type="button" id="ap_password_show" aria-pressed="false">Show</button><span id="ap_password_dirty" class="edit-note"></span></div>
+<p id="ap_password_help" class="muted">Use 8–63 characters: letters without accents, numbers, spaces or symbols. Stop recording before saving. Devices connected to this Wi-Fi will need to reconnect with the new password.</p>
+<div class="actions"><button type="button" id="ap_password_save" disabled>Save password</button><button type="button" id="ap_password_cancel">Cancel</button></div>
+</div>
+<p id="ap_password_feedback" class="feedback" role="status" aria-live="polite"></p>
+</div>
+</section>
+<table>
+<tr><td class='k' id='t_ip'>IP Address</td><td class='v' id='ip'></td></tr>
+<tr><td class='k' id='t_wifi_rssi'>WiFi RSSI</td><td class='v' id='rssi'></td></tr>
+<tr><td class='k' id='t_wifi_tx'>WiFi TX Power</td><td class='v' id='wtx'></td></tr>
+<tr>
+<td class='k' id='t_mdns'>mDNS</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_mdns'>
+<option value='on'>ON</option>
+<option value='off'>OFF</option>
+</select>
+<button id='btn_mdns_set' onclick="setv('mdns_enable',sel_mdns.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr>
+<td class='k'>mDNS Hostname</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mdns_host' maxlength='32' placeholder='esp32mic-a1b2c3'>
+<button onclick="setvRaw('mdns_hostname',in_mdns_host.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_wifi_antenna' hidden>
+<td class='k'><label for='wifi_antenna'>Wi-Fi antenna</label></td>
+<td class='v'><div class='field'>
+<select id='wifi_antenna' onchange='antennaDraftChanged()'><option value='external'>External (default)</option><option value='internal'>Internal (built-in)</option></select>
+<button id='wifi_antenna_save' onclick='saveAntenna()' disabled>Save &amp; restart</button>
+<span id='wifi_antenna_dirty' class='edit-note'></span>
+</div><p class='muted'>XIAO ESP32-C6 only. Select the connected antenna. Changing this setting restarts the device and may interrupt Wi-Fi access.</p>
+<p id='wifi_antenna_feedback' role='status' class='feedback'></p></td>
+</tr>
+<tr>
+<td class='k'><label for='wifi_ap_mode'>Access point</label></td>
+<td class='v'>
+<div class='field'><select id='wifi_ap_mode' onchange='wifiApModeChanged()'>
+<option value='auto'>Default connection</option>
+<option value='locked'>Choose a specific access point</option>
+</select></div>
+<div id='wifi_ap_current' class='muted' aria-live='polite'>Loading Wi-Fi connection…</div>
+<div id='wifi_ap_picker' hidden>
+<p><button id='wifi_ap_scan' onclick='scanWifiAps()'>Find access points</button></p>
+<div id='wifi_ap_results' role='radiogroup' aria-label='Access points'></div>
+<p class='muted'>Only access points for your saved Wi-Fi network are shown, strongest first. Scanning may briefly affect the stream.</p>
+</div>
+<p><button id='wifi_ap_save' onclick='saveWifiAp()' disabled>Save and connect</button></p>
+<p class='muted'>Changing the access point briefly interrupts the stream. The selection is kept after a restart.</p>
+<p id='wifi_ap_recovery_hint' class='muted'>If home Wi-Fi is unavailable, the device creates its own Wi-Fi for control. See Device Wi-Fi above for connection details.</p>
+<div id='wifi_ap_message' role='status' aria-live='polite'></div>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_wifi_tx2'>TX Power (dBm)</span>
+<button type='button' class='help' id='h_tx' aria-label='Help' aria-expanded='false' title="Wi-Fi TX power; lowering can reduce RF noise.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_tx'>
+<option>-1.0</option>
+<option>2.0</option>
+<option>5.0</option>
+<option>7.0</option>
+<option>8.5</option>
+<option>11.0</option>
+<option>13.0</option>
+<option selected>15.0</option>
+<option>17.0</option>
+<option>18.5</option>
+<option>19.0</option>
+<option>19.5</option>
+</select>
+<span class='unit'>dBm</span>
+<button id='btn_tx_set' onclick="setv('wifi_tx',sel_tx.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_tx_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_tx_hint'>Wi-Fi TX power; lowering can reduce RF noise.</div>
+</td>
+</tr>
+</table>
+<div class='actions'><button onclick="act('wifi_reconnect')" id='b_wifi_reconnect'>Reconnect Wi-Fi</button><button onclick="confirmNetReset()" id='b_net_reset' class='danger'>Reset Wi-Fi</button></div>
+</details>
+<details id='batterysec' class='card'>
+<summary class='sum'><span><span class='section-title'>Battery</span><span class='section-note'>Monitoring, wiring and voltage calibration</span></span><span class='chev' aria-hidden='true'></span></summary>
+<details><summary>Battery connection help</summary><p id='battery_board' class='section-note'></p>
+<p id='battery_wiring'></p>
+<pre id='battery_divider' class='mono'>BAT+ ── 100 kΩ ──┬── D0 / A0
+                 │
+               100 kΩ
+                 │
+BAT− / GND ──────┘</pre>
+<p id='battery_pack_note' class='muted'>One Li-ion/LiPo cell or parallel cells (1S, 4.2 V max). Percentage is a voltage estimate. USB power can produce a voltage reading even without a battery.</p>
+</details><div class='actions'><label><input id='battery_monitor' type='checkbox' onchange='batteryDraftChanged()'> Enable battery monitoring</label><button id='battery_save' onclick="batteryAction('enable')" disabled>Save</button><span id='battery_dirty' class='edit-note'></span></div>
+<p id='battery_reading' role='status' aria-live='polite'></p>
+<details><summary>Calibrate voltage measurement</summary><div class='field'><label for='battery_reference'>Voltage measured with a multimeter (V)</label><input id='battery_reference' type='number' min='2.5' max='4.3' step='0.001' inputmode='decimal' placeholder='4.100'></div>
+<p class='muted'>Compare stable readings at the same time. Calibration adjusts voltage and the estimated percentage. Maximum correction: ±10%.</p>
+<p id='battery_correction'></p>
+<div class='actions'><button id='battery_calibrate' onclick="batteryAction('calibrate')">Calibrate</button><button id='battery_reset' onclick="batteryAction('reset')">Reset calibration</button></div>
+<p id='battery_feedback' class='feedback' role='status' aria-live='polite'></p>
+</details><div data-recording-only><h3>Low-battery protection</h3>
+<p class='section-note'>Stops recording and closes the WAV file before the selected action. Requires battery monitoring and a correct voltage reading.</p>
+<div class='actions'><label><input id='field_guard' type='checkbox' onchange='fieldPowerDraftChanged()'> Enable low-battery protection</label></div>
+<div class='field'><label for='field_cutoff'>Stop voltage (V)</label><input id='field_cutoff' type='number' min='3.0' max='4.2' step='0.01' value='3.50' oninput='fieldPowerDraftChanged()'></div>
+<details id='battery_protection_advanced'><summary>Advanced protection settings</summary><div class='field'><label for='field_confirm'>Ignore brief voltage drops (seconds)</label><input id='field_confirm' type='number' min='0' max='300' step='1' value='30' oninput='fieldPowerDraftChanged()'></div>
+<div class='field'><label for='field_hysteresis'>Voltage rise required before restarting (V)</label><input id='field_hysteresis' type='number' min='0' max='0.3' step='0.01' value='0.10' oninput='fieldPowerDraftChanged()'></div>
+<div class='field'><label for='field_sleep'>After a low-battery stop</label><select id='field_sleep' onchange='fieldPowerDraftChanged()'><option value='1'>Sleep until switched off and on</option><option value='0'>Stay awake, recording stopped</option></select></div>
+<p class='section-note'>Confirmation ignores brief dips. Recovery requires voltage above the stop voltage plus the recovery margin. Deep sleep has no automatic wake-up. This does not replace the battery pack's hardware protection.</p>
+</details><p id='field_power_status' role='status' aria-live='polite'></p>
+<div class='actions'><button id='field_power_save' onclick='saveFieldPowerSettings()' disabled>Save power settings</button><span id='field_power_dirty' class='edit-note'></span><button id='field_acknowledge' onclick="recordingAction('battery_acknowledge')" hidden>Allow recording again</button></div>
+<p id='field_power_feedback' class='feedback' role='status' aria-live='polite'></p></div>
+
+</details>
+<details id='thermalsec' class='card'>
+<summary class='sum'><span><span class='section-title' id='t_thermal'>Thermal management</span><span class='section-note'>Temperature, protection, cooling and CPU frequency</span></span><span class='chev' aria-hidden='true'></span></summary>
+<table>
+<tr>
+<td class='k' id='t_therm_status'>Status</td>
+<td class='v' id='therm_status'>
+</td>
+</tr>
+<tr>
+<td class='k' id='t_therm_now'>Current Temp</td>
+<td class='v' id='therm_now'>
+</td>
+</tr>
+<tr>
+<td class='k' id='t_therm_max'>Peak Temp</td>
+<td class='v' id='therm_max'>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_therm_protect'>Overheat Protection</span>
+<button type='button' class='help' id='h_therm_protect' aria-label='Help' aria-expanded='false' title="Stops streaming when the internal chip temperature reaches the limit.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_oh_enable'>
+<option value='on'>ON</option>
+<option value='off'>OFF</option>
+</select>
+<button id='btn_oh_enable' onclick="setv('oh_enable',sel_oh_enable.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_therm_hint_protect' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_therm_hint_protect'>Stops streaming when the internal chip temperature reaches the limit.</div>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_therm_limit'>Shutdown Limit</span>
+<button type='button' class='help' id='h_therm_limit' aria-label='Help' aria-expanded='false' title="Temperature threshold for shutdown. Default: 80 C. Recovery requires 5 minutes at least 10 C below the limit.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_oh_limit'>
+<option>30</option>
+<option>35</option>
+<option>40</option>
+<option>45</option>
+<option>50</option>
+<option>55</option>
+<option>60</option>
+<option>65</option>
+<option>70</option>
+<option>75</option>
+<option selected>80</option>
+<option>85</option>
+<option>90</option>
+<option>95</option>
+</select>
+<span class='unit'>&deg;C</span>
+<button id='btn_oh_limit' onclick="setv('oh_limit',sel_oh_limit.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_therm_hint_limit' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_therm_hint_limit'>Temperature threshold for shutdown. Default: 80 C. Recovery requires 5 minutes at least 10 C below the limit.</div>
+</td>
+</tr>
+<tr><td class='k'><label for='sel_oh_auto'>Automatically resume after cooling</label></td>
+<td class='v'><div class='field'><select id='sel_oh_auto'><option value='off'>OFF (default)</option><option value='on'>ON</option></select>
+<button onclick="setv('oh_auto',sel_oh_auto.value)">Apply</button></div></td></tr>
+<tr id='row_auto_cooling_hint'><td colspan='2'><div class='hint'>Waits 5 continuous minutes at least 10 &deg;C below the shutdown limit. The third shutdown within 24 hours requires acknowledgement. Emergency shutdowns always require acknowledgement.</div></td></tr>
+<tr><td class='k'>Shutdowns in last 24 hours</td><td class='v' id='therm_trip_count'>0 / 3</td></tr>
+<tr>
+<td class='k'>
+<span id='t_therm_last'>Last Shutdown</span>
+</td>
+<td class='v'>
+<div id='therm_last' class='hint'>
+</div>
+</td>
+</tr>
+<tr id='row_therm_latch' style='display:none'>
+<td colspan='2'>
+<div class='hint warn' id='txt_therm_latch'>
+</div>
+<div class='field' style='margin-top:8px'>
+<button id='btn_therm_clear' class='danger' onclick="clearThermalLatch()">
+</button>
+</div>
+</td>
+</tr>
+<tr>
+<td class='k' id='t_therm_cpu'>CPU Clock</td>
+<td class='v' id='therm_cpu'>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_cpu'>CPU Frequency</span>
+<button type='button' class='help' id='h_cpu' aria-label='Help' aria-expanded='false' title="Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_cpu'>
+<option>80</option>
+
+<option selected>160</option>
+</select>
+<span class='unit'>MHz</span>
+<button id='btn_cpu_set' onclick="setv('cpu_freq',sel_cpu.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_cpu_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_cpu_hint'>Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.</div>
+</td>
+</tr></table>
+</details>
+<details id='recoverysec' class='card'>
+<summary class='sum'><span><span class='section-title' id='t_perf'>Recovery &amp; Maintenance</span><span class='section-note'>Microphone recovery, stream warnings and scheduled reboot</span></span><span class='chev' aria-hidden='true'></span></summary>
+<table>
+<tr>
+<td class='k'>
+<span id='t_auto'>Microphone auto-recovery</span>
+<button type='button' class='help' id='h_auto' aria-label='Help' aria-expanded='false' title="Restarts audio capture if microphone reads stop. Slow network output does not trigger a restart.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='in_auto'>
+<option value='on'>ON</option>
+<option value='off'>OFF</option>
+</select>
+<button id='btn_auto_set' onclick="setv('auto_recovery',in_auto.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_auto_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_auto_hint'>Restarts audio capture if microphone reads stop. Slow network output does not trigger a restart.</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k'>
+<span id='t_thr_mode'>Threshold Mode</span>
+<button type='button' class='help' id='h_thr_mode' aria-label='Help' aria-expanded='false' title="Auto = computed threshold; Manual = your value.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='in_thr_mode'>
+<option value='auto'>Auto</option>
+<option value='manual'>Manual</option>
+</select>
+<button id='btn_thrmode_set' onclick="setv('thr_mode',in_thr_mode.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_thrmode_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_thr_mode_hint'>Auto = computed threshold; Manual = your value.</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_thr_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_thr_hint'>Minimum recent packet rate for a stream warning.</div>
+</td>
+</tr>
+<tr id='row_min_rate' data-streaming-only>
+<td class='k'>
+<span id='t_thr'>Output Rate Warning</span>
+<button type='button' class='help' id='h_thr' aria-label='Help' aria-expanded='false' title="Minimum recent packet rate for a stream warning.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_thr' type='number' step='1' min='5' max='200'>
+<span class='unit'>pkt/s</span>
+<button id='btn_thr_set' onclick="setv('min_rate',in_thr.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k'>
+<span id='t_sched'>Scheduled reboot</span>
+<button type='button' class='help' id='h_sched' aria-label='Help' aria-expanded='false' title="Periodic device restart for long-term stability.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='in_sched'>
+<option value='on'>ON</option>
+<option value='off' selected>OFF</option>
+</select>
+<button id='btn_sched_set' onclick="setv('sched_reset',in_sched.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_sched_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_sched_hint'>Periodic device restart for long-term stability.</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k'>
+<span id='t_hours'>Reboot interval</span>
+<button type='button' class='help' id='h_hours' aria-label='Help' aria-expanded='false' title="Interval between scheduled restarts.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_hours' type='number' step='1' min='1' max='168'>
+<span class='unit'>h</span>
+<button id='btn_hours_set' onclick="setv('reset_hours',in_hours.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_hours_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_hours_hint'>Interval between scheduled restarts.</div>
+</td>
+</tr>
+<tr data-streaming-only>
+<td class='k'>
+<span id='t_chk'>Stream warning check interval</span>
+<button type='button' class='help' id='h_chk' aria-label='Help' aria-expanded='false' title="How often stream output is checked for a rate warning.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_chk' type='number' step='1' min='1' max='60'>
+<span class='unit'>min</span>
+<button id='btn_chk_set' onclick="setv('check_interval',in_chk.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr data-streaming-only id='row_chk_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_chk_hint'>How often stream output is checked for a rate warning.</div>
+</td>
+</tr>
+</table>
+<h3>Service actions</h3><p class='muted'>These actions interrupt streaming. Factory reset also clears saved settings.</p><div class='actions'><button onclick="act('reset_i2s')" id='b_reset'>Reset I2S</button><button onclick="rebootNow()" id='b_reboot'>Reboot</button><button onclick="defaultsNow()" id='b_defaults' class='danger'>Factory reset</button></div>
+</details>
+<details id='mqttsec' class='card'>
+<summary class='sum'><span><span class='section-title' id='t_mqtt'>MQTT & Home Assistant</span><span class='section-note'>Broker connection, publishing and discovery</span></span><span class='chev' aria-hidden='true'></span></summary>
+<h3>Broker connection</h3><table>
+<tr>
+<td class='k'>MQTT</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_mqtt_en'>
+<option value='on'>ON</option>
+<option value='off'>OFF</option>
+</select>
+
+</div>
+</td>
+</tr>
+<tr>
+<td class='k'>Broker Host/IP</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mqtt_host' type='text' placeholder='192.168.1.10 or mqtt.local'>
+
+</div>
+</td>
+</tr>
+<tr>
+<td class='k'>Broker Port</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mqtt_port' type='number' min='1' max='65535' step='1'>
+
+</div>
+</td>
+</tr>
+<tr>
+<td class='k'>Username</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mqtt_user' type='text' autocomplete='username'>
+
+</div>
+</td>
+</tr>
+<tr>
+<td class='k'>Password</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mqtt_pass' type='password' autocomplete='current-password' placeholder='Leave empty to keep saved password' maxlength='128'>
+
+</div>
+</td>
+</tr>
+</table><label class='password-clear'><input id='mqtt_clear_password' type='checkbox'> Clear saved password</label><p class='muted'>An empty password keeps the saved password. Select Clear to remove it.</p><div class='actions'><button id='btn_mqtt_save' onclick='saveMqttConnection()'>Save connection</button></div><h3>Publishing</h3><table>
+<tr>
+<td class='k'>Topic Prefix</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mqtt_topic' type='text' placeholder='esp32mic/device'>
+<button onclick="setMqttTopic()">Apply</button>
+</div>
+</td>
+</tr>
+
+<tr>
+<td class='k'>Client ID</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mqtt_client_id' type='text' placeholder='esp32mic-xxxx'>
+<button onclick="setMqttClientId()">Apply</button>
+</div>
+</td>
+</tr>
+<tr>
+<td class='k'>Publish Interval</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mqtt_interval' type='number' min='10' max='3600' step='1'>
+<span class='unit'>s</span>
+<button onclick="setMqttInterval()">Apply</button>
+</div>
+</td>
+</tr>
+</table><h3>Home Assistant discovery</h3><table><tr>
+<td class='k'>Discovery Prefix</td>
+<td class='v'>
+<div class='field'>
+<input id='in_mqtt_discovery' type='text' placeholder='homeassistant'>
+<button onclick="setMqttDiscovery()">Apply</button>
+</div>
+</td>
+</tr></table><h3>Connection status</h3><table>
+<tr>
+<td class='k'>MQTT Status</td>
+<td class='v' id='mqtt_conn'>
+</td>
+</tr>
+<tr>
+<td class='k'>Last Error</td>
+<td class='v mono' id='mqtt_err'>
+</td>
+</tr>
+<tr><td class='k'>Discovery</td><td class='v' id='mqtt_discovery_status'></td></tr>
+</table>
+<div class='actions'>
+<button onclick="act('mqtt_discovery')">Re-publish Discovery</button>
+</div>
+</details>
+<details id='logssec' class='card'>
+<summary class='sum'>
+<span class='section-title' id='t_logs'>Logs</span>
+<span class='chev' aria-hidden='true'>
+</span>
+</summary>
+<div class='actions'>
+<button onclick="loadOlderLogs()" id='b_log_older' disabled>Older</button>
+<button onclick="loadNewerLogs()" id='b_log_newer' disabled>Newer</button>
+<button onclick="loadLatestLogs()" id='b_log_latest'>Latest</button>
+<button onclick="downloadLogs()" id='b_log_dl'>Download Logs</button>
+</div>
+<details id='recording_log_settings' data-recording-only class='recording-settings'>
+<summary>Log settings</summary>
+<p class='section-note'>Normal logs contain recording starts, saved WAV files, stops and errors. Detailed logging adds diagnostics and periodic progress.</p>
+<div class='field'><label for='recording_log_level'>Detail</label><select id='recording_log_level' onchange='recordingLogDraftChanged()'><option value='0'>Normal</option><option value='1'>Detailed diagnostics</option></select></div>
+<div class='actions'><label><input id='recording_log_sd' type='checkbox' onchange='recordingLogDraftChanged()'> Append the device log to microSD in Recording mode</label></div>
+<div class='field'><label for='recording_log_max'>Log size limit (MB)</label><input id='recording_log_max' type='number' min='0.07' max='16.78' step='0.01' value='1.00' oninput='recordingLogDraftChanged()'></div>
+<p class='section-note'>The same device events are saved to microSD during recording. Older messages are replaced automatically when the storage limit is reached. Files on the card retain history across restarts.</p>
+<div class='actions'><button id='recording_log_save' onclick='saveRecordingLogSettings()' disabled>Save log settings</button><span id='recording_log_dirty' class='edit-note'></span></div>
+<p id='recording_log_status' class='section-note'></p><p id='recording_log_feedback' class='feedback' role='status' aria-live='polite'></p>
+
+</details>
+<p id='log_page_status' class='section-note' role='status'></p>
+<pre id='logs' class='mono'>
+</pre>
+</details>
+</main>
+<dialog id='mic_dialog' aria-labelledby='mic_dialog_title' aria-describedby='mic_dialog_note'>
+<h2 id='mic_dialog_title' tabindex='-1' autofocus>Use recommended microphone settings?</h2>
+<p id='mic_dialog_target'></p>
+<table aria-label='Microphone setting changes'><thead><tr><th scope='col'>Setting</th><th scope='col'>Saved</th><th scope='col'>Recommended</th></tr></thead><tbody id='mic_dialog_rows'></tbody></table>
+<p id='mic_dialog_note' class='muted'></p><p id='mic_dialog_drafts' class='warn'></p>
+<p class='muted'>Saving briefly interrupts audio. PDM always uses 48 kHz; I2S Shift is unused.</p>
+<div class='actions'><button id='btn_mic_use' onclick="saveMicSettings('recommended')">Use recommended and save</button><button id='btn_mic_keep' onclick="saveMicSettings('keep')">Keep saved values and save</button><button id='btn_mic_cancel' onclick="document.getElementById('mic_dialog').close()">Cancel</button></div>
+</dialog>
+<script><!-- @include "js/wifi-ap.js" --></script>
+<script><!-- @include "js/app.js" --></script>
+<script><!-- @include "js/microphone-bindings.js" --></script>
+<script><!-- @include "js/ota-notice.js" --></script>
+
+<script id='antenna_script'><!-- @include "js/antenna.js" --></script>
+<script><!-- @include "js/device-setup.js" --></script>
+<script id='battery_script'><!-- @include "js/battery.js" --></script>
+<script id='recording_script'><!-- @include "js/recording.js" --></script>
+<script id='browser_audio_script'><!-- @include "js/browser-audio.js" --></script>
+<script><!-- @include "js/update-notice.js" --></script>
+
+<script><!-- @include "js/draft-highlights.js" -->
+</script>
+<script><!-- @include "js/ap-password-bindings.js" --></script>
+</body>
+</html>

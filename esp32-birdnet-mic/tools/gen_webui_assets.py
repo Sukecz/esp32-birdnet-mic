@@ -12,6 +12,8 @@ except ImportError:
     raise SystemExit('Missing Zopfli. Install tools/requirements-webui.txt in your Python environment.')
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT.parent / 'tools'))
+from assemble_webui import assemble
 
 
 def make_header(assets):
@@ -35,6 +37,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='Verify generated headers without changing them')
     args = parser.parse_args()
+    index = ROOT / 'webui/index.html'
+    expected_index = assemble().encode('utf-8')
+    if args.check:
+        if not index.is_file() or index.read_bytes() != expected_index:
+            raise SystemExit('Stale webui/index.html; run tools/gen_webui_gzip_header.sh')
+    elif not index.is_file() or index.read_bytes() != expected_index:
+        index.write_bytes(expected_index)
     for filename, assets in [
         ('WebUI_gz.h', [('WEBUI_INDEX_GZ', 'index.html')]),
         ('OtaAssets_gz.h', [('OTA_CSS_GZ', 'ota.css'), ('OTA_JS_GZ', 'ota.js')]),
@@ -45,7 +54,7 @@ def main():
         if args.check:
             if not path.is_file() or path.read_text() != expected:
                 raise SystemExit(f'Stale {filename}; run tools/gen_webui_gzip_header.sh')
-        else:
+        elif not path.is_file() or path.read_text() != expected:
             path.write_text(expected)
 
 
