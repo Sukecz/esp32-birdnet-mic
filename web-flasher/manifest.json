@@ -91,6 +91,28 @@
           "offset": 65536
         }
       ]
+    },
+    {
+      "chipFamily": "ESP32-S31",
+      "baud": 115200,
+      "parts": [
+        {
+          "path": "bootloader-s31.bin",
+          "offset": 8192
+        },
+        {
+          "path": "partitions-s31.bin",
+          "offset": 32768
+        },
+        {
+          "path": "boot_app0-s31.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware-app-s31-2.06.bin",
+          "offset": 65536
+        }
+      ]
     }
   ]
 }

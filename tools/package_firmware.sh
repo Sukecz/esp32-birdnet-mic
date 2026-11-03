@@ -17,7 +17,7 @@ usage() {
   cat <<EOF
 Usage: $0 [--clean] [--skip-build]
 
-Builds all supported XIAO firmware variants and refreshes:
+Builds all registered firmware targets and refreshes:
   web-flasher/bootloader-<board>.bin
   web-flasher/partitions-<board>.bin
   web-flasher/boot_app0-<board>.bin
@@ -279,4 +279,4 @@ PY
 
 python3 "$ROOT_DIR/tools/check_release_texts.py"
 
-echo "Built and packaged firmware $version for C3/S3/C5/C6."
+echo "Built and packaged firmware $version for all registered targets."

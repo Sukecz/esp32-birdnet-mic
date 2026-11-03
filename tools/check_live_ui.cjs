@@ -4,8 +4,9 @@ const {chromium}=require('playwright-core');
 (async()=>{
  const url=process.argv[2];if(!url)throw Error('Usage: NODE_PATH=tools/node_modules node tools/check_live_ui.cjs http://DEVICE');
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
+ const output=process.argv[3]||'tmp/qualification';
  const results=[],errors=[],writes=[];let credentialReadsBlocked=0;
- fs.mkdirSync('tmp/qualification/live-ui-images',{recursive:true});
+ fs.mkdirSync(output+'/live-ui-images',{recursive:true});
  try{
   for(const width of [320,390,1280])for(const theme of ['light','dark']){
    const page=await browser.newPage({viewport:{width,height:900}});
@@ -25,7 +26,7 @@ const {chromium}=require('playwright-core');
    await page.evaluate(()=>refreshAll());assert.equal(await control.inputValue(),saved==='1'?'0':'1');
    const style=await control.evaluate(e=>({border:getComputedStyle(e).borderColor,font:getComputedStyle(e).fontSize}));
    assert.match(style.border,/rgb\((217, 119, 6|245, 158, 11)\)/);
-   await page.locator('#batterysec').screenshot({path:`tmp/qualification/live-ui-images/battery-${width}-${theme}.png`});
+   await page.locator('#batterysec').screenshot({path:`${output}/live-ui-images/battery-${width}-${theme}.png`});
    await control.selectOption(saved);assert(!await control.evaluate(e=>e.classList.contains('dirty')));
    await control.selectOption(saved==='1'?'0':'1');await page.locator('#batterysec>[data-discard-drafts]').click();
    await page.waitForFunction(saved=>document.getElementById('battery_monitor').value===saved,saved);
@@ -34,8 +35,8 @@ const {chromium}=require('playwright-core');
    results.push({width,theme,style,ok:true});await page.close();
   }
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);
-  fs.mkdirSync('tmp/qualification',{recursive:true});
-  fs.writeFileSync('tmp/qualification/live-ui.json',JSON.stringify({ok:true,results,errors,writes,credentialReadsBlocked},null,2));
+  fs.mkdirSync(output,{recursive:true});
+  fs.writeFileSync(output+'/live-ui.json',JSON.stringify({ok:true,device:url,results,errors,writes,credentialReadsBlocked},null,2));
   console.log('Live device UI: 320/390/1280 px, both themes, orange drafts, polling/revert/discard and zero writes passed');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
