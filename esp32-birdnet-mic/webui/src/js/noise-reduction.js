@@ -1,10 +1,12 @@
 const noiseFields=[['noise_mode','noise_mode','mode'],['noise_floor','noise_floor','floor_db'],['noise_adapt','noise_adapt','adapt_s']];
 for(const [id,key] of noiseFields){trackEdit($(id),key);$(id).addEventListener('change',updateNoiseSave);}
-function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_save').disabled=busy||sectionBusy.has('audiosec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
+function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;$('noise_save').disabled=busy||sectionBusy.has('audiosec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
 function renderNoiseSettings(s){
  if(!s)return;
  for(const [id,key,field] of noiseFields)syncInput($(id),key,String(s[field]));
- $('noise_status').textContent=s.error||(s.mode?(s.active?(s.learned?'Running':'Learning noise profile: '+s.learn_pct+'%'):'Starting…'):'Off — original audio');
+ const reason=s.error||'';
+ const error=reason.includes('Insufficient memory')?'Not enough memory. Audio stays unchanged.':reason.includes('CPU too slow')?'Cannot keep up. Audio stays unchanged. Increase CPU speed, then turn Off and On.':reason?'Could not start. Audio stays unchanged. Turn Off and On to retry.':'';
+ $('noise_status').textContent=error||(s.mode?(s.active?(s.learned?'On':'Learning background noise: '+s.learn_pct+'%'):'Starting…'):'Off');
  $('noise_status').className='section-note '+(s.error?'warn':'');
  $('noise_metrics').textContent=s.active?`Processing: ${s.cpu_pct}% of audio time · Peak: ${s.cpu_peak_pct}% · Estimated reduction: ${s.est_reduction_db} dB · Working memory: ${s.engine_psram?'PSRAM':'internal RAM'}`:'';
  updateNoiseSave();
@@ -15,7 +17,7 @@ async function saveNoiseSettings(){
 }
 let noiseGraphBusy=false;
 async function updateNoiseSpectrum(){
- if(!$('noise_details').open||!$('audiosec').open||noiseGraphBusy)return;
+ if(!$('noise_details').open||!$('noise_diagnostics').open||!$('audiosec').open||noiseGraphBusy)return;
  noiseGraphBusy=true;
  try{
   const s=await fetchJSON('/api/noise?spectra=1');renderNoiseSettings(s);
@@ -29,7 +31,8 @@ async function updateNoiseSpectrum(){
   for(const level of [0,-30,-60,-90,-120]){const yy=12-level*(h-42)/120;ctx.fillText(String(level),4,yy+5);ctx.beginPath();ctx.moveTo(48,yy);ctx.lineTo(w-16,yy);ctx.stroke();}
   for(const k of [0,64,128,192,256])ctx.fillText((k*s.sample_rate/512000).toFixed(0),x(k)-6,h-8);
   for(const [key,color] of [['level','#3b82f6'],['floor','#f59e0b'],['signature','#10b981']]){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();s[key].forEach((q,k)=>k?ctx.lineTo(x(k),y(q)):ctx.moveTo(x(k),y(q)));ctx.stroke();}
- }catch(_){$('noise_metrics').textContent='Spectrum unavailable. Retrying while details are open.';}finally{noiseGraphBusy=false;}
+ }catch(_){$('noise_metrics').textContent='Could not load the graph. Retrying…';}finally{noiseGraphBusy=false;}
 }
 $('noise_details').addEventListener('toggle',updateNoiseSpectrum);
+$('noise_diagnostics').addEventListener('toggle',updateNoiseSpectrum);
 setInterval(updateNoiseSpectrum,3000);

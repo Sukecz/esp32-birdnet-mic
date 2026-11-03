@@ -356,19 +356,28 @@
 <div class='hint' id='txt_hpf_cut_hint'>High-pass cutoff in Hz.</div>
 </td>
 </tr>
-<tr><td class='k'><label for='noise_mode'>Adaptive noise reduction</label><span class='badge'>Experimental</span></td>
+<tr><td class='k'><label for='noise_mode'>Noise reduction</label><span class='badge'>Experimental</span></td>
 <td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
-<p id='noise_status' class='section-note' role='status'>Off</p></td></tr>
-<tr><td colspan='2'><p class='section-note'>Reduces steady hiss and hum after High-pass. May affect faint or continuous bird calls; improved BirdNET recognition is not yet verified. When on, Listen, RTSP and SD recordings all receive processed audio. Uses more CPU and memory and may shorten battery life. At low CPU frequencies, including 80 MHz, processing may be too slow.</p>
-<details id='noise_details' class='advanced'><summary>Noise reduction details</summary>
-<table><tr><td class='k'><label for='noise_floor'>Maximum reduction</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>6 dB</option><option value='12'>12 dB</option><option value='20'>20 dB</option></select></div></td></tr>
-<tr><td class='k'><label for='noise_adapt'>Adaptation</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
-<p class='section-note'>Normal is the starting point. Fast follows changing background sooner but may treat long songs as noise. Slow offers more protection for continuous songs. The profile learns again after restart or a change to the preceding audio settings; initially audio passes without reduction.</p>
+<div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
+<p id='noise_status' class='section-note' role='status'>Off</p>
+<p id='noise_busy_hint' class='section-note' hidden>Stop and save your recording before changing this.</p></td></tr>
+<tr><td colspan='2'><p id='noise_help' class='section-note'>Reduces steady hiss and hum. High-pass can stay on.</p>
+<p class='section-note'>Changes live audio and SD recordings. May hide faint bird calls. BirdNET accuracy still needs testing.</p>
+<p class='section-note'>Uses more power. For C6, use 160 MHz.</p>
+<details id='noise_details' class='advanced'><summary>Options and help</summary>
+<table><tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12'>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select></div></td></tr>
+<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
+<p class='section-note'>Start with Normal. Strong removes more noise but may change quiet calls. Slow is safer for long bird songs.</p>
+<p class='section-note'>Use Save noise reduction above to save the switch and these options.</p>
+<p class='section-note'>The filter learns the background again after a restart or audio change. It takes a short time to start reducing noise.</p>
+<p class='section-note'>High-pass cuts low rumble. Noise reduction handles steady hiss and hum. You can use both.</p>
+<p class='section-note'>On C6, select 160 MHz in Thermal management. If audio cuts out, turn noise reduction off. It never changes CPU speed for you.</p>
+<p class='section-note'>If the filter cannot start, audio stays unchanged. After fixing the problem, turn it Off and On to retry.</p>
+<details id='noise_diagnostics' class='advanced'><summary>Sound graph and diagnostics</summary>
 <p id='noise_metrics' class='section-note'></p>
 <canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
-<p class='section-note'>Blue: live level · Orange: estimated floor · Green: learned profile. Frequency in kHz, level in dBFS per frequency band. These curves include environmental sounds and do not measure the microphone’s self-noise alone.</p>
-</details><div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
-<p class='section-note'>Stop and save recording before changing noise reduction. If resources are insufficient, audio remains unfiltered and the reason appears above. CPU frequency is never raised by this filter. After resolving a resource warning, turn reduction Off and On to retry.</p></td></tr>
+<p class='section-note'>Blue: current sound · Orange: estimated background · Green: learned noise. Frequency in kHz; level in dBFS per band. The graph includes sounds around the microphone.</p>
+</details></details></td></tr>
 </table><details id='audioadvanced' class='advanced'><summary>Advanced audio settings</summary><table>
 <tr>
 <td class='k'>
@@ -1691,11 +1700,13 @@ window.addEventListener('beforeunload',event=>{if(Object.keys(edits).length||wif
 </script>
 <script>const noiseFields=[['noise_mode','noise_mode','mode'],['noise_floor','noise_floor','floor_db'],['noise_adapt','noise_adapt','adapt_s']];
 for(const [id,key] of noiseFields){trackEdit($(id),key);$(id).addEventListener('change',updateNoiseSave);}
-function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_save').disabled=busy||sectionBusy.has('audiosec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
+function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;$('noise_save').disabled=busy||sectionBusy.has('audiosec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
 function renderNoiseSettings(s){
  if(!s)return;
  for(const [id,key,field] of noiseFields)syncInput($(id),key,String(s[field]));
- $('noise_status').textContent=s.error||(s.mode?(s.active?(s.learned?'Running':'Learning noise profile: '+s.learn_pct+'%'):'Starting…'):'Off — original audio');
+ const reason=s.error||'';
+ const error=reason.includes('Insufficient memory')?'Not enough memory. Audio stays unchanged.':reason.includes('CPU too slow')?'Cannot keep up. Audio stays unchanged. Increase CPU speed, then turn Off and On.':reason?'Could not start. Audio stays unchanged. Turn Off and On to retry.':'';
+ $('noise_status').textContent=error||(s.mode?(s.active?(s.learned?'On':'Learning background noise: '+s.learn_pct+'%'):'Starting…'):'Off');
  $('noise_status').className='section-note '+(s.error?'warn':'');
  $('noise_metrics').textContent=s.active?`Processing: ${s.cpu_pct}% of audio time · Peak: ${s.cpu_peak_pct}% · Estimated reduction: ${s.est_reduction_db} dB · Working memory: ${s.engine_psram?'PSRAM':'internal RAM'}`:'';
  updateNoiseSave();
@@ -1706,7 +1717,7 @@ async function saveNoiseSettings(){
 }
 let noiseGraphBusy=false;
 async function updateNoiseSpectrum(){
- if(!$('noise_details').open||!$('audiosec').open||noiseGraphBusy)return;
+ if(!$('noise_details').open||!$('noise_diagnostics').open||!$('audiosec').open||noiseGraphBusy)return;
  noiseGraphBusy=true;
  try{
   const s=await fetchJSON('/api/noise?spectra=1');renderNoiseSettings(s);
@@ -1720,9 +1731,10 @@ async function updateNoiseSpectrum(){
   for(const level of [0,-30,-60,-90,-120]){const yy=12-level*(h-42)/120;ctx.fillText(String(level),4,yy+5);ctx.beginPath();ctx.moveTo(48,yy);ctx.lineTo(w-16,yy);ctx.stroke();}
   for(const k of [0,64,128,192,256])ctx.fillText((k*s.sample_rate/512000).toFixed(0),x(k)-6,h-8);
   for(const [key,color] of [['level','#3b82f6'],['floor','#f59e0b'],['signature','#10b981']]){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();s[key].forEach((q,k)=>k?ctx.lineTo(x(k),y(q)):ctx.moveTo(x(k),y(q)));ctx.stroke();}
- }catch(_){$('noise_metrics').textContent='Spectrum unavailable. Retrying while details are open.';}finally{noiseGraphBusy=false;}
+ }catch(_){$('noise_metrics').textContent='Could not load the graph. Retrying…';}finally{noiseGraphBusy=false;}
 }
 $('noise_details').addEventListener('toggle',updateNoiseSpectrum);
+$('noise_diagnostics').addEventListener('toggle',updateNoiseSpectrum);
 setInterval(updateNoiseSpectrum,3000);
 </script>
 <script>
