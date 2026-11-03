@@ -141,7 +141,7 @@ async function checkWifiOffRecovery(controls){
 }
 
 const recordingNode=id=>document.getElementById(id);
-function recordingDurationModeChanged(){const limited=recordingNode('recording_duration_mode').value==='1';recordingNode('recording_hours').value=limited?(Number(recordingNode('recording_hours').value)||60):0;recordingNode('recording_hours').hidden=!limited;recordingNode('recording_minutes_label').hidden=!limited;recordingDraftChanged();}
+function recordingDurationModeChanged(){const limited=recordingNode('recording_duration_mode').value==='1';recordingNode('recording_hours').value=limited?(Number(recordingNode('recording_hours').value)||60):0;recordingNode('recording_hours').hidden=!limited;recordingNode('recording_minutes_label').hidden=!limited;const group=recordingNode('recording_duration_options');if(group)group.hidden=!limited;recordingDraftChanged();}
 function recordingDraftChanged(){
  if(!recordingState)return;
  recordingDirty=!recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(recordingState.duration_minutes?'1':'0')||Math.round(Number(recordingNode('recording_hours').value))!==recordingState.duration_minutes||Number(recordingNode('recording_segment').value)!==recordingState.segment_minutes||recordingNode('recording_auto').checked!==recordingState.auto_start;
@@ -186,7 +186,7 @@ function renderRecording(j){
   capacity.className='section-note'+(insufficient?' warn':'');
  }
  recordingNode('recording_file').textContent=r.file||'';
- if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').checked=r.auto_start;}
+ if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').checked=r.auto_start;}
  for(const id of ['recording_duration_mode','recording_hours','recording_segment','recording_auto'])recordingNode(id).disabled=r.busy||r.cooling_pending||recordingPending;
  recordingNode('recording_stop').disabled=(!r.busy&&!r.cooling_pending)||recordingPending;
  const check=recordingNode('recording_check');if(check)check.disabled=r.busy||r.cooling_pending||recordingPending||!r.supported;

@@ -23,7 +23,7 @@ async function saveValues(url,values,keys,section,success='Saved.',options={}){
  const refresh=options.refresh||refreshAll;
  const versions=keys.map(k=>editVersions[k]||0);
  keys.forEach(k=>{savingKeys.add(k);pendingSyncKeys.add(k);markDirty(k);});
- sectionBusy.add(section);updateDiscard($(section));report('Saving…');
+ sectionBusy.add(section);updateDiscard($(section));if(typeof updateFeatureDependencies==='function')updateFeatureDependencies();report('Saving…');
  try{
   const response=await mutationFetch(url,new URLSearchParams(values).toString());
   const result=await response.json();
@@ -38,6 +38,6 @@ async function saveValues(url,values,keys,section,success='Saved.',options={}){
   // A response started before the write must not become the new saved baseline.
   if(pollPromise)await pollPromise;
   keys.forEach(k=>savingKeys.delete(k));
-  sectionBusy.delete(section);updateDiscard($(section));
+  sectionBusy.delete(section);updateDiscard($(section));if(typeof updateFeatureDependencies==='function')updateFeatureDependencies();
  }
 }

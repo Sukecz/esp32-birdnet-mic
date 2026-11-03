@@ -3,3 +3,11 @@
 @media(max-width:600px){.hero>div:first-child{flex-basis:100%}.title{font-size:17px}.card{padding:12px}.lang{gap:8px}.lang .gh{font-size:12px}.lang #t_theme{margin-left:auto}.stream-grid{gap:12px}td{padding:9px 8px}td.k{width:38%;font-size:14px}td.v{font-size:14px}.field{gap:6px}.playback{gap:8px}#listen_volume{flex:1 1 100px;width:120px}.playback label{font-size:12px}#listen_button{min-width:75px;padding:9px}select,input,button{font-size:14px;padding:8px}.section-note{max-width:250px}.overview{gap:8px 12px}.hint{padding:9px;font-size:12px}}
 
 .section-note[hidden]{display:none}
+
+.feature-group+.feature-group{margin-top:16px}
+.feature-main td.k,.feature-main>.actions>label,.feature-main.actions>label{font-weight:700}
+.feature-settings{margin:0 0 12px 16px;padding-left:12px;border-left:2px solid var(--border);min-width:0}
+.feature-settings [hidden]{display:none!important}
+.feature-settings input:disabled:not(.dirty),.feature-settings select:disabled:not(.dirty){color:var(--muted);opacity:.6;cursor:not-allowed}
+.feature-settings .dirty:disabled{opacity:1}
+@media(max-width:600px){.feature-settings{margin-left:10px;padding-left:8px}}

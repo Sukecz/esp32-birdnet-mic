@@ -32,8 +32,7 @@ function updateDependencies(){
  const schedule=$('sel_stream_sched_en').value==='on';
  $('sel_deep_sleep_sched').disabled=!schedule;
  $('schedule_draft_hint').textContent=schedule?'The streaming window uses device local time. Start and end are saved together.':'Schedule disabled. You can prepare a window, then enable and save it. Sleep will also be disabled.';
- $('in_hours').disabled=$('in_sched').value!=='on';$('btn_hours_set').disabled=$('in_sched').value!=='on';
- $('in_hp_cutoff').disabled=$('sel_hp').value!=='on';$('btn_hpf_cut_set').disabled=$('sel_hp').value!=='on';
+ if(typeof updateFeatureDependencies==='function')updateFeatureDependencies();
 }
 async function fetchJSON(url){const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(8000)});if(!response.ok)throw new Error('Device response unavailable');return response.json();}
 
@@ -193,9 +192,10 @@ async function saveMicSettings(mode){
  const cpuChange=mode==='recommended'&&state.profile.cpu_mhz;
  const relatedSections=['noisesec',...(cpuChange?['thermalsec']:[])];
  for(const id of relatedSections){sectionBusy.add(id);updateDiscard($(id));}
- if(window.updateNoiseSave)updateNoiseSave();
+ if(typeof updateFeatureDependencies==='function')updateFeatureDependencies();
+ else if(window.updateNoiseSave)updateNoiseSave();
  try{await saveValues('/api/settings/microphone',{format:state.format,settings:mode},keys,'audiosec',mode==='recommended'?'Microphone and recommended settings saved.':'Microphone saved. Custom values preserved.');}
- finally{for(const id of relatedSections){sectionBusy.delete(id);updateDiscard($(id));}if(window.updateNoiseSave)updateNoiseSave();}
+ finally{for(const id of relatedSections){sectionBusy.delete(id);updateDiscard($(id));}if(typeof updateFeatureDependencies==='function')updateFeatureDependencies();else if(window.updateNoiseSave)updateNoiseSave();}
 }
 $('mic_dialog').addEventListener('close',()=>{micDialogState=null;});
 function renderMicFormat(j){

@@ -14,6 +14,9 @@
 - Audio settings are directly visible. High-pass and adaptive noise reduction
   have a separate Audio noise reduction section with independent save scopes.
   Thermal & performance separates CPU speed from temperature protection.
+- Shared feature hierarchy groups switches with indented dependent settings.
+  Independently saved details require confirmed On; disabled drafts are retained.
+  MQTT, schedule and other grouped forms remain configurable before enabling.
 - Web flasher installation copy uses the manifest version badge. Packaging and
   public verification check current release copy. Poll warnings require two
   consecutive failures from the same endpoint.

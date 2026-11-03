@@ -3,7 +3,9 @@ let noiseSettingsLoaded=false;
 for(const [id,key] of noiseFields){trackEdit($(id),key);$(id).addEventListener('change',updateNoiseSave);}
 function updateNoiseSave(){
  const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;
- for(const [,key,,button] of noiseFields)$(button).disabled=!noiseSettingsLoaded||busy||sectionBusy.has('noisesec')||!differsFromSaved(key);
+ for(const [,key,,button] of noiseFields)$(button).disabled=!noiseSettingsLoaded||busy||sectionBusy.has('noisesec')||(key!=='noise_mode'&&!featureEnabled('noise_mode','1'))||!differsFromSaved(key);
+ const ready=featureEnabled('noise_mode','1');$('noise_spectrum').hidden=!ready;$('noise_graph_placeholder').hidden=ready;
+ if(!ready)$('noise_metrics').hidden=true;
 }
 function renderNoiseSettings(s){
  if(!s)return;
@@ -18,7 +20,7 @@ function renderNoiseSettings(s){
 }
 async function saveNoiseSettings(key='noise_mode'){
  const row=noiseFields.find(([,field])=>field===key);
- if(!noiseSettingsLoaded||!row||!differsFromSaved(key))return;
+ if(!noiseSettingsLoaded||!row||(key!=='noise_mode'&&!featureEnabled('noise_mode','1'))||!differsFromSaved(key))return;
  // The endpoint takes a full configuration. Only this row uses its draft;
  // other rows use their confirmed saved values, preserving unrelated edits.
  const values=Object.fromEntries(noiseFields.map(([,field,,,param])=>[param,confirmedValues[field]]));
@@ -27,7 +29,7 @@ async function saveNoiseSettings(key='noise_mode'){
 }
 let noiseGraphBusy=false;
 async function updateNoiseSpectrum(){
- if(!$('noisesec').open||noiseGraphBusy)return;
+ if(!$('noisesec').open||!featureEnabled('noise_mode','1')||noiseGraphBusy)return;
  noiseGraphBusy=true;
  try{
   // Spectrum requests never replace saved settings from the main status poll.

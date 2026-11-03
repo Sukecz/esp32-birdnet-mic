@@ -25,8 +25,10 @@ function renderBattery(j){
  n('battery_reading').textContent=!supported?'Unsupported':!b.enabled?'Monitoring disabled':valid?`${b.voltage.toFixed(2)} V · ~${b.percent}%`:'Voltage unavailable; waiting for a valid reading.';
  const correction=Number.isFinite(b.calibration_percent)?b.calibration_percent:0;
  n('battery_correction').textContent=`Applied correction: ${correction>=0?'+':''}${correction.toFixed(2)}%`;
- n('battery_reference').disabled=!supported||!b.enabled||locked;
- n('battery_calibrate').disabled=!supported||!b.enabled||!valid||locked||batteryDraft!==null;
+ const monitoringReady=b.enabled&&n('battery_monitor').checked&&batteryDraft===null;
+ n('battery_options')?.classList.toggle('is-disabled',!monitoringReady);
+ n('battery_reference').disabled=!supported||!monitoringReady||locked;
+ n('battery_calibrate').disabled=!supported||!monitoringReady||!valid||locked;
  n('battery_reset').disabled=!supported||locked||correction===0;
 }
 async function batteryAction(action){

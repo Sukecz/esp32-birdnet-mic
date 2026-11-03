@@ -88,10 +88,11 @@
 <button id='recording_start' onclick="recordingAction('start')">Start recording</button>
 <button id='recording_stop' onclick="recordingAction('stop')">Stop &amp; save</button>
 </div>
-<div class='actions'>
-<label for='recording_duration_mode'>Recording duration</label><select id='recording_duration_mode' onchange='recordingDurationModeChanged()'><option value='0'>Until stopped</option><option value='1'>Set a duration</option></select><label id='recording_minutes_label' for='recording_hours'>Minutes</label>
-<input id='recording_hours' type='number' min='0' max='10080' step='1' required value='0' oninput='recordingDraftChanged()'>
-</div>
+<div class='feature-group'>
+<div class='feature-main actions'><label for='recording_duration_mode'>Recording duration</label><select id='recording_duration_mode' onchange='recordingDurationModeChanged()'><option value='0'>Until stopped</option><option value='1'>Set a duration</option></select></div>
+<div id='recording_duration_options' class='feature-settings' role='group' aria-label='Recording duration settings' data-feature-parent='recording_duration_mode' hidden>
+<div class='field'><label id='recording_minutes_label' for='recording_hours'>Minutes</label><input id='recording_hours' type='number' min='0' max='10080' step='1' required value='0' oninput='recordingDraftChanged()'></div>
+</div></div>
 <div class='actions'><label><input id='recording_auto' type='checkbox' onchange='recordingDraftChanged()'> Start recording after power-on</label></div>
 <div class='recording-settings'>
 <h3>Recording settings</h3>
@@ -324,8 +325,7 @@
 </details>
 <details id='noisesec' class='card'>
 <summary class='sum'><span><span class='section-title'>Audio noise reduction</span><span class='section-note'>High-pass filter and optional background noise reduction</span></span><span class='chev' aria-hidden='true'></span></summary>
-<table id='noise_settings'>
-<tr>
+<div class='feature-group'><table id='noise_settings' class='feature-main'><tr>
 <td class='k'>
 <span id='t_hpf'>High-pass</span>
 <button type='button' class='help' id='h_hpf' aria-label='Help' aria-expanded='false' title="Cuts low-frequency rumble.">?</button>
@@ -344,7 +344,8 @@
 <td colspan='2'>
 <div class='hint' id='txt_hpf_hint'>Cuts low-frequency rumble.</div>
 </td>
-</tr>
+</tr></table>
+<div id='hpf_options' class='feature-settings' role='group' aria-label='High-pass settings' data-feature-parent='sel_hp' data-feature-enable='on'><p class='section-note feature-dependency' hidden></p><table>
 <tr>
 <td class='k'>
 <span id='t_hpf_cut'>HPF Cutoff</span>
@@ -364,21 +365,24 @@
 </td>
 </tr>
 
-<tr><td class='k'><label for='noise_mode'>Noise reduction</label> <span class='badge'>Experimental</span></td>
+</table></div></div>
+<div class='feature-group'><table class='feature-main'><tr><td class='k'><label for='noise_mode'>Noise reduction</label> <span class='badge'>Experimental</span></td>
 <td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select>
-<button id='noise_save' onclick="saveNoiseSettings('noise_mode')" disabled>Apply</button></div></td></tr>
-<tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12' selected>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select><button id='noise_floor_apply' onclick="saveNoiseSettings('noise_floor')" disabled>Apply</button></div></td></tr>
-<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15' selected>Normal</option><option value='60'>Slow</option></select><button id='noise_adapt_apply' onclick="saveNoiseSettings('noise_adapt')" disabled>Apply</button></div></td></tr>
+<button id='noise_save' onclick="saveNoiseSettings('noise_mode')" disabled>Apply</button></div></td></tr></table>
+<div id='noise_options' class='feature-settings' role='group' aria-label='Noise reduction settings' data-feature-parent='noise_mode' data-feature-enable='1'><p id='noise_graph_placeholder' class='section-note feature-dependency' hidden></p><table><tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12' selected>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select><button data-own-save-state id='noise_floor_apply' onclick="saveNoiseSettings('noise_floor')" disabled>Apply</button></div></td></tr>
+<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15' selected>Normal</option><option value='60'>Slow</option></select><button data-own-save-state id='noise_adapt_apply' onclick="saveNoiseSettings('noise_adapt')" disabled>Apply</button></div></td></tr>
 </table>
+
 <p id='noise_status' class='section-note warn' role='status' hidden></p>
 <p id='noise_busy_hint' class='section-note' hidden>Stop and save your recording before changing this.</p>
 <p id='noise_help' class='section-note'>Learns the background to reduce steady hiss and hum. High-pass cuts low rumble; you can use both.</p>
 <p class='section-note'>Start with Normal. Strong may hide quiet bird calls. Slow follows background changes more gently.</p>
 <p class='section-note'>Changes streaming, Listen and SD audio. Low CPU speeds may cause streaming dropouts.</p>
 <p id='noise_metrics' class='section-note' role='status' hidden></p>
-<canvas id='noise_spectrum' width='800' height='240' aria-label='Input sound, estimated background and learned background'></canvas>
+<canvas hidden id='noise_spectrum' width='800' height='240' aria-label='Input sound, estimated background and learned background'></canvas>
 <p class='section-note'>Blue: input sound · Orange: current background estimate · Green: learned background.</p>
 <p class='section-note'>Left to right: low to high pitch (kHz). Higher lines mean louder sound (dBFS).</p>
+</div></div>
 </details>
 <details id='timesec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_time'>Time &amp; Schedule</span><span class='section-note'>Clock, time zone and streaming window</span></span><span class='chev' aria-hidden='true'></span></summary>
@@ -479,7 +483,7 @@
 <div class='hint' id='txt_offset_hint'>Used only in Manual UTC offset mode. Negative = west (UTC-), positive = east (UTC+).</div>
 </td>
 </tr>
-<tr data-streaming-only>
+</table><div class='feature-group' data-streaming-only><table class='feature-main'><tr data-streaming-only>
 <td class='k'>
 <span id='t_stream_sched_en'>Stream Schedule</span>
 <button type='button' class='help' id='h_stream_sched_en' aria-label='Help' aria-expanded='false' title="Automatically turns RTSP server ON/OFF by local device time. If time is unavailable, fail-open keeps stream allowed.">?</button>
@@ -498,7 +502,7 @@
 <td colspan='2'>
 <div class='hint' id='txt_stream_sched_en_hint'>Automatically turns RTSP server ON/OFF by local device time. If time is unavailable, fail-open keeps stream allowed.</div>
 </td>
-</tr>
+</tr></table><div id='schedule_options' class='feature-settings' role='group' aria-label='Streaming schedule settings' data-feature-parent='sel_stream_sched_en'><table>
 <tr data-streaming-only>
 <td class='k'>
 <span id='t_stream_start'>Stream Start</span>
@@ -565,6 +569,7 @@
 </tr>
 </table>
 <div data-streaming-only class='actions'><button id='btn_schedule_save' onclick='saveSchedule()'>Save schedule</button></div><p data-streaming-only id='schedule_draft_hint' class='muted'>The streaming window uses the device local time. Start and end are saved together.</p>
+</div></div>
 <div class='actions'><button onclick="act('time_sync')" id='b_sync_now'>Sync Time Now</button></div>
 </details>
 <details id='networksec' class='card'>
@@ -594,7 +599,7 @@
 <tr><td class='k' id='t_ip'>IP Address</td><td class='v' id='ip'></td></tr>
 <tr><td class='k' id='t_wifi_rssi'>WiFi RSSI</td><td class='v' id='rssi'></td></tr>
 <tr><td class='k' id='t_wifi_tx'>WiFi TX Power</td><td class='v' id='wtx'></td></tr>
-<tr>
+</table><div class='feature-group'><table class='feature-main'><tr>
 <td class='k' id='t_mdns'>mDNS</td>
 <td class='v'>
 <div class='field'>
@@ -605,7 +610,7 @@
 <button id='btn_mdns_set' onclick="setv('mdns_enable',sel_mdns.value)">Apply</button>
 </div>
 </td>
-</tr>
+</tr></table><div id='mdns_options' class='feature-settings' role='group' aria-label='mDNS settings' data-feature-parent='sel_mdns'><table>
 <tr>
 <td class='k'>mDNS Hostname</td>
 <td class='v'>
@@ -614,7 +619,7 @@
 <button onclick="setvRaw('mdns_hostname',in_mdns_host.value)">Apply</button>
 </div>
 </td>
-</tr>
+</tr></table></div></div><table>
 <tr id='row_wifi_antenna' hidden>
 <td class='k'><label for='wifi_antenna'>Wi-Fi antenna</label></td>
 <td class='v'><div class='field'>
@@ -687,22 +692,22 @@
                  │
 BAT− / GND ──────┘</pre>
 <p id='battery_pack_note' class='muted'>One Li-ion/LiPo cell or parallel cells (1S, 4.2 V max). Percentage is a voltage estimate. USB power can produce a voltage reading even without a battery.</p>
-</details><div class='actions'><label><input id='battery_monitor' type='checkbox' onchange='batteryDraftChanged()'> Enable battery monitoring</label><button id='battery_save' onclick="batteryAction('enable')" disabled>Save</button><span id='battery_dirty' class='edit-note'></span></div>
+</details><div class='feature-group'><div class='feature-main'><div class='actions'><label><input id='battery_monitor' type='checkbox' onchange='batteryDraftChanged()'> Enable battery monitoring</label><button id='battery_save' onclick="batteryAction('enable')" disabled>Save</button><span id='battery_dirty' class='edit-note'></span></div></div><div id='battery_options' class='feature-settings' role='group' aria-label='Battery monitoring settings' data-feature-parent='battery_monitor'>
 <p id='battery_reading' role='status' aria-live='polite'></p>
 <details><summary>Calibrate voltage measurement</summary><div class='field'><label for='battery_reference'>Voltage measured with a multimeter (V)</label><input id='battery_reference' type='number' min='2.5' max='4.3' step='0.001' inputmode='decimal' placeholder='4.100'></div>
 <p class='muted'>Compare stable readings at the same time. Calibration adjusts voltage and the estimated percentage. Maximum correction: ±10%.</p>
 <p id='battery_correction'></p>
 <div class='actions'><button id='battery_calibrate' onclick="batteryAction('calibrate')">Calibrate</button><button id='battery_reset' onclick="batteryAction('reset')">Reset calibration</button></div>
 <p id='battery_feedback' class='feedback' role='status' aria-live='polite'></p>
-</details><div data-recording-only><h3>Low-battery protection</h3>
+</details></div></div><div data-recording-only><h3>Low-battery protection</h3>
 <p class='section-note'>Stops recording and closes the WAV file before the selected action. Requires battery monitoring and a correct voltage reading.</p>
-<div class='actions'><label><input id='field_guard' type='checkbox' onchange='fieldPowerDraftChanged()'> Enable low-battery protection</label></div>
+<div class='feature-group'><div class='feature-main'><div class='actions'><label><input id='field_guard' type='checkbox' onchange='fieldPowerDraftChanged()'> Enable low-battery protection</label></div></div><div id='battery_guard_options' class='feature-settings' role='group' aria-label='Low-battery protection settings' data-feature-parent='field_guard'>
 <div class='field'><label for='field_cutoff'>Stop voltage (V)</label><input id='field_cutoff' type='number' min='3.0' max='4.2' step='0.01' value='3.50' oninput='fieldPowerDraftChanged()'></div>
 <details id='battery_protection_advanced'><summary>Advanced protection settings</summary><div class='field'><label for='field_confirm'>Ignore brief voltage drops (seconds)</label><input id='field_confirm' type='number' min='0' max='300' step='1' value='30' oninput='fieldPowerDraftChanged()'></div>
 <div class='field'><label for='field_hysteresis'>Voltage rise required before restarting (V)</label><input id='field_hysteresis' type='number' min='0' max='0.3' step='0.01' value='0.10' oninput='fieldPowerDraftChanged()'></div>
 <div class='field'><label for='field_sleep'>After a low-battery stop</label><select id='field_sleep' onchange='fieldPowerDraftChanged()'><option value='1'>Sleep until switched off and on</option><option value='0'>Stay awake, recording stopped</option></select></div>
 <p class='section-note'>Confirmation ignores brief dips. Recovery requires voltage above the stop voltage plus the recovery margin. Deep sleep has no automatic wake-up. This does not replace the battery pack's hardware protection.</p>
-</details><p id='field_power_status' role='status' aria-live='polite'></p>
+</details></div></div><p id='field_power_status' role='status' aria-live='polite'></p>
 <div class='actions'><button id='field_power_save' onclick='saveFieldPowerSettings()' disabled>Save power settings</button><span id='field_power_dirty' class='edit-note'></span><button id='field_acknowledge' onclick="recordingAction('battery_acknowledge')" hidden>Allow recording again</button></div>
 <p id='field_power_feedback' class='feedback' role='status' aria-live='polite'></p></div>
 
@@ -755,7 +760,7 @@ BAT− / GND ──────┘</pre>
 <td class='v' id='therm_max'>
 </td>
 </tr>
-<tr>
+</table><div class='feature-group'><table class='feature-main'><tr>
 <td class='k'>
 <span id='t_therm_protect'>Overheat Protection</span>
 <button type='button' class='help' id='h_therm_protect' aria-label='Help' aria-expanded='false' title="Stops streaming when the internal chip temperature reaches the limit.">?</button>
@@ -774,7 +779,7 @@ BAT− / GND ──────┘</pre>
 <td colspan='2'>
 <div class='hint' id='txt_therm_hint_protect'>Stops streaming when the internal chip temperature reaches the limit.</div>
 </td>
-</tr>
+</tr></table><div id='thermal_options' class='feature-settings' role='group' aria-label='Temperature protection settings' data-feature-parent='sel_oh_enable' data-feature-enable='on'><p class='section-note feature-dependency' hidden></p><table>
 <tr>
 <td class='k'>
 <span id='t_therm_limit'>Shutdown Limit</span>
@@ -811,7 +816,7 @@ BAT− / GND ──────┘</pre>
 <tr><td class='k'><label for='sel_oh_auto'>Automatically resume after cooling</label></td>
 <td class='v'><div class='field'><select id='sel_oh_auto'><option value='off'>OFF (default)</option><option value='on'>ON</option></select>
 <button onclick="setv('oh_auto',sel_oh_auto.value)">Apply</button></div></td></tr>
-<tr id='row_auto_cooling_hint'><td colspan='2'><div class='hint'>Waits 5 continuous minutes at least 10 &deg;C below the shutdown limit. The third shutdown within 24 hours requires acknowledgement. Emergency shutdowns always require acknowledgement.</div></td></tr>
+<tr id='row_auto_cooling_hint'><td colspan='2'><div class='hint'>Waits 5 continuous minutes at least 10 &deg;C below the shutdown limit. The third shutdown within 24 hours requires acknowledgement. Emergency shutdowns always require acknowledgement.</div></td></tr></table></div></div><table>
 <tr><td class='k'>Shutdowns in last 24 hours</td><td class='v' id='therm_trip_count'>0 / 3</td></tr>
 <tr>
 <td class='k'>
@@ -895,7 +900,7 @@ BAT− / GND ──────┘</pre>
 </div>
 </td>
 </tr>
-<tr data-streaming-only>
+</table><div class='feature-group' data-streaming-only><table class='feature-main'><tr data-streaming-only>
 <td class='k'>
 <span id='t_sched'>Scheduled reboot</span>
 <button type='button' class='help' id='h_sched' aria-label='Help' aria-expanded='false' title="Periodic device restart for long-term stability.">?</button>
@@ -914,7 +919,7 @@ BAT− / GND ──────┘</pre>
 <td colspan='2'>
 <div class='hint' id='txt_sched_hint'>Periodic device restart for long-term stability.</div>
 </td>
-</tr>
+</tr></table><div id='reboot_options' class='feature-settings' role='group' aria-label='Scheduled reboot settings' data-feature-parent='in_sched' data-feature-enable='on'><p class='section-note feature-dependency' hidden></p><table>
 <tr data-streaming-only>
 <td class='k'>
 <span id='t_hours'>Reboot interval</span>
@@ -932,7 +937,7 @@ BAT− / GND ──────┘</pre>
 <td colspan='2'>
 <div class='hint' id='txt_hours_hint'>Interval between scheduled restarts.</div>
 </td>
-</tr>
+</tr></table></div></div><table>
 <tr data-streaming-only>
 <td class='k'>
 <span id='t_chk'>Stream warning check interval</span>
@@ -956,8 +961,7 @@ BAT− / GND ──────┘</pre>
 </details>
 <details id='mqttsec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_mqtt'>MQTT & Home Assistant</span><span class='section-note'>Broker connection, publishing and discovery</span></span><span class='chev' aria-hidden='true'></span></summary>
-<h3>Broker connection</h3><table>
-<tr>
+<h3>Broker connection</h3><div class='feature-group'><table class='feature-main'><tr>
 <td class='k'>MQTT</td>
 <td class='v'>
 <div class='field'>
@@ -968,7 +972,7 @@ BAT− / GND ──────┘</pre>
 
 </div>
 </td>
-</tr>
+</tr></table><div id='mqtt_options' class='feature-settings' role='group' aria-label='MQTT connection settings' data-feature-parent='sel_mqtt_en'><table>
 <tr>
 <td class='k'>Broker Host/IP</td>
 <td class='v'>
@@ -1005,7 +1009,7 @@ BAT− / GND ──────┘</pre>
 </div>
 </td>
 </tr>
-</table><label class='password-clear'><input id='mqtt_clear_password' type='checkbox'> Clear saved password</label><p class='muted'>An empty password keeps the saved password. Select Clear to remove it.</p><div class='actions'><button id='btn_mqtt_save' onclick='saveMqttConnection()'>Save connection</button></div><h3>Publishing</h3><table>
+</table><label class='password-clear'><input id='mqtt_clear_password' type='checkbox'> Clear saved password</label><p class='muted'>An empty password keeps the saved password. Select Clear to remove it.</p><div class='actions'><button id='btn_mqtt_save' onclick='saveMqttConnection()'>Save connection</button></div></div></div><h3>Publishing</h3><table>
 <tr>
 <td class='k'>Topic Prefix</td>
 <td class='v'>
@@ -1076,10 +1080,10 @@ BAT− / GND ──────┘</pre>
 <summary>Log settings</summary>
 <p class='section-note'>Normal logs contain recording starts, saved WAV files, stops and errors. Detailed logging adds diagnostics and periodic progress.</p>
 <div class='field'><label for='recording_log_level'>Detail</label><select id='recording_log_level' onchange='recordingLogDraftChanged()'><option value='0'>Normal</option><option value='1'>Detailed diagnostics</option></select></div>
-<div class='actions'><label><input id='recording_log_sd' type='checkbox' onchange='recordingLogDraftChanged()'> Append the device log to microSD in Recording mode</label></div>
+<div class='feature-group'><div class='feature-main'><div class='actions'><label><input id='recording_log_sd' type='checkbox' onchange='recordingLogDraftChanged()'> Append the device log to microSD in Recording mode</label></div></div><div id='sd_log_options' class='feature-settings' role='group' aria-label='SD logging settings' data-feature-parent='recording_log_sd'>
 <div class='field'><label for='recording_log_max'>Log size limit (MB)</label><input id='recording_log_max' type='number' min='0.07' max='16.78' step='0.01' value='1.00' oninput='recordingLogDraftChanged()'></div>
 <p class='section-note'>The same device events are saved to microSD during recording. Older messages are replaced automatically when the storage limit is reached. Files on the card retain history across restarts.</p>
-<div class='actions'><button id='recording_log_save' onclick='saveRecordingLogSettings()' disabled>Save log settings</button><span id='recording_log_dirty' class='edit-note'></span></div>
+</div></div><div class='actions'><button id='recording_log_save' onclick='saveRecordingLogSettings()' disabled>Save log settings</button><span id='recording_log_dirty' class='edit-note'></span></div>
 <p id='recording_log_status' class='section-note'></p><p id='recording_log_feedback' class='feedback' role='status' aria-live='polite'></p>
 
 </details>
@@ -1099,6 +1103,7 @@ BAT− / GND ──────┘</pre>
 <script><!-- @include "js/wifi-ap.js" --></script>
 <script><!-- @include "js/app.js" --></script>
 <script><!-- @include "js/microphone-bindings.js" --></script>
+<script><!-- @include "js/feature-groups.js" --></script>
 <script><!-- @include "js/noise-reduction.js" --></script>
 <script><!-- @include "js/ota-notice.js" --></script>
 

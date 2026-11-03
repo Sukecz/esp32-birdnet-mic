@@ -14,6 +14,7 @@ function reconcileEdit(key){
 }
 function syncInput(el,key,value){
  if(!el)return;
+ if(el.dataset)el.dataset.savedLoaded='1';
  if(savingKeys.has(key)){toggleDirty(el,key);return;}
  const editing=!!edits[key],locked=locks[key]&&Date.now()<locks[key];
  confirmedValues[key]=fieldValue(el,value);pendingSyncKeys.delete(key);

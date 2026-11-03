@@ -3,7 +3,7 @@ const {chromium}=require('playwright-core');
 const assets=require('./ui_assets');
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
- fs.mkdirSync('tmp/qualification/flat-noise',{recursive:true});fs.mkdirSync('tmp/qualification/manual-ui',{recursive:true});fs.mkdirSync('tmp/qualification/2.06-manual-ui',{recursive:true});
+ fs.mkdirSync('tmp/qualification/feature-groups',{recursive:true});fs.mkdirSync('tmp/qualification/manual-ui',{recursive:true});fs.mkdirSync('tmp/qualification/2.06-manual-ui',{recursive:true});
  const results=[];
  try{for(const packed of [false,true])for(const width of [320,390,1280])for(const theme of ['light','dark']){
   const fixture=JSON.parse(fs.readFileSync('tests/fixtures/ui-state.json'));
@@ -39,7 +39,7 @@ const assets=require('./ui_assets');
    assert(await page.locator('#'+control).isVisible());assert(await page.locator('#'+button).isDisabled());
   }
   assert.equal(await page.locator('#noisesec details').count(),0);
-  assert(await page.locator('#noise_spectrum').isVisible());assert(await page.locator('#noise_status').isHidden());
+  assert(await page.locator('#noise_spectrum').isHidden());assert(await page.locator('#noise_graph_placeholder').isVisible());assert(await page.locator('#noise_status').isHidden());
   const text=await page.locator('#noisesec').textContent();assert(!/C6|160 MHz|80 MHz|Save noise reduction/.test(text));assert.match(text,/Low CPU speeds.*dropouts/);
   assert.equal(await page.locator('#audioadvanced').count(),0);
   for(const id of ['in_rate','sel_buf','in_shift'])assert(await page.locator('#'+id).isVisible());
@@ -54,28 +54,31 @@ const assets=require('./ui_assets');
    await page.selectOption('#'+id,original);assert(!await dirty(id));
   }
   assert.equal(writes.length,0);
-  await page.waitForFunction(()=>!noiseGraphBusy);const reads=graphReads;await page.evaluate(()=>updateNoiseSpectrum());assert(graphReads>reads,'Visible graph polls directly');
-  const openReads=graphReads;await page.evaluate(()=>{document.getElementById('noisesec').open=false;return updateNoiseSpectrum();});assert.equal(graphReads,openReads);await page.evaluate(()=>openSection('noisesec'));
-  for(const [id,changed,original] of [['noise_floor','6','12'],['noise_adapt','60','15']]){
-   await page.selectOption('#'+id,changed);assert(await dirty(id));
-   await page.evaluate(()=>refreshAll());assert.equal(await page.inputValue('#'+id),changed);
-   await page.selectOption('#'+id,original);assert(!await dirty(id));
-  }
-  await page.selectOption('#noise_mode','1');await page.selectOption('#noise_floor','6');
+  assert(await page.locator('#noise_floor').isDisabled());assert(await page.locator('#noise_adapt').isDisabled());
+  await page.selectOption('#noise_mode','1');assert(await page.locator('#noise_floor').isDisabled(),'On must be applied first');
   await page.fill('#in_gain','2.25');await page.fill('#in_hp_cutoff','1500');fail=true;await page.click('#noise_save');
-  await page.waitForFunction(()=>!sectionBusy.has('noisesec'));assert(await dirty('noise_mode'));assert(await dirty('noise_floor'));
+  await page.waitForFunction(()=>!sectionBusy.has('noisesec'));assert(await dirty('noise_mode'));assert(await page.locator('#noise_floor').isDisabled());
   assert.match(await page.locator('#noisesec>.feedback').textContent(),/kept/);
   fail=false;await page.click('#noise_save');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));
-  assert(!await dirty('noise_mode'));assert(await dirty('noise_floor'));assert(await dirty('in_gain'));
-  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'12',adapt:'15'},'Mode Apply sends saved values for other drafts');
-  assert(await page.locator('#noise_status').isHidden(),'No repeated On label');
-  await page.selectOption('#noise_adapt','60');
+  assert(!await dirty('noise_mode'));assert(await page.locator('#noise_floor').isEnabled());assert(await dirty('in_gain'));
+  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'12',adapt:'15'});
+  await page.waitForFunction(()=>!noiseGraphBusy);const reads=graphReads;await page.evaluate(()=>updateNoiseSpectrum());assert(graphReads>reads);
+  const openReads=graphReads;await page.evaluate(()=>{document.getElementById('noisesec').open=false;return updateNoiseSpectrum();});assert.equal(graphReads,openReads);await page.evaluate(()=>openSection('noisesec'));
+  for(const [id,changed,original] of [['noise_floor','6','12'],['noise_adapt','60','15']]){
+   await page.selectOption('#'+id,changed);assert(await dirty(id));await page.evaluate(()=>refreshAll());assert.equal(await page.inputValue('#'+id),changed);
+   await page.selectOption('#'+id,original);assert(!await dirty(id));
+  }
+  await page.selectOption('#noise_floor','6');await page.selectOption('#noise_adapt','60');
+  await page.selectOption('#noise_mode','0');assert(await page.locator('#noise_floor').isDisabled());await page.click('#noise_save');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));
+  assert(await dirty('noise_floor'));assert(await dirty('noise_adapt'));assert.deepEqual(writes.at(-1).v,{mode:'0',floor:'12',adapt:'15'});
+  await page.selectOption('#noise_mode','1');await page.click('#noise_save');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));
+  assert(await dirty('noise_floor'));assert(await dirty('noise_adapt'));assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'12',adapt:'15'});
   await page.click('#noise_floor_apply');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));assert(!await dirty('noise_floor'));assert(await dirty('noise_adapt'));
-  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'6',adapt:'15'},'Strength Apply keeps the speed draft pending');
-  await page.selectOption('#noise_mode','0');
-  await page.click('#noise_adapt_apply');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));assert(!await dirty('noise_adapt'));assert(await dirty('noise_mode'));
-  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'6',adapt:'60'},'Speed Apply keeps the On/Off draft pending');
-  await page.selectOption('#noise_mode','1');
+  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'6',adapt:'15'});
+  await page.selectOption('#noise_mode','0');assert(await page.locator('#noise_adapt_apply').isDisabled());
+  const blocked=writes.length;await page.evaluate(()=>saveNoiseSettings('noise_adapt'));assert.equal(writes.length,blocked);
+  await page.selectOption('#noise_mode','1');await page.click('#noise_adapt_apply');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));assert(!await dirty('noise_adapt'));
+  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'6',adapt:'60'});
   await page.selectOption('#noise_adapt','15');await page.click('#noise_adapt_apply');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));
   assert.deepEqual(Object.keys(writes.at(-1).v).sort(),['adapt','floor','mode']);
   assert(await dirty('in_hp_cutoff'),'Noise save preserves a High-pass draft');
@@ -113,7 +116,7 @@ const assets=require('./ui_assets');
   const styles=await page.locator('#noise_adapt').evaluate(e=>({border:getComputedStyle(e).borderColor,font:getComputedStyle(e).fontSize,reference:getComputedStyle(document.getElementById('sel_hp')).fontSize}));
   assert.equal(styles.font,styles.reference);assert.match(styles.border,/rgb\((217, 119, 6|245, 158, 11)\)/);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  if(packed){await page.locator('#audiosec').screenshot({path:`tmp/qualification/flat-noise/audio-${width}-${theme}.png`});await page.locator('#noisesec').screenshot({path:`tmp/qualification/flat-noise/filters-${width}-${theme}.png`});}
+  if(packed){await page.locator('#audiosec').screenshot({path:`tmp/qualification/feature-groups/audio-${width}-${theme}.png`});await page.locator('#noisesec').screenshot({path:`tmp/qualification/feature-groups/filters-${width}-${theme}.png`});}
   await page.evaluate(()=>openSection('thermalsec'));
   assert.equal(await page.locator('#t_thermal').textContent(),'Thermal & performance');
   assert.deepEqual(await page.locator('#thermalsec>h3').allTextContents(),['CPU performance','Temperature protection']);

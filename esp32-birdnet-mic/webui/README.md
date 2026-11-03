@@ -29,6 +29,7 @@ not rewritten, preserving timestamps and avoiding needless firmware recompilatio
 | `src/js/app.js` | Existing application integration, polling, status rendering and bindings |
 | `src/js/settings/fields.js` | Value normalization, confirmed values, edit tracking, polling preservation and dirty rendering |
 | `src/js/settings/groups.js` | Group saving, request feedback, concurrent edit protection and discard |
+| `src/js/feature-groups.js` | Shared feature hierarchy, confirmed-parent dependency state and disabled-draft presentation |
 | `src/js/draft-highlights.js` | Recording/Battery/power field mapping into the shared settings engine |
 | `src/js/recording.js`, `battery.js`, `antenna.js`, `wifi-ap.js` | Existing feature UI behavior |
 | `src/js/browser-audio.js` | Listen playback and recovery |
@@ -55,3 +56,10 @@ pending. Only the main status poll updates those saved baselines. The graph poll
 while its section is open and never synchronizes form settings. High-pass and
 noise reduction saves keep each other's drafts pending; microphone recommendations
 explicitly review any High-pass changes.
+
+Feature switches and their children share `.feature-group`, `.feature-main` and
+`.feature-settings`. The children stay visible, indented behind one subtle rule.
+`feature-groups.js` gates independently saved child controls on both the selected
+and confirmed saved On value. A failed or pending parent save cannot unlock them.
+Disabled drafts keep the common orange markers and remain discardable. Grouped
+forms omit `data-feature-enable` to keep preparation possible before enabling.
