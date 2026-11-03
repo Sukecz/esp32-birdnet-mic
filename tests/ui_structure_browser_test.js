@@ -93,6 +93,6 @@ const fixture=require('./fixtures/ui-state.json');
   }
   await load();assert.equal(await page.locator('details.card[open]').count(),0);
   assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
-  console.log('UI structure: ten closed sections, relocated controls, 0–150% volume, polling/drafts, PDM, alerts, stale data, themes and 320–1280px layouts passed');
+  console.log('UI structure: closed sections, relocated controls, 0–150% volume, polling/drafts, PDM, alerts, stale data, themes and 320–1280px layouts passed');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
