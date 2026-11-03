@@ -27,6 +27,20 @@ def line(path='/firmware-app-c6.bin', agent='ESP32HTTPClient', size=1295104, met
 
 
 class DownloadStatsTests(unittest.TestCase):
+    def test_s31_ota_manual_and_github_are_counted_separately_from_s3(self):
+        release = {'version':'2.06','published_at':'2026-11-03T17:00:00Z','assets':[
+            {'name':'firmware-app-s31.bin','size':1449264,'downloads':3},
+            {'name':'firmware-app-s31-2.06.bin','size':1449264,'downloads':2},
+            {'name':'firmware-s31.bin','size':16777216,'downloads':4}]}
+        with stats.connect(':memory:') as db:
+            stats.ingest(db,[line(path='/updates/firmware-app-s31.bin',size=1449264),
+                             line(path='/firmware-app-s31-2.06.bin',size=1449264,agent='Mozilla/5.0',tick=1)], [release])
+            result=stats.summarize(db,{'updated_at':'2026-11-03T17:00:00Z','available':True,'releases':[release]})
+            row=result['versions'][0]
+            self.assertEqual(row['boards']['s31'],dict(web_flash=0,ota=1,manual=1,github_app=5,github_full=4))
+            self.assertEqual(row['total'],11)
+            self.assertEqual(sum(row['boards']['s3'].values()),0)
+
     def test_historical_alias_uses_size_not_current_release(self):
         self.assertEqual(stats.classify(stats.parse_line(line(size=1284000)),RELEASES),('1.34','c6','ota'))
 

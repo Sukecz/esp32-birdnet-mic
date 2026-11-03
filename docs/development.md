@@ -94,7 +94,7 @@ C6 external antenna. Publication/OTA authority follows AGENTS.md.
 
 ## Implementation status
 
-The planned software foundation is implemented: the board registry, six-target
+The planned software foundation is implemented: the board registry, seven-configuration
 build/memory gates, shared settings field/save/discard behavior, readable UI
 sources, firmware service boundaries, source/commit/artifact receipts and verified
 release snapshots. `AppRuntime.h` preserves the existing shared configuration
@@ -144,8 +144,8 @@ verification checks the served landing-page copy as well as firmware payloads.
 Device configuration JavaScript now assembles from `webui/src/js/setup.js` and
 shares the draft engine in `settings/fields.js`; regenerate assets before testing.
 
-## ESP32-S31 candidate
+## ESP32-S31-Function-CoreBoard-1
 
-See [ESP32-S31-Function-CoreBoard-1 integration](esp32-s31.md) for the local 2.06
-candidate, onboard ES8311 microphone, common core migration and qualification
-limits. S31 images are not yet published.
+Use the built-in ES8311 microphone without external audio wiring. See the
+[S31 guide](esp32-s31.md) for installation, 320 MHz CPU selection, optional
+battery measurement and the current storage limitations.

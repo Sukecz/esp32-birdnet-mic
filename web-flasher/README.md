@@ -1,9 +1,9 @@
 # BirdNETMic Web Flasher — ESP32 Microphone USB Installation and OTA Updates
 
-> **Firmware 2.06:** Optional experimental noise reduction. Streaming and standalone Recording. See the [main guide](../README.md).
+> **Firmware 2.06:** ESP32-S31 support, optional experimental noise reduction and clearer controls. See the [main guide](../README.md).
 
 
-Firmware artifacts: **v2.06**. See [validation and hardware limits](../release-notes/2.06-validation.md).
+Firmware artifacts: **v2.06**. See [release notes](../release-notes/2.06.md).
 
 **Current firmware: 2.06**.
 
@@ -104,11 +104,11 @@ HTTP access to the board-specific app files without redirects.
 GitHub release assets include all five boards' bootloader, partition, boot_app0, app-only and merged
 images, plus the manifest and version file. See the [changelog](../esp32-birdnet-mic/CHANGELOG.md).
 
-## ESP32-S31 candidate
+## ESP32-S31-Function-CoreBoard-1
 
-See [ESP32-S31-Function-CoreBoard-1 integration](../docs/esp32-s31.md) for the local 2.06
-candidate, onboard ES8311 microphone, common core migration and qualification
-limits. S31 images are not yet published.
+Use the built-in ES8311 microphone without external audio wiring. See the
+[S31 guide](../docs/esp32-s31.md) for installation, 320 MHz CPU selection, optional
+battery measurement and the current storage limitations.
 
 The shared browser flasher uses ESP Web Tools 10.4.0 with pinned esptool-js 0.7.1
 for S31 detection and its ROM/stub. Rebuild provenance is in `tools/web-tools`.

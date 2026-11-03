@@ -30,7 +30,7 @@ hosts, preserve this state directory as well as the timer and script.
 - USB web flashes count the app payload only. Bootloaders/partition tables do not
   add downloads. Browser transfers from this site, device OTA, direct downloads,
   GitHub app-only and GitHub merged image downloads remain separate subtypes.
-- A release total sums its four boards and all five subtypes. Repeat downloads
+- A release total sums all five boards (C3, S3, C5, C6 and S31) and all five subtypes. Repeat downloads
   count again. Transfers do not prove installation success or unique devices.
 - GitHub asset counters are raw lifetime totals and can include historical
   verification or automation. No unverifiable subtraction is applied.

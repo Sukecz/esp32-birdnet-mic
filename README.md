@@ -15,8 +15,8 @@ to BirdNET-Go, BirdNET-Pi, VLC or ffmpeg; **Recording** saves WAV files to a mic
 card, even away from your home Wi-Fi. Use **Listen** for a quick sound check in either mode.
 Bird identification runs on the receiving computer, not on the ESP32.
 
-> **Firmware 2.06** — adds optional experimental noise reduction.
-> [Validation and hardware limits](release-notes/2.06-validation.md).
+> **Firmware 2.06** — ESP32-S31 support, optional experimental noise reduction and simpler controls.
+> [What’s new in 2.06](release-notes/2.06.md).
 
 **[Boards](#supported-boards) · [Quick start](#quick-start) · [Modes](#streaming-and-recording) · [Battery](#battery) · [Features](#features) · [Wiring](#microphones-and-wiring) · [Help](#everyday-use-and-troubleshooting)**
 
@@ -37,7 +37,7 @@ measured ranking of every microphone. Existing I2S microphones remain supported.
 
 ## Supported boards
 
-Five firmware images cover the boards below (S31 is new in the local 2.06 candidate). Sense and AtomS3U use the **S3 image**;
+Five firmware images cover the boards below (including ESP32-S31). Sense and AtomS3U use the **S3 image**;
 choose their board variant in **Device configuration** during setup.
 
 | Board | Firmware | Microphone | Streaming | Recording storage |
@@ -120,7 +120,8 @@ automatically; Standalone does not search for the router.
 For an external microphone, select **Audio → Microphone format** using the
 [wiring guide](#microphones-and-wiring). Review the recommended settings and adjust
 **Gain** while watching the signal level. Sense and AtomS3U profiles select their
-built-in PDM microphone automatically.
+built-in PDM microphone automatically. ESP32-S31-Function-CoreBoard-1 uses its
+built-in ES8311 microphone automatically; no external microphone is needed.
 
 Press **Listen** to hear the microphone. The playback **Volume** control changes
 what you hear in the browser; **Gain** changes captured audio. Then follow the
@@ -258,7 +259,7 @@ using USB-measured power as a proxy. They are **not measured battery runtimes**:
 BAT-path efficiency, cold, cutoff voltage, card and cell condition change the result.
 Four cells must be **parallel, never series**. Use a properly assembled protected pack.
 
-C5 measures voltage with its built-in divider. C3/S3/C6 need two external 100 kΩ
+C5 measures voltage with its built-in divider. C3/S3/C6 and S31 need two external 100 kΩ
 resistors. Enable Battery monitoring and calibrate against a multimeter if needed.
 The displayed percentage is approximate, not a runtime prediction. Optional
 **Low-battery protection** stops and saves Recording, then stays awake or sleeps;
@@ -288,7 +289,8 @@ it complements the pack's hardware protection.
   recovery after cooling; recording can continue in a new file. Automatic recovery
   is off by default.
 - **Board-specific options:** C6 internal/external antenna selection, S3/C5 PSRAM audio
-  buffers with an internal-RAM fallback, and optional 240 MHz CPU on S3/C5.
+  buffers with an internal-RAM fallback, optional 240 MHz CPU on S3/C5, and up to
+  320 MHz with PSRAM buffers on S31.
 - **Firmware updates:** USB installation and board-specific OTA with saved settings
   preserved; guided preparation for older C3/C6 flash layouts.
 
@@ -321,7 +323,7 @@ its expansion board; Sense support remains experimental.
 
 | Item | When needed |
 |---|---|
-| USB data connection | First installation; USB-C for XIAO, USB-A for AtomS3U |
+| USB data connection | First installation; USB-C for XIAO/S31, USB-A for AtomS3U |
 | USB power supply | Operation after installation |
 | External I2S or PDM microphone | Standard XIAO boards; see the wiring guide |
 | Board-compatible antenna | Match the board's connector and antenna configuration |
@@ -566,8 +568,8 @@ settings used for the packaged firmware.
 
 Created by **@Sukecz**, with thanks to everyone helping improve BirdNETMic. Released under the [MIT License](LICENSE).
 
-## ESP32-S31 candidate
+## ESP32-S31-Function-CoreBoard-1
 
-See [ESP32-S31-Function-CoreBoard-1 integration](docs/esp32-s31.md) for the local 2.06
-candidate, onboard ES8311 microphone, common core migration and qualification
-limits. S31 images are not yet published.
+Use the built-in ES8311 microphone without external audio wiring. See the
+[S31 guide](docs/esp32-s31.md) for installation, 320 MHz CPU selection, optional
+battery measurement and the current storage limitations.

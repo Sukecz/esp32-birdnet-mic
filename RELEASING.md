@@ -12,7 +12,7 @@ changes are recorded in the [changelog](esp32-birdnet-mic/CHANGELOG.md).
 - UI changes: edit `esp32-birdnet-mic/webui/src/`, regenerate assembled/embedded
   assets and validate source and embedded behavior. See the [UI source guide](esp32-birdnet-mic/webui/README.md).
 - Firmware changes: use focused checks while editing, then run the final host,
-  browser and six-configuration build gates on the settled source. Follow the
+  browser and seven-configuration build gates on the settled source. Follow the
   [development workflow](docs/development.md#implementation-status).
 
 Commit reviewed firmware sources before final builds. Promote verified outputs
@@ -28,7 +28,7 @@ checks do not grant permission to install or publish firmware.
 ## Publication
 
 On the maintainer's configured host, the local-only `scripts/publish_release.sh`
-creates a verified snapshot, pushes the reviewed commit/tag, publishes all four
+creates a verified snapshot, pushes the reviewed commit/tag, publishes all five
 board asset sets, deploys the public web/OTA feed and verifies both destinations.
 Host-specific scripts and credentials are intentionally absent from source clones.
 Follow the applicable authorization rules before running this helper. A failed

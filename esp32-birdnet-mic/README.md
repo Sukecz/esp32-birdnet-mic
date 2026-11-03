@@ -6,10 +6,10 @@
 
 Two modes: live **RTSP Streaming** or standalone **microSD WAV Recording**.
 Start with the [beginner guide](../README.md) and [field recording guide](../docs/field-recording.md).
-Current firmware: **2.06** ([validation record](../release-notes/2.06-validation.md)).
+Current firmware: **2.06** ([release notes](../release-notes/2.06.md)).
 For new builds we recommend **XIAO ESP32-C5 + IM73D122 PDM**, with an Adafruit BFF for SD.
 
-Arduino firmware for Seeed Studio XIAO ESP32 and M5Stack AtomS3U, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
+Arduino firmware for Seeed Studio XIAO ESP32, M5Stack AtomS3U and Espressif ESP32-S31-Function-CoreBoard-1, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
@@ -367,6 +367,7 @@ The firmware owns one profile list used by both the preview and the save operati
 
 | Microphone | Boards | Rate | Gain (starting value) | Packet size | I2S Shift | HPF | CPU change |
 |---|---|---|---|---|---|---|---|
+| Built-in ES8311 | S31 CoreBoard-1 | 48 kHz | 1.5 | 512 | 12 | On, 500 Hz | Keep current |
 | ICS-43434 / INMP441 | C3/S3/C5/C6 | 48 kHz | 1.5 | 512 | 12 | On, 500 Hz | Keep current |
 | Adafruit SPH0645 | C3/S3/C5/C6 | 48 kHz | 1.5 | 512 | 12 | On, 500 Hz | Keep current |
 | PDM IM73D122 | C3/C5/C6 | 48 kHz | 24 | 512 | Unused; stored I2S value retained | On, 500 Hz | 160 MHz |
@@ -490,7 +491,7 @@ You have two choices:
 Automatic update uses a board-specific stable plain HTTP URL, for example
 `http://esp32mic.msmeteo.cz/updates/firmware-app-c3.bin`. The build/deploy workflow replaces that alias with
 the latest published app image on every release. The URL is fixed by the compiled board profile and
-cannot be edited in the OTA page, preventing a C3/S3/C5/C6 device from pulling another board's image.
+cannot be edited in the OTA page, preventing a device from pulling another board's image, including S31.
 Unsupported generic builds must use manual OTA with a matching app-only file.
 
 ### One-time C3/C6 preparation (v1.35)
@@ -868,7 +869,7 @@ ohLatched        Persisted thermal latch (legacy compatibility)
 ```
 
 Apply changes through Web UI or API. Audio-related updates call `restartI2S()` when needed.
-Current validation ranges include `sampleRate=8000..192000`, `bufferSize=256..8192`, and
+Current validation ranges include `sampleRate=8000..192000` (S31: `8000..48000`), `bufferSize=256..8192`, and
 `micFormat=0..1`.
 
 ## RTSP Implementation Notes
@@ -940,8 +941,8 @@ are insufficient, the UI reports the reason and audio passes without reduction.
 Details include a spectrum and measured processing cost; the estimated noise floor
 includes environmental sound and is not a calibrated microphone self-noise measurement.
 
-## ESP32-S31 candidate
+## ESP32-S31-Function-CoreBoard-1
 
-See [ESP32-S31-Function-CoreBoard-1 integration](../docs/esp32-s31.md) for the local 2.06
-candidate, onboard ES8311 microphone, common core migration and qualification
-limits. S31 images are not yet published.
+Use the built-in ES8311 microphone without external audio wiring. See the
+[S31 guide](../docs/esp32-s31.md) for installation, 320 MHz CPU selection, optional
+battery measurement and the current storage limitations.

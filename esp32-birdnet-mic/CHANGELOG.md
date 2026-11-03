@@ -1,52 +1,13 @@
 # Changelog
 
-## 2.06 — Experimental noise reduction (unreleased)
+## 2.06 — 2026-11-03
 
-- Local candidate: ESP32-S31-Function-CoreBoard-1 target with onboard ES8311
-  microphone, board-specific OTA artifacts and optional external-divider battery
-  monitoring on GPIO42. No SD-card support on this board.
-- Common Arduino-ESP32 4.0.0-RC1 migration is under regression qualification.
-  S31 hardware qualification and maintainer UI acceptance are pending; not published.
-
-
-- Board and microphone selection remain manual in Audio and Device configuration.
-  Saved concrete profiles and tuned audio values are retained after updating.
-- Optional experimental adaptive noise reduction in Audio noise reduction, together with High-pass.
-  It processes Listen, RTSP and SD audio, defaults Off and learns again after
-  relevant changes. DSP based on a contributor's fixed-point spectral subtraction
-  implementation. Better BirdNET recognition is not yet established.
-- Noise settings use the shared draft/save/discard lifecycle. The spectrum and brief help
-  are directly visible; each filter setting has its own Apply action. Memory/CPU failures keep unfiltered audio flowing;
-  the filter never raises CPU frequency. Low-frequency CPU operation needs qualification.
-- Audio settings are directly visible. High-pass and adaptive noise reduction
-  have a separate Audio noise reduction section with independent save scopes.
-  Thermal & performance separates CPU speed from temperature protection.
-- Shared feature hierarchy groups switches with indented dependent settings.
-  Independently saved details require confirmed On; disabled drafts are retained.
-  MQTT, schedule and other grouped forms remain configurable before enabling.
-- Persistent feature switches use shared On/Off controls, including Battery in
-  Device configuration, low-battery protection, recording auto-start and SD logging.
-  Battery monitoring uses Apply; voltage calibration is directly visible. Nested
-  help/settings open by default; top-level panels keep their existing navigation.
-- Network shows actual Home/device Wi-Fi connections first, with backup access
-  details below Home Wi-Fi settings. Saved startup and Recording preferences are
-  presented separately from the current connection state.
-- Recording connection has its own Apply action, independent of the startup mode.
-  Switching modes changes only the current mode; restarting restores the saved
-  default. Booting into Standalone Recording starts device Wi-Fi without searching
-  for a router. Switching to Streaming connects to the saved home network while
-  keeping device Wi-Fi available for control if the router is unavailable.
-- Returning to Standalone Recording preserves an existing home connection and
-  enables device Wi-Fi. Once Home is lost, Standalone does not start new router
-  connection attempts. In Streaming/Home Recording, backup device Wi-Fi closes
-  only after Home has been connected for at least 60 seconds and no AP clients remain.
-- Recording Wi-Fi power saving remains an explicit action. After the configured
-  delay it turns off both Home and device Wi-Fi and suppresses reconnection.
-  Normal access then requires reset or power off/on unless a wake source was configured.
-- Web flasher installation copy uses the manifest version badge. Packaging and
-  public verification check current release copy. Poll warnings require two
-  consecutive failures from the same endpoint.
-- Validation scope and remaining hardware limitations: [2.06 record](../release-notes/2.06-validation.md).
+- **ESP32-S31:** support for Function-CoreBoard-1 with its built-in ES8311 microphone, CPU speeds up to 320 MHz and optional battery measurement on GPIO42 through an external divider. Recording mode is selectable; SD-card recording is not supported on this board.
+- **Audio:** optional experimental adaptive noise reduction for Listen, RTSP and SD recordings, alongside High-pass. It defaults Off; saved microphone profiles and audio settings are preserved.
+- **Web UI:** consistent On/Off controls, clearer settings groups, independent Apply actions and visible voltage calibration. Unsaved edits survive polling and failed saves.
+- **Wi-Fi and modes:** clearer Home/device Wi-Fi status, separate startup and Recording connection preferences, and smoother transitions between Streaming and standalone Recording.
+- **Firmware platform:** one shared Arduino-ESP32 4.0.0-RC1 core for all five targets, with PSRAM support and existing OTA upgrade paths retained.
+- **Installation and downloads:** S31 USB flashing, board-specific OTA files, updated wiring guides and download statistics covering all five boards.
 
 ## 2.05 - 2026-11-02
 

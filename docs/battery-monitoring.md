@@ -54,6 +54,7 @@ and charger limits, with manufacturer references.
 | XIAO ESP32-C3 | D0 / A0, GPIO2 (ADC1) | External: 100 kΩ + 100 kΩ |
 | XIAO ESP32-S3 / Plus, XIAO ESP32-S3 Sense | D0 / A0, GPIO1 (ADC1) | External: 100 kΩ + 100 kΩ |
 | XIAO ESP32-C6 | D0 / A0, GPIO0 (ADC1) | External: 100 kΩ + 100 kΩ |
+| ESP32-S31-Function-CoreBoard-1 | GPIO42, ADC1_CH0, J2 pin 20 | External: 100 kΩ + 100 kΩ |
 | M5Stack AtomS3U | Unsupported | Monitoring cannot be enabled |
 
 **C5:** connect the battery to BAT+ and BAT−. No external resistors are needed.
@@ -196,3 +197,6 @@ current measurement on the complete powered assembly.
 mutation header. `GET /api/status` exposes `field_power`, `wifi_off_pending` and
 `wifi_suspended`. `POST /api/recording/action` adds `action=wifi_off` and
 `action=battery_acknowledge`.
+
+For S31, use GPIO42 wherever the external-divider diagram shows D0/A0.
+See the [S31 guide](esp32-s31.md). The divider measures voltage only; it does not charge or power the board.
