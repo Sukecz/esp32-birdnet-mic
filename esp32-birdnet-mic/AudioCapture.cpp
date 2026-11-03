@@ -1,5 +1,6 @@
 #include "AppRuntime.h"
 #include "AudioCapture.h"
+#include "S31Codec.h"
 #include "FirmwareDefaults.h"
 #include "MqttService.h"
 #include "RtspService.h"
@@ -52,6 +53,11 @@ static constexpr int I2S_MCLK_PIN = D7;
 static constexpr int I2S_BCLK_PIN = D3;
 static constexpr int I2S_LRCLK_PIN = D1;
 static constexpr int I2S_DOUT_PIN = D2;
+#elif defined(CONFIG_IDF_TARGET_ESP32S31)
+static constexpr int I2S_MCLK_PIN = 52;
+static constexpr int I2S_BCLK_PIN = 53;
+static constexpr int I2S_LRCLK_PIN = 55;
+static constexpr int I2S_DOUT_PIN = 54;
 #else
 static constexpr int I2S_MCLK_PIN = 7;
 static constexpr int I2S_BCLK_PIN = 21;
@@ -648,6 +654,7 @@ bool setup_i2s_driver() {
     // A persisted thermal shutdown must boot with capture stopped so it can
     // actually cool. Settings changes must not bypass either pause condition.
     if (overheatLatched || otaInProgress) return true;
+    if (!micBoardFormatAllowed(micFormat)) return false;
     if (micFormat == MIC_FORMAT_PDM && (!pdmMicSupported() || currentSampleRate != PDM_SAMPLE_RATE)) return false;
     uint16_t dma_buf_len = (currentBufferSize > 512) ? 512 : currentBufferSize;
 
@@ -744,6 +751,14 @@ bool setup_i2s_driver() {
         return false;
     }
 
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+    if (!s31codec::begin(currentSampleRate)) {
+        simplePrintln("ES8311 initialization failed; capture stopped.");
+        i2s_del_channel(i2s_rx_handle);
+        i2s_rx_handle = nullptr;
+        return false;
+    }
+#endif
     err = enableI2sReceiverWithDiagnostics();
     if (err != ESP_OK) {
         audioDmaCallbackAvailable = false;

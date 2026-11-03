@@ -11,7 +11,9 @@ function renderBattery(j){
  const b=batteryState,n=id=>document.getElementById(id),supported=!!b.supported;
  const family=j.chip_family||'',c5=family==='ESP32-C5';
  n('battery_board').textContent=(j.board_name||family||'Board')+(supported?'':' · Unsupported');
- n('battery_wiring').textContent=!supported?'Battery monitoring is unsupported on M5Stack AtomS3U.':c5?'No external divider is needed. Connect the battery directly to BAT+ and BAT−. The voltage divider is built into XIAO C5.':`Use two 100 kΩ resistors: BAT+ → 100 kΩ → D0/A0 (GPIO${family==='ESP32-C3'?2:family==='ESP32-S3'?1:0}), then 100 kΩ from D0/A0 to GND. Connect BAT− to GND. Never connect BAT+ directly to the ADC pin.`;
+ const s31=family==='ESP32-S31';
+ n('battery_wiring').textContent=s31?'Use two 100 kΩ resistors: BAT+ → 100 kΩ → GPIO42 (J2 pin 20), then 100 kΩ from GPIO42 to GND. Connect BAT− to GND. Never connect BAT+ directly to GPIO42. This measures a 1S battery; it does not charge the battery.':!supported?'Battery monitoring is unsupported on M5Stack AtomS3U.':c5?'No external divider is needed. Connect the battery directly to BAT+ and BAT−. The voltage divider is built into XIAO C5.':`Use two 100 kΩ resistors: BAT+ → 100 kΩ → D0/A0 (GPIO${family==='ESP32-C3'?2:family==='ESP32-S3'?1:0}), then 100 kΩ from D0/A0 to GND. Connect BAT− to GND. Never connect BAT+ directly to the ADC pin.`;
+ n('battery_divider').textContent=`BAT+ ── 100 kΩ ──┬── ${s31?'GPIO42 (J2 pin 20)':'D0 / A0'}\n                 │\n               100 kΩ\n                 │\nBAT− ────────────┴── GND`;
  n('battery_divider').hidden=!supported||c5;
  n('battery_pack_note').hidden=!supported;
  if(!supported)batteryDraft=null;

@@ -3,6 +3,7 @@
 #include "FlashLayoutTable.h"
 #include <Preferences.h>
 #include <esp_flash.h>
+#include <esp_flash_chips/esp_flash_types.h> // IDF 6 no longer exports chip internals via esp_flash.h
 #include <esp_flash_encrypt.h>
 #include <esp_secure_boot.h>
 #include <esp_ota_ops.h>

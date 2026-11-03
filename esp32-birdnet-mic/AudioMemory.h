@@ -7,7 +7,7 @@
 
 // Both PSRAM-equipped XIAO targets use the same CPU-accessible audio storage.
 // DMA and capture/DSP working buffers always remain in internal RAM.
-#if (defined(CONFIG_IDF_TARGET_ESP32C5) || defined(CONFIG_IDF_TARGET_ESP32S3)) && CONFIG_SPIRAM
+#if (defined(CONFIG_IDF_TARGET_ESP32C5) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S31)) && CONFIG_SPIRAM
 #define AUDIO_RING_IN_PSRAM 1
 #else
 #define AUDIO_RING_IN_PSRAM 0

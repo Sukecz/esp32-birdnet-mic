@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
+from arduino_environment import activate
+activate()
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,9 +22,10 @@ def main():
     version = cli("version")["VersionString"]
     if version != lock["arduino_cli"]:
         raise SystemExit(f"Arduino CLI: expected {lock['arduino_cli']}, found {version}")
+    urls = [arg for url in lock.get("additional_urls", []) for arg in ("--additional-urls", url)]
     if args.install:
-        subprocess.run(["arduino-cli", "core", "update-index"], check=True)
-        subprocess.run(["arduino-cli", "core", "install", lock["core"]["id"] + "@" + lock["core"]["version"]], check=True)
+        subprocess.run(["arduino-cli", "core", "update-index", *urls], check=True)
+        subprocess.run(["arduino-cli", "core", "install", lock["core"]["id"] + "@" + lock["core"]["version"], *urls], check=True)
         for name, version in lock["libraries"].items():
             subprocess.run(["arduino-cli", "lib", "install", name + "@" + version], check=True)
     cores = {p["id"]: p.get("installed_version") for p in cli("core", "list")["platforms"]}

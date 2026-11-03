@@ -1,7 +1,7 @@
 #include "AppRuntime.h"
 
 bool setDeviceMode(bool recordingMode) {
-    if (recordingMode && !recordingHardwareSupported()) return false;
+    if (recordingMode && !recordingModeSupported()) return false;
     if (recordingMode == recording::mode()) return true;
     if (applicationUpdateInProgress() || flashlayout::busy()) return false;
     const bool previousMode = recording::mode();

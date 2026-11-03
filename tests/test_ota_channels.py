@@ -55,6 +55,7 @@ class RealNginxBridgeTests(unittest.TestCase):
                 (web/f'firmware-app-{board}.bin').write_bytes(('new-'+board).encode()+b'x'*1310720)
                 (web/f'firmware-app-{board}-bridge.bin').write_bytes(('bridge-'+board).encode())
                 (web/f'firmware-app-{board}-1.40.bin').write_bytes((web/f'firmware-app-{board}.bin').read_bytes())
+            (web/'firmware-app-s31.bin').write_bytes(b'new-s31')
             with socket.socket() as sock:
                 sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
             server=(ROOT/'deployment/esp32mic-web-default.conf').read_text()
@@ -92,6 +93,8 @@ class RealNginxBridgeTests(unittest.TestCase):
                         self.assertEqual(r.read(),(web/f'firmware-app-{board}.bin').read_bytes())
                 with urllib.request.urlopen(url+'/firmware-app.bin',timeout=2) as r:
                     self.assertEqual(r.read(),b'bridge-c6')
+                self.assertEqual(urllib.request.urlopen(url+'/updates/firmware-app-s31.bin').read(),b'new-s31')
+                self.assertEqual(urllib.request.urlopen(url+'/firmware-app-s31.bin').read(),b'new-s31')
                 records=[json.loads(line) for line in (base/'logs/access.log').read_text().splitlines()]
                 self.assertTrue(all(record['release']=='1.40' for record in records))
                 self.assertTrue(any(record['file'].endswith('firmware-app-c6-bridge.bin') for record in records))

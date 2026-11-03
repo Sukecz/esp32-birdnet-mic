@@ -34,6 +34,15 @@ inline Pins resolve(uint8_t variant = s3boards::External) {
     return {-1, -1, -1, -1, false, false};
 #endif
 }
+// Choosing Recording is independent of whether an SD route is implemented.
+inline bool modeSupported(uint8_t variant = s3boards::External) {
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+    (void)variant;
+    return true;
+#else
+    return resolve(variant).supported;
+#endif
+}
 inline const char* storage(uint8_t variant = s3boards::External) {
     const auto pins = resolve(variant);
     return !pins.supported ? "unavailable" : pins.builtin ? "sense_builtin" : "external_spi";

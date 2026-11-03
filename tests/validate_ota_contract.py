@@ -29,6 +29,7 @@ profiles = {
     "ARDUINO_XIAO_ESP32S3": "firmware-app-s3.bin",
     "ARDUINO_XIAO_ESP32C5": "firmware-app-c5.bin",
     "ARDUINO_XIAO_ESP32C6": "firmware-app-c6.bin",
+    "CONFIG_IDF_TARGET_ESP32S31": "firmware-app-s31.bin",
 }
 for macro, artifact in profiles.items():
     pattern = rf"defined\({macro}\).*?#define\s+XIAO_OTA_ARTIFACT\s+\"{re.escape(artifact)}\""
@@ -50,7 +51,8 @@ require(manifest["version"] == version, "Manifest version does not match FW_VERS
 require((WEB / "ota-version.txt").read_text(encoding="utf-8").strip() == version,
         "ota-version.txt does not match FW_VERSION")
 
-for key in ("c3", "s3", "c5", "c6"):
+require({b["chipFamily"] for b in manifest["builds"]} == {"ESP32-C3", "ESP32-S3", "ESP32-C5", "ESP32-C6", "ESP32-S31"}, "Manifest must cover all five targets")
+for key in ("c3", "s3", "c5", "c6", "s31"):
     stable = WEB / f"firmware-app-{key}.bin"
     versioned = WEB / f"firmware-app-{key}-{version}.bin"
     manual = MANUAL / f"firmware-app-{key}.bin"

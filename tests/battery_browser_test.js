@@ -12,7 +12,7 @@ const base={ok:true,complete:true,default_mode:'streaming',connection:'home',con
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  const errors=[];fs.mkdirSync('tmp/battery-monitoring',{recursive:true});
  try{
-  for(const packed of [false,true])for(const family of ['C3','S3','C5','C6']){
+  for(const packed of [false,true])for(const family of ['C3','S3','C5','C6','S31']){
    const page=await browser.newPage({viewport:{width:320,height:850}});
    page.on('pageerror',e=>errors.push(e.message));
    let saved,info={...base,chip_family:'ESP32-'+family,board_name:'XIAO ESP32-'+family,s3_board_supported:family==='S3',antenna_supported:family==='C6'};
@@ -38,7 +38,7 @@ const base={ok:true,complete:true,default_mode:'streaming',connection:'home',con
     assert.match(await page.locator('#battery_wiring').textContent(),/Ready to use.*built-in/);
     assert.equal(await page.locator('#battery_diagram').isVisible(),false);
    }else{
-    assert.match(await page.locator('#battery_wiring').textContent(),new RegExp('GPIO'+(family==='C3'?2:family==='S3'?1:0)));
+    assert.match(await page.locator('#battery_wiring').textContent(),new RegExp('GPIO'+(family==='S31'?42:family==='C3'?2:family==='S3'?1:0)));
     assert(await page.locator('#battery_diagram').isVisible());
    }
    for(const theme of ['light','dark']){

@@ -9,7 +9,7 @@ Firmware artifacts: **v2.06**. See [validation and hardware limits](../release-n
 
 Install using [esp32mic.msmeteo.cz](https://esp32mic.msmeteo.cz) in desktop **Chrome or Edge**
 with a USB **data** connection (AtomS3U plugs directly into USB-A). The flasher detects the ESP chip family and chooses the image for
-XIAO ESP32-C3/S3/C5/C6. AtomS3U and Sense also use the S3 image; chip detection
+XIAO ESP32-C3/S3/C5/C6 or ESP32-S31-Function-CoreBoard-1. AtomS3U and Sense also use the S3 image; chip detection
 cannot distinguish these board designs, so select the matching profile after installation.
 
 **XIAO ESP32-S3 Sense / M5Stack AtomS3U:** use the S3 image, then open
@@ -37,7 +37,7 @@ USB installation may erase settings: choose to keep existing data when updating 
 
 ### Structure
 - `index.html` - main page with the "Flash" button and instructions.
-- `manifest.json` - ESP Web Tools manifest, writes only firmware parts without NVS and includes C3/S3/C5/C6 builds.
+- `manifest.json` - ESP Web Tools manifest, writes only firmware parts without NVS and includes C3/S3/C5/C6/S31 builds. S31 uses its own 0x2000 bootloader offset.
 - `bootloader-<board>.bin`, `partitions-<board>.bin`, `boot_app0-<board>.bin` - system parts for USB web flashing.
 - `firmware-<board>.bin` - merged image (bootloader + partition + app), only for manual full flash.
 - `firmware-app-<board>.bin` - app-only image for OTA update through the device Web UI.
@@ -101,5 +101,14 @@ WebSerial needs HTTPS (or localhost). JSON and firmware must have the appropriat
 `application/json` and `application/octet-stream`. Automatic device OTA additionally needs direct
 HTTP access to the board-specific app files without redirects.
 
-GitHub release assets include all four boards' bootloader, partition, boot_app0, app-only and merged
+GitHub release assets include all five boards' bootloader, partition, boot_app0, app-only and merged
 images, plus the manifest and version file. See the [changelog](../esp32-birdnet-mic/CHANGELOG.md).
+
+## ESP32-S31 candidate
+
+See [ESP32-S31-Function-CoreBoard-1 integration](../docs/esp32-s31.md) for the local 2.06
+candidate, onboard ES8311 microphone, common core migration and qualification
+limits. S31 images are not yet published.
+
+The shared browser flasher uses ESP Web Tools 10.4.0 with pinned esptool-js 0.7.1
+for S31 detection and its ROM/stub. Rebuild provenance is in `tools/web-tools`.

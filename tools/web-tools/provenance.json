@@ -1,0 +1,26 @@
+{
+  "source_url": "https://api.github.com/repos/esphome/esp-web-tools/tarball/10.4.0",
+  "source_sha256": "f775357dfa5247a321650c2cb074526956f155bb0e87f70e6ad54040b0e5dc3f",
+  "esptool_js": "0.7.1",
+  "bundle_version": "10.4.0-s31.1",
+  "outputs": {
+    "index-Dt9w-IG1.js": "1967f0ef76d492c982284c15c48f5c5022a37137786bc16a1e2d012cf69a2166",
+    "esp32p4-rev1-DEdUM_9Q.js": "056013ab34b89e4b8aa2fa7f74c0eff79e685360897e802784cd0f22a47fd975",
+    "esp32c5-Bq6mXcb5.js": "a9881ea78d3742b703aedfdce62f5c63f391fb72c3e8c492f3a0ef93253b38eb",
+    "esp32c2-Bmu-jpVE.js": "a1f24fc2ce757cf81715deb57d9eece4740934816f7253edd812e37cf954db75",
+    "esp32c6-yQoBKrxY.js": "9a47e98dc3e0e1e9a21190d6a7ffbc320b1ce86d2aaa712ed6aa2d68c5561a94",
+    "esp32s3-WXxMoV8x.js": "298f31b5a77a9bdf42fc09ce95a9b67a846479a6129015ad5b2e39a92bcdd1b8",
+    "esp32c3-81Rr-aQE.js": "6fab8199779972b2f5bbc22ca6f1febb92f16513fd96fea1467b49a90f2b22b3",
+    "esp32p4-o74i42i3.js": "19c05d88a44666c9c26dfacd1211ff402a50e4a03a18c4cfcb9354f8ee23cef0",
+    "esp32-BlyKoTgy.js": "b3982c8963092ee9a24f07d4e65eb60b4dbfc79913f2601decf43d3d7466cbea",
+    "esp32c61-DmDn041x.js": "efe3cdb1b1814af740af06c9809cb53fd48ca19fc91af04d754695fc97efe08c",
+    "styles-sT2V1cOw.js": "ad32b41ad8507aed4f7241178d9a472457355ecf0282faaa655de3ea37809c9a",
+    "esp8266-DsDItw_h.js": "34154df294eeb7701958a7244298813bc19cb979713e31a2bd004a43b002cce7",
+    "install-button.js": "1e7105baa5c512e96e5f48511f9129cda8ad5644a0926d3a6b425c85293ceacb",
+    "esp32h2-B8bZhHv5.js": "3099acc7ba032419d89b00c06c18355b5043dd6ced5bc66abb2135698d01e6bd",
+    "esp32s2-O1Tyu6IT.js": "976707629707461d0ba23a6237b2413194a290cc7eb6cccc91e9cdcecaab06c1",
+    "esp32s31-Ef8NLP2_.js": "62b0fc81c7d4faa86c7b2da883db0b6acdf7062398441b2ce07d9cd2a9b0f8f4",
+    "esp32h4-KyNsS-mo.js": "9b3aff6c4192bc7a435699df140221eb6336ec88a647e63a0a9f2fcb6685c049",
+    "install-dialog-DgkgiBBp.js": "ed6a1fb9dfaf63b813b7b77ec7287ee167c14c6645b42fa96fed51d034029afd"
+  }
+}

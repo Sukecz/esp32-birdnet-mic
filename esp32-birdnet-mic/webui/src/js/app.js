@@ -204,19 +204,21 @@ function renderMicFormat(j){
     row.style.display=j.s3_board_supported===true?'':'none';
     syncInput(document.getElementById('sel_s3_board'),'s3_board',String(j.s3_board??0));
   }
+  const codec=j.audio_codec==='ES8311';
   const locked=j.s3_board_supported===true&&Number(j.s3_board)===2;
   const apply=document.getElementById('btn_mic_apply');
   if(apply)apply.disabled=false;
 
   const select=document.getElementById('sel_mic_format');
   const now=Date.now();
-  if(select){select.disabled=false;for(const option of select.options||[])if(Number(option.value)<2)option.disabled=locked;syncInput(select,'mic_format',String(j.mic_format));}
-  if(select){toggleDirty(select,'mic_format');document.getElementById('mic_format_label').textContent=select.selectedOptions[0]?.textContent||'';}
+  if(select){select.disabled=codec;if(codec)select.options[0].textContent='Built-in microphone (ES8311)';for(const option of select.options||[])option.disabled=codec?Number(option.value)!==0:(Number(option.value)<2&&locked);syncInput(select,'mic_format',String(j.mic_format));}
+  if(select){toggleDirty(select,'mic_format');document.getElementById('mic_format_label').textContent=codec?'Built-in microphone (ES8311)':(select.selectedOptions[0]?.textContent||'');}
   const option=document.getElementById('opt_pdm');
   if(option){
-    option.disabled=j.pdm_supported!==true;
+    option.disabled=codec||j.pdm_supported!==true;
     option.textContent=j.s3_board_supported===true&&Number(j.s3_board)!==0?'Built-in PDM microphone':'PDM microphone (IM73D122)';
   }
+  if(codec){const r=document.getElementById('in_rate');if(r)r.max='48000';}
   const pdm=j.mic_format===2;
   const gainHint=document.getElementById('txt_gain_hint');
   if(gainHint) gainHint.textContent=pdm?'Adjust Gain to avoid clipping. PDM produces 16-bit PCM; I2S Shift is unused.':(T[lang]||T.en).help_gain;
@@ -257,7 +259,7 @@ function renderThermalRecovery(j){
  const statusEl=$('therm_status'); if(statusEl){ statusEl.textContent=status; statusEl.className=latched||j.sensor_fault?'warn':!j.protection_enabled?'bad':'ok'; }
  for(const id of ['btn_therm_clear','btn_thermal_notice_ack']){ const btn=$(id); if(btn){ btn.textContent=latched?'Acknowledge and restore operation':'Acknowledge warning'; btn.disabled=!j.can_acknowledge; } }
 }
-function loadTherm(){return fetchJSON('/api/thermal').then(j=>{ const now=Date.now(); const L=T[lang]; const en=$('sel_oh_enable'); syncInput(en,'oh_enable',j.protection_enabled?'on':'off'); const lim=$('sel_oh_limit'); syncInput(lim,'oh_limit',(Number(j.shutdown_c)||80).toFixed(0)); const sc=$('sel_cpu'); const fast=sc.querySelector('option[value="240"]'); if(j.cpu_max_mhz>=240&&!fast)sc.add(new Option('240','240'));else if(!(j.cpu_max_mhz>=240)&&fast)fast.remove(); syncInput(sc,'cpu_freq',j.cpu_mhz); const currentValid=(j.current_valid&&typeof j.current_c==='number'&&isFinite(j.current_c)); const cur=$('therm_now'); if(cur) cur.textContent=currentValid?j.current_c.toFixed(1)+' °C':'N/A'; const max=$('therm_max'); if(max){ const maxValid=(typeof j.max_c==='number'&&isFinite(j.max_c)); max.textContent=maxValid?j.max_c.toFixed(1)+' °C':'N/A'; } const cpu=$('therm_cpu'); if(cpu) cpu.textContent=j.cpu_mhz+' MHz'; renderThermalRecovery(j); updateOverview('thermal',j); const last=$('therm_last'); if(last){ if(j.sensor_fault){ last.textContent=L.therm_last_sensor_fault; } else if(j.last_trip_ts && j.last_trip_ts.length){ let msg=L.therm_last_fmt; const temp=(typeof j.last_trip_c==='number'&&isFinite(j.last_trip_c)&&j.last_trip_c>0)?j.last_trip_c.toFixed(1):'0'; const limit=(Number(j.shutdown_c)||0).toFixed(0); const ts=j.last_trip_ts||L.therm_time_unknown; const ago=j.last_trip_since||L.therm_time_ago_unknown; msg=msg.replace('%TEMP%',temp).replace('%LIMIT%',limit).replace('%TIME%',ts).replace('%AGO%',ago); last.textContent=msg; if(j.latched_persist){ last.textContent+=' — '+(j.auto_resume_pending?'Waiting for cooling':L.therm_status_latched_persist); } else if(j.manual_restart){ last.textContent+=' — '+L.therm_status_latched; } } else if(j.last_reason && j.last_reason.length){ last.textContent=j.last_reason; } else { last.textContent=L.therm_last_none; } } })}let logLatestPage=true,logPageBusy=false,logPageState=null;
+function loadTherm(){return fetchJSON('/api/thermal').then(j=>{ const now=Date.now(); const L=T[lang]; const en=$('sel_oh_enable'); syncInput(en,'oh_enable',j.protection_enabled?'on':'off'); const lim=$('sel_oh_limit'); syncInput(lim,'oh_limit',(Number(j.shutdown_c)||80).toFixed(0)); const sc=$('sel_cpu'); for(const mhz of [240,320]){const fast=sc.querySelector('option[value="'+mhz+'"]');if(j.cpu_max_mhz>=mhz&&!fast)sc.add(new Option(String(mhz),String(mhz)));else if(!(j.cpu_max_mhz>=mhz)&&fast)fast.remove();} syncInput(sc,'cpu_freq',j.cpu_mhz); const currentValid=(j.current_valid&&typeof j.current_c==='number'&&isFinite(j.current_c)); const cur=$('therm_now'); if(cur) cur.textContent=currentValid?j.current_c.toFixed(1)+' °C':'N/A'; const max=$('therm_max'); if(max){ const maxValid=(typeof j.max_c==='number'&&isFinite(j.max_c)); max.textContent=maxValid?j.max_c.toFixed(1)+' °C':'N/A'; } const cpu=$('therm_cpu'); if(cpu) cpu.textContent=j.cpu_mhz+' MHz'; renderThermalRecovery(j); updateOverview('thermal',j); const last=$('therm_last'); if(last){ if(j.sensor_fault){ last.textContent=L.therm_last_sensor_fault; } else if(j.last_trip_ts && j.last_trip_ts.length){ let msg=L.therm_last_fmt; const temp=(typeof j.last_trip_c==='number'&&isFinite(j.last_trip_c)&&j.last_trip_c>0)?j.last_trip_c.toFixed(1):'0'; const limit=(Number(j.shutdown_c)||0).toFixed(0); const ts=j.last_trip_ts||L.therm_time_unknown; const ago=j.last_trip_since||L.therm_time_ago_unknown; msg=msg.replace('%TEMP%',temp).replace('%LIMIT%',limit).replace('%TIME%',ts).replace('%AGO%',ago); last.textContent=msg; if(j.latched_persist){ last.textContent+=' — '+(j.auto_resume_pending?'Waiting for cooling':L.therm_status_latched_persist); } else if(j.manual_restart){ last.textContent+=' — '+L.therm_status_latched; } } else if(j.last_reason && j.last_reason.length){ last.textContent=j.last_reason; } else { last.textContent=L.therm_last_none; } } })}let logLatestPage=true,logPageBusy=false,logPageState=null;
 function updateLogPageControls(){
  const state=logPageState;
  const older=$('b_log_older'),newer=$('b_log_newer');

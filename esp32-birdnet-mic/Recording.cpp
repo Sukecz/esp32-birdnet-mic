@@ -904,7 +904,8 @@ String statusJson(bool supported, uint8_t boardVariant, uint32_t sampleRate) {
     // Names and errors are generated internally and contain no JSON metacharacters.
     String out = "{\"mode\":\""; out += mode() ? "recording" : "streaming";
     out += "\",\"state\":\""; out += states[uint8_t(s.state)];
-    out += "\",\"supported\":"; out += supported ? "true" : "false";
+    out += "\",\"mode_supported\":"; out += recordingpins::modeSupported(boardVariant) ? "true" : "false";
+    out += ",\"supported\":"; out += supported ? "true" : "false";
     out += ",\"storage\":\""; out += recordingpins::storage(boardVariant); out += "\"";
     out += ",\"busy\":"; out += busy() ? "true" : "false";
     out += ",\"cooling_pending\":"; out += resumePending() ? "true" : "false";

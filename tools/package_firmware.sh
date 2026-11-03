@@ -242,7 +242,9 @@ for build in manifest["builds"]:
         path = web_dir / part["path"]
         if not path.exists() or path.stat().st_size == 0:
             missing.append(str(path))
-for key in ("c3", "s3", "c5", "c6"):
+sys.path.insert(0, str(web_dir.parent / 'tools'))
+from board_registry import boards
+for key in [b['id'] for b in boards()]:
     stable_app = web_dir / f"firmware-app-{key}.bin"
     versioned_app = web_dir / f"firmware-app-{key}-{version}.bin"
     manual_app = manual_dir / f"firmware-app-{key}.bin"

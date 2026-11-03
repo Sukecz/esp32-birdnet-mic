@@ -399,7 +399,7 @@ namespace recording {
  bool resumePending(){return pending;}bool mode(){return active;}bool busy(){return working;}
  bool checkCard(bool supported,uint8_t){++checks;working=true;return supported;}
 }
-namespace recordingpins {struct Pins{bool supported;};Pins resolve(uint8_t v){return {v!=2};}}
+namespace recordingpins {struct Pins{bool supported;};Pins resolve(uint8_t v){return {v!=2};}bool modeSupported(uint8_t v){return resolve(v).supported;}}
 namespace devicesetup {
  bool done=false,busy=false;String ssid="",state="idle";bool startup=false,direct=false;
  bool complete(){return done;}bool connectionBusy(){return busy;}

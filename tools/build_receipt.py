@@ -18,7 +18,7 @@ def source_digest():
              and p.suffix in ('.h', '.cpp', '.ino', '.html', '.js', '.css', '.sh')]
     files += [ROOT / name for name in ('boards.json', 'build-dependencies.json',
               'tools/compile_firmware.sh', 'tools/prepare_sd_library.py',
-              'tools/board_registry.py', 'tools/build_receipt.py',
+              'tools/board_registry.py', 'tools/build_receipt.py', 'tools/arduino_environment.py',
               'tools/assemble_webui.py', 'tools/minify_webui.cjs',
               'tools/package-lock.json', 'tools/requirements-webui.txt',
               'esp32-birdnet-mic/tools/gen_webui_assets.py',

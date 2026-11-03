@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="site.css?v=20261025b">
   <script defer src="https://stats.msmeteo.cz/script.js" data-website-id="be5609b6-a535-4090-90bd-8d2e6d9396a4"></script>
   <script defer src="site.js?v=20261025b"></script>
-  <script type="module" src="vendor/esp-web-tools/10.4.0/install-button.js"></script>
+  <script type="module" src="vendor/esp-web-tools/10.4.0-s31.1/install-button.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -36,7 +36,7 @@
           <p class="lede">Stream live audio to BirdNET-Go or BirdNET-Pi, or record wildlife sounds to microSD without a router or computer. Install BirdNETMic from your browser.</p>
           <div class="install-action"><esp-web-install-button manifest="manifest.json"><button type="button" slot="activate" class="flash-button">Connect &amp; flash <span aria-hidden="true">↗</span></button><span slot="unsupported" class="install-note">USB installation needs Chrome or Edge on desktop. <a href="https://github.com/Sukecz/esp32-birdnet-mic/releases">Download firmware ↗</a></span></esp-web-install-button><a class="guide-button" href="https://github.com/Sukecz/esp32-birdnet-mic#quick-start" target="_blank" rel="noreferrer">Setup guide <span aria-hidden="true">↗</span></a><span class="release-badge" id="fw-version-chip">Loading release…</span></div>
           <p class="install-note">Chrome or Edge on desktop · USB data connection<br>Updating? Choose the option that keeps existing data.</p>
-          <div class="chips" aria-label="Supported boards"><span>XIAO ESP32-C3</span><span>XIAO ESP32-S3 / Plus</span><span>XIAO ESP32-C5</span><span>XIAO ESP32-C6</span><span>M5Stack AtomS3U</span><span>XIAO ESP32-S3 Sense (experimental)</span></div>
+          <div class="chips" aria-label="Supported boards"><span>XIAO ESP32-C3</span><span>XIAO ESP32-S3 / Plus</span><span>XIAO ESP32-C5</span><span>XIAO ESP32-C6</span><span>ESP32-S31 CoreBoard-1</span><span>M5Stack AtomS3U</span><span>XIAO ESP32-S3 Sense (experimental)</span></div>
           <p class="board-note"><strong>New build? Choose XIAO ESP32-C5 + PDM:</strong> PSRAM buffers and built-in battery voltage measurement. Add an Adafruit microSD BFF #5683 for Recording. Sense has its own microphone and SD slot (experimental); AtomS3U supports Streaming. Both use S3 firmware: choose your board in <strong>Device configuration</strong>.</p>
         </div>
         <div class="hero-art"><div class="art-orbit"></div><img src="assets/bird.png?v=20260722" alt="A green bird singing into a microphone" width="320" height="320"></div>
@@ -63,7 +63,7 @@
           <div class="metric"><span>GitHub</span><strong id="metric-github">—</strong><small>firmware assets downloaded</small></div>
         </div>
         <div class="panel release-panel">
-          <div class="filters"><div class="filter-label"><span class="live-dot"></span> Releases <span id="release-count"></span></div><div class="filter-controls"><label for="board-filter">Board <select id="board-filter"><option value="all">All boards</option><option value="c3">ESP32-C3</option><option value="s3">ESP32-S3</option><option value="c5">ESP32-C5</option><option value="c6">ESP32-C6</option></select></label><label for="source-filter">Source <select id="source-filter"><option value="all">All downloads</option><option value="website">Website + OTA</option><option value="web_flash">USB web flasher</option><option value="ota">Device OTA</option><option value="manual">Direct downloads</option><option value="github">GitHub</option></select></label></div></div>
+          <div class="filters"><div class="filter-label"><span class="live-dot"></span> Releases <span id="release-count"></span></div><div class="filter-controls"><label for="board-filter">Board <select id="board-filter"><option value="all">All boards</option><option value="c3">ESP32-C3</option><option value="s3">ESP32-S3</option><option value="c5">ESP32-C5</option><option value="c6">ESP32-C6</option><option value="s31">ESP32-S31</option></select></label><label for="source-filter">Source <select id="source-filter"><option value="all">All downloads</option><option value="website">Website + OTA</option><option value="web_flash">USB web flasher</option><option value="ota">Device OTA</option><option value="manual">Direct downloads</option><option value="github">GitHub</option></select></label></div></div>
           <p id="stats-status" class="stats-status" role="status">Fetching download totals…</p>
           <div class="release-list" id="release-list"></div>
           <div class="list-footer"><span>Open a release for board & download type details.</span><button type="button" class="text-button" id="show-older" hidden>Show older releases ↓</button><button type="button" class="text-button" id="stats-retry" hidden>Try again ↻</button></div>

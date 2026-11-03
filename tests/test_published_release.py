@@ -13,6 +13,13 @@ spec.loader.exec_module(release)
 
 
 class ReleaseVerificationTest(unittest.TestCase):
+    def test_s31_assets_have_no_legacy_bridge(self):
+        names = release.asset_names('2.06')
+        self.assertIn('firmware-app-s31.bin', names)
+        self.assertIn('firmware-app-s31-2.06.bin', names)
+        self.assertNotIn('firmware-app-s31-bridge.bin', names)
+        self.assertNotIn('firmware-app-s31.bin', release.asset_names('2.05'))
+
     def setUp(self):
         self.files = {name: b"firmware" for name in release.asset_names("1.23")}
         self.files["ota-version.txt"] = b"1.23\n"

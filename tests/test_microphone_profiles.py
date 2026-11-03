@@ -99,20 +99,20 @@ int main(){
     def test_actual_board_cpu_limits(self):
         code = (function(SKETCH, 'uint16_t maxSupportedCpuFrequencyMhz()') + '\n' +
                 function(SKETCH, 'bool cpuFrequencySupported(uint32_t mhz)'))
-        for board in ('ESP32C3', 'ESP32S3', 'ESP32C5', 'ESP32C6'):
+        for board in ('ESP32C3', 'ESP32S3', 'ESP32C5', 'ESP32C6', 'ESP32S31'):
             with self.subTest(board=board):
-                self.native('#define CONFIG_IDF_TARGET_' + board + ' 1\n#include <cstdint>\n#include <cassert>\n' + code + '\nint main(){assert(cpuFrequencySupported(40)&&cpuFrequencySupported(80)&&cpuFrequencySupported(160));assert(!cpuFrequencySupported(120)&&!cpuFrequencySupported(320)&&!cpuFrequencySupported(0));assert(cpuFrequencySupported(240)==' + ('true' if board in ('ESP32S3','ESP32C5') else 'false') + ');}\n')
+                self.native('#define CONFIG_IDF_TARGET_' + board + ' 1\n#include <cstdint>\n#include <cassert>\n' + code + '\nint main(){assert(cpuFrequencySupported(40)&&cpuFrequencySupported(80)&&cpuFrequencySupported(160));assert(!cpuFrequencySupported(120)&&!cpuFrequencySupported(0));assert(cpuFrequencySupported(320)==' + ('true' if board == 'ESP32S31' else 'false') + ');assert(cpuFrequencySupported(240)==' + ('true' if board in ('ESP32S3','ESP32C5','ESP32S31') else 'false') + ');}\n')
 
     def test_actual_cpu_save_and_boot_repair(self):
         cpu = function(SKETCH, 'uint16_t maxSupportedCpuFrequencyMhz()') + '\n' + function(SKETCH, 'bool cpuFrequencySupported(uint32_t mhz)')
         handler = function(WEB, '    else if (key == "cpu_freq")').replace('else if (key == "cpu_freq")', 'if (true)', 1)
         repair = function(SKETCH, '    if (!cpuFrequencySupported(cpuFrequencyMhz))')
-        for board in ('ESP32C3', 'ESP32S3', 'ESP32C5', 'ESP32C6'):
+        for board in ('ESP32C3', 'ESP32S3', 'ESP32C5', 'ESP32C6', 'ESP32S31'):
             with self.subTest(board=board):
                 self.native('#define CONFIG_IDF_TARGET_' + board + ' 1\n' + r'''
 #include <cstdint>
 #include <cassert>
-uint8_t cpuFrequencyMhz=160;
+uint16_t cpuFrequencyMhz=160;
 uint32_t input=240;
 int saves=0,clockCalls=0;
 bool applied=false,handled=false,clockOk=true,settingsRepaired=false;
@@ -122,7 +122,10 @@ void saveAudioSettings(){++saves;}
 ''' + cpu + '\nvoid save(){' + handler + '}\nvoid boot(){' + repair + '}' + r'''
 int main(){
  save();
-#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C5)
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+ assert(applied&&cpuFrequencyMhz==240);
+ input=320;save();assert(cpuFrequencyMhz==320);boot();assert(cpuFrequencyMhz==320&&!settingsRepaired);
+#elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C5)
  assert(applied&&saves==1&&cpuFrequencyMhz==240&&clockCalls==1);
  boot();assert(cpuFrequencyMhz==240&&!settingsRepaired);
 #else

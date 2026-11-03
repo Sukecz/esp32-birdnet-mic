@@ -40,7 +40,7 @@ void loadAudioSettings() {
     minAcceptableRate = audioPrefs.getUInt("minRate", 50);
     performanceCheckInterval = audioPrefs.getUInt("checkInterval", 15);
     autoThresholdEnabled = audioPrefs.getBool("thrAuto", true);
-    cpuFrequencyMhz = audioPrefs.getUChar("cpuFreq", 160);
+    cpuFrequencyMhz = audioPrefs.getUShort("cpuFreq16", audioPrefs.getUChar("cpuFreq", 160));
     wifiTxPowerDbm = audioPrefs.getFloat("wifiTxDbm", DEFAULT_WIFI_TX_DBM);
     highpassEnabled = audioPrefs.getBool("hpEnable", DEFAULT_HPF_ENABLED);
     highpassCutoffHz = (uint16_t)audioPrefs.getUInt("hpCutoff", DEFAULT_HPF_CUTOFF_HZ);
@@ -116,7 +116,7 @@ void loadAudioSettings() {
         i2sShiftBits = 12;
         settingsRepaired = true;
     }
-    if (micFormat > MIC_FORMAT_PDM || (micFormat == MIC_FORMAT_PDM && !pdmMicSupported())) {
+    if (!micBoardFormatAllowed(micFormat) || micFormat > MIC_FORMAT_PDM || (micFormat == MIC_FORMAT_PDM && !pdmMicSupported())) {
         micFormat = DEFAULT_MIC_FORMAT;
         settingsRepaired = true;
     }
@@ -211,7 +211,7 @@ void saveAudioSettings() {
     audioPrefs.putUInt("minRate", minAcceptableRate);
     audioPrefs.putUInt("checkInterval", performanceCheckInterval);
     audioPrefs.putBool("thrAuto", autoThresholdEnabled);
-    audioPrefs.putUChar("cpuFreq", cpuFrequencyMhz);
+    audioPrefs.putUShort("cpuFreq16", cpuFrequencyMhz);
     audioPrefs.putFloat("wifiTxDbm", wifiTxPowerDbm);
     audioPrefs.putBool("hpEnable", highpassEnabled);
     audioPrefs.putUInt("hpCutoff", (uint32_t)highpassCutoffHz);

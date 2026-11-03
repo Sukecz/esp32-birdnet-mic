@@ -19,6 +19,7 @@ firmware-app-c3.bin    XIAO ESP32-C3
 firmware-app-s3.bin    XIAO ESP32-S3
 firmware-app-c5.bin    XIAO ESP32-C5
 firmware-app-c6.bin    XIAO ESP32-C6
+firmware-app-s31.bin   ESP32-S31-Function-CoreBoard-1 (local 2.06 candidate)
 ```
 
 `firmware-app.bin` is kept as a compatibility alias for the XIAO ESP32-C6 build.
@@ -40,3 +41,6 @@ to the latest release.
 PDM (IM73D122 / Adafruit PDM / MP34DT01) support is **🟡 Experimental**. On C3/C5 use 512 samples per packet and 160 MHz;
 keeping saved values preserves the packet size; **Recommended settings** applies 512.
 See the [wiring and setup guide](../esp32-birdnet-mic/README.md#pdm-microphones).
+
+S31 support is a local candidate until publication is approved. It uses a normal
+dual-slot OTA layout and does not use the v1.35 bridge. See [S31 notes](../docs/esp32-s31.md).

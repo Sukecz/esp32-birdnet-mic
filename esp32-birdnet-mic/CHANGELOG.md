@@ -2,6 +2,13 @@
 
 ## 2.06 — Experimental noise reduction (unreleased)
 
+- Local candidate: ESP32-S31-Function-CoreBoard-1 target with onboard ES8311
+  microphone, board-specific OTA artifacts and optional external-divider battery
+  monitoring on GPIO42. No SD-card support on this board.
+- Common Arduino-ESP32 4.0.0-RC1 migration is under regression qualification.
+  S31 hardware qualification and maintainer UI acceptance are pending; not published.
+
+
 - Board and microphone selection remain manual in Audio and Device configuration.
   Saved concrete profiles and tuned audio values are retained after updating.
 - Optional experimental adaptive noise reduction in Audio noise reduction, together with High-pass.

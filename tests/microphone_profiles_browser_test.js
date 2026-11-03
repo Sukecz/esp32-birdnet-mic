@@ -36,7 +36,7 @@ const {chromium}=require('playwright-core');
     return route.fulfill({json:{ok:true}});
    }
    if(path==='/api/logs')return route.fulfill({body:'Example log'});
-   if(path==='/api/thermal')fixture.thermal.cpu_max_mhz=['s3','c5'].includes(board)?240:160;
+   if(path==='/api/thermal')fixture.thermal.cpu_max_mhz=board==='s31'?320:['s3','c5'].includes(board)?240:160;
    return route.fulfill({json:fixture[path.slice(5)]||{ok:true,available:false,latest:'1.30'}});
   });
   await page.goto('http://ui.test/');await page.waitForFunction(()=>document.querySelector('#in_gain').value==='1.50');
@@ -108,6 +108,20 @@ const {chromium}=require('playwright-core');
     await page.locator('#btn_mic_cancel').click();
    }
   }
+  board='s31';fixture.thermal.cpu_max_mhz=320;
+  await page.evaluate(()=>loadTherm());
+  assert.equal(await page.locator('#sel_cpu option[value="320"]').count(),1);
+  fixture.audio_status.mic_format=0;
+  fixture.audio_status.audio_codec='ES8311';
+  fixture.audio_status.builtin_mic=true;
+  fixture.audio_status.s3_board_supported=false;
+  await page.evaluate(()=>{for(const key of Object.keys(edits))delete edits[key];});
+  await page.evaluate(()=>loadAudio());
+  assert(await page.locator('#sel_mic_format').isDisabled());
+  assert.match(await page.locator('#mic_format_label').textContent(),/ES8311/);
+  assert(await page.locator('#in_gain').isEnabled());
+  assert(await page.locator('#in_shift').isEnabled());
+  assert.equal(await page.locator('#sel_mic_format option[value="2"]').evaluate(e=>e.disabled),true);
   assert.deepEqual(errors,[]);await page.close();console.log((packed?'Embedded':'Source')+' microphone UI: cancel/Escape, atomic apply/keep, failed saves, retained drafts, all board profiles, responsive dialog and conditional 240 MHz passed');
  }
  }finally{await browser.close();}

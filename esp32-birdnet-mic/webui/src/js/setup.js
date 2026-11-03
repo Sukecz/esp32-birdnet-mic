@@ -24,8 +24,11 @@ async function request(path,values){
 function message(id,text,error=false){node(id).textContent=text;node(id).classList.toggle('error',error);}
 function controls(){
  if(!state)return;
+ const codec=state.chip_family==='ESP32-S31';
  const atom=state.s3_board_supported&&node('variant').value==='2';
- for(const option of node('microphone').options)option.disabled=atom&&option.value!=='2';
+ for(const option of node('microphone').options)option.disabled=codec?option.value!=='0':atom&&option.value!=='2';
+ node('microphone').disabled=working||codec;
+ if(codec){node('microphone').value='0';node('microphone').options[0].textContent='Built-in microphone (ES8311)';}
  if(atom)node('microphone').value='2';
  const batterySupported=!atom&&(state.s3_board_supported||state.battery_supported!==false);
  node('battery_enabled').disabled=working||!batterySupported;
@@ -171,7 +174,7 @@ function batteryWiring(){
  const c5=family==='ESP32-C5',c3=family==='ESP32-C3';
  const board=state.s3_board_supported?(node('variant').value==='1'?'XIAO ESP32-S3 Sense':'XIAO ESP32-S3'):state.board_name;
  node('battery_board').textContent=board;
- node('battery_wiring').textContent=c5?'Ready to use: the built-in divider has two 100 kΩ resistors. Connect the battery to BAT+ and BAT−; no external divider is needed.':`Connect BAT+ through 100 kΩ to D0/A0 (GPIO${c3?2:state.s3_board_supported?1:0}), then another 100 kΩ from A0 to GND. This input is separate from the microphone and microSD wiring.`;
+ node('battery_wiring').textContent=family==='ESP32-S31'?'Use two 100 kΩ resistors: BAT+ → 100 kΩ → GPIO42 (J2 pin 20), then 100 kΩ from GPIO42 to GND. Connect BAT− to GND. Never connect BAT+ directly to GPIO42. This measures a 1S battery; it does not charge the battery.':c5?'Ready to use: the built-in divider has two 100 kΩ resistors. Connect the battery to BAT+ and BAT−; no external divider is needed.':`Connect BAT+ through 100 kΩ to D0/A0 (GPIO${c3?2:state.s3_board_supported?1:0}), then another 100 kΩ from A0 to GND. This input is separate from the microphone and microSD wiring.`;
  node('battery_diagram').hidden=c5;
  node('battery_dialog').showModal();
 }

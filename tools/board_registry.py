@@ -20,24 +20,26 @@ def boards():
             raise ValueError(f"Invalid RAM limits: {b['id']}")
         if 2 * b['ota_slot_bytes'] >= b['flash_bytes']:
             raise ValueError(f"OTA slots do not fit: {b['id']}")
-        if bool(b['psram_bytes']) != bool(b['psram_option']):
+        if bool(b['psram_bytes']) != bool(b['psram_option'] or b.get('fixed_psram')):
             raise ValueError(f"Invalid PSRAM configuration: {b['id']}")
     return result
 
 
 def target(board_id, no_psram=False):
     b = next(b for b in boards() if b['id'] == board_id)
-    if no_psram and not b['psram_bytes']:
+    if no_psram and (not b['psram_bytes'] or b.get('fixed_psram')):
         raise ValueError(f'{board_id} has no PSRAM variant')
     option = 'disabled' if no_psram else b['psram_option']
+    options = [b.get('default_options', '')] + ([f'PSRAM={option}'] if option else [])
+    suffix = ','.join(x for x in options if x)
     return {**b, 'key': board_id + ('-no-psram' if no_psram else ''),
-            'fqbn': b['fqbn'] + (f':PSRAM={option}' if option else ''),
+            'fqbn': b['fqbn'] + (':' + suffix if suffix else ''),
             'enabled_psram_bytes': 0 if no_psram else b['psram_bytes']}
 
 
 def matrix():
     return {'include': [target(b['id'], disabled) for b in boards()
-                        for disabled in ([False, True] if b['psram_bytes'] else [False])]}
+                        for disabled in ([False, True] if b['psram_bytes'] and not b.get('fixed_psram') else [False])]}
 
 
 def main():

@@ -95,6 +95,12 @@ const char* FW_BUILD_DATE_STR = __DATE__ " " __TIME__;
 #define XIAO_CHIP_FAMILY "ESP32-C6"
 #define XIAO_OTA_ARTIFACT "firmware-app-c6.bin"
 #define XIAO_HAS_RF_SWITCH 1
+#elif defined(CONFIG_IDF_TARGET_ESP32S31)
+#define XIAO_BOARD_ID "esp32-s31-function-coreboard-1"
+#define XIAO_BOARD_NAME "ESP32-S31-Function-CoreBoard-1"
+#define XIAO_CHIP_FAMILY "ESP32-S31"
+#define XIAO_OTA_ARTIFACT "firmware-app-s31.bin"
+#define XIAO_HAS_RF_SWITCH 0
 #else
 #define XIAO_BOARD_ID "esp32-generic"
 #define XIAO_BOARD_NAME "ESP32 generic"
@@ -161,9 +167,15 @@ bool s3BoardSelectionSupported() {
 #endif
 }
 bool builtinMicSelected() {
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+    return true;
+#endif
     return s3BoardSelectionSupported() && s3boards::builtin(s3BoardVariant) && micFormat == 2;
 }
 bool micBoardFormatAllowed(uint8_t format) {
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+    return format == 0;
+#endif
     return !s3BoardSelectionSupported() || s3BoardVariant != s3boards::AtomS3U || format == 2;
 }
 void updateS3BoardIdentity() {
@@ -181,6 +193,8 @@ bool getRecommendedMicSettings(uint8_t format, micprofiles::Settings& out) {
     constexpr auto board = micprofiles::C5;
 #elif defined(ARDUINO_XIAO_ESP32C6)
     constexpr auto board = micprofiles::C6;
+#elif defined(CONFIG_IDF_TARGET_ESP32S31)
+    constexpr auto board = micprofiles::S31;
 #else
     constexpr auto board = micprofiles::Unknown;
 #endif
@@ -191,7 +205,9 @@ bool getRecommendedMicSettings(uint8_t format, micprofiles::Settings& out) {
 }
 
 uint16_t maxSupportedCpuFrequencyMhz() {
-#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C5)
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+    return 320;
+#elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C5)
     return 240;
 #else
     return 160;
@@ -200,10 +216,14 @@ uint16_t maxSupportedCpuFrequencyMhz() {
 
 bool cpuFrequencySupported(uint32_t mhz) {
     return mhz == 40 || mhz == 80 || mhz == 160 ||
-        (mhz == 240 && maxSupportedCpuFrequencyMhz() >= 240);
+        (mhz == 240 && maxSupportedCpuFrequencyMhz() >= 240) ||
+        (mhz == 320 && maxSupportedCpuFrequencyMhz() >= 320);
 }
 
 const char* micFormatName(uint8_t format) {
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+    if (format == 0) return "ES8311/Philips";
+#endif
     if (format == MIC_FORMAT_PDM) return "PDM";
     return format == MIC_FORMAT_MSB ? "SPH0645/MSB" : "ICS43434/Philips";
 }
@@ -337,7 +357,7 @@ RTC_DATA_ATTR uint32_t rtcSleepCycleCount = 0;
 // -- Configurable thresholds
 uint32_t minAcceptableRate = 50;        // Minimum recent output rate for a warning
 uint32_t performanceCheckInterval = 15; // Check interval in minutes
-uint8_t cpuFrequencyMhz = 160;          // CPU frequency (default 160 MHz)
+uint16_t cpuFrequencyMhz = 160;          // CPU frequency (default 160 MHz)
 
 // Forward declaration (used by early wake-snapshot logger).
 void simplePrintln(String message);
@@ -1515,7 +1535,8 @@ bool applyMicProfileConfig(uint8_t newFormat, bool recommended) {
     micprofiles::Settings next;
     if (!getRecommendedMicSettings(newFormat, next) ||
         (newFormat == MIC_FORMAT_PDM && !pdmMicSupported())) return false;
-    const uint8_t oldFormat = micFormat, oldCpu = cpuFrequencyMhz;
+    const uint8_t oldFormat = micFormat;
+    const uint16_t oldCpu = cpuFrequencyMhz;
     const micprofiles::Settings old = {currentSampleRate, currentGainFactor, currentBufferSize,
         i2sShiftBits, highpassEnabled, highpassCutoffHz, cpuFrequencyMhz};
     const uint32_t oldMinRate = minAcceptableRate;
@@ -1528,7 +1549,7 @@ bool applyMicProfileConfig(uint8_t newFormat, bool recommended) {
     highpassEnabled = next.highpass;
     highpassCutoffHz = next.cutoff;
     if (autoThresholdEnabled) minAcceptableRate = computeRecommendedMinRate();
-    const uint8_t nextCpu = next.cpu ? next.cpu : oldCpu;
+    const uint16_t nextCpu = next.cpu ? next.cpu : oldCpu;
     const bool clockOk = nextCpu == oldCpu || setCpuFrequencyMhz(nextCpu);
     if (clockOk) cpuFrequencyMhz = nextCpu;
     if (clockOk && restartI2S()) return true;
@@ -1597,6 +1618,10 @@ bool applyS3BoardConfig(uint8_t variant) {
 // Capture and RTP work buffers are touched for every packet: keep them internal,
 // since with PSRAM in the heap plain malloc() prefers PSRAM above 4 KB.
 
+
+bool recordingModeSupported() {
+    return recordingpins::modeSupported(s3BoardVariant);
+}
 
 bool recordingHardwareSupported() {
     return recordingpins::resolve(s3BoardVariant).supported;
@@ -1736,7 +1761,7 @@ void setup() {
 
     wifiApLoad();
     devicesetup::begin(recording::mode());
-    recording::setRuntimeMode(devicesetup::defaultRecording() && recordingHardwareSupported());
+    recording::setRuntimeMode(devicesetup::defaultRecording() && recordingpins::modeSupported(s3BoardVariant));
     webui_logModeChanged(recording::mode());
     devicesetup::currentMode(recording::mode());
     simplePrintln("WiFi: non-blocking connection; automatic fallback available.");

@@ -1,5 +1,13 @@
 {
   "arduino_cli": "1.5.0",
-  "core": {"id": "esp32:esp32", "version": "3.3.12"},
-  "libraries": {"PubSubClient": "2.8"}
+  "core": {
+    "id": "esp32:esp32",
+    "version": "4.0.0-RC1"
+  },
+  "libraries": {
+    "PubSubClient": "2.8"
+  },
+  "additional_urls": [
+    "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json"
+  ]
 }

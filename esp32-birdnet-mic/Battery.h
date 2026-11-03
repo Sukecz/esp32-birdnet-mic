@@ -13,6 +13,11 @@ inline Pins pins(uint8_t variant = s3boards::External) {
     return {A0, -1, true};
 #elif defined(ARDUINO_XIAO_ESP32S3)
     return {A0, -1, variant == s3boards::External || variant == s3boards::Sense};
+#elif defined(CONFIG_IDF_TARGET_ESP32S31)
+    (void)variant;
+    // ADC1_CH0 on J2 pin 20; avoids the codec's ADC2/I2C/I2S pads.
+    // Requires an external 100k/100k divider, never direct BAT+.
+    return {42, -1, true};
 #else
     (void)variant;
     return {-1, -1, false};

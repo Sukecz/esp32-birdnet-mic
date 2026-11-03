@@ -13,7 +13,7 @@ function renderDeviceSetup(j){
  document.getElementById('device_wifi_status').textContent=apStatus;
  document.getElementById('direct_access_status').textContent=apStatus;
  syncInput(document.getElementById('recording_connection'),'recording_connection',s.connection);
- document.getElementById('recording_connection').disabled=j.recording?.supported===false||!!j.wifi_off_pending||!!j.wifi_suspended;
+ document.getElementById('recording_connection').disabled=(j.recording?.mode_supported??j.recording?.supported)===false||!!j.wifi_off_pending||!!j.wifi_suspended;
  updateRecordingConnection();
  document.getElementById('direct_access_name').textContent=s.ap_name;
  if(document.getElementById('networksec').open)loadDirectAccess();
@@ -21,7 +21,7 @@ function renderDeviceSetup(j){
  if(j.recording&&j.recording.mode==='streaming'&&!s.connected){
   const status=document.getElementById('device_mode_status');status.textContent='Streaming: Waiting for Wi-Fi';status.className='warn';
  }
- const choice=document.querySelector('#device_mode option[value=recording]');if(choice&&j.recording)choice.disabled=!j.recording.supported;
+ const choice=document.querySelector('#device_mode option[value=recording]');if(choice&&j.recording)choice.disabled=!(j.recording.mode_supported??j.recording.supported);
 }
 async function loadDirectAccess(){
  if(!deviceSetupState||directAccessLoaded||directAccessLoading)return;

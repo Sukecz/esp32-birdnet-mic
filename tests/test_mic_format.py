@@ -24,7 +24,7 @@ class MicFormatContractTest(unittest.TestCase):
     def test_setting_is_validated_and_persisted(self):
         self.assertIn('getUChar("micFormat", DEFAULT_MIC_FORMAT)', SKETCH)
         self.assertIn('putUChar("micFormat", micFormat)', SKETCH)
-        self.assertIn("if (micFormat > MIC_FORMAT_PDM", SKETCH)
+        self.assertIn("if (!micBoardFormatAllowed(micFormat) || micFormat > MIC_FORMAT_PDM", SKETCH)
         self.assertIn("if (newFormat > MIC_FORMAT_PDM", SKETCH)
         self.assertIn("micFormat = oldFormat;", SKETCH)
 

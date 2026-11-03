@@ -21,7 +21,8 @@ def read(url):
 def asset_names(version):
     names = ["manifest.json", "ota-version.txt", "bootloader.bin", "partitions.bin",
              "boot_app0.bin", "firmware.bin", "firmware-app.bin"]
-    for board in ("c3", "s3", "c5", "c6"):
+    release_boards = ("c3", "s3", "c5", "c6", "s31") if tuple(map(int, version.split("."))) >= (2, 6) else ("c3", "s3", "c5", "c6")
+    for board in release_boards:
         names.extend(f"{part}-{board}.bin" for part in
                      ("bootloader", "partitions", "boot_app0", "firmware", "firmware-app"))
         names.append(f"firmware-app-{board}-{version}.bin")
@@ -43,7 +44,7 @@ def verify(repo, version, base):
     public = {}
     for name in required:
         modern = "ota-bridge.json" in required and (name == "ota-version.txt" or
-                   re.fullmatch(r"firmware-app(?:-(?:c3|s3|c5|c6))?\.bin", name))
+                   re.fullmatch(r"firmware-app(?:-(?:c3|s3|c5|c6|s31))?\.bin", name))
         # The unsuffixed current C6 alias is verified via its board-specific
         # URL; the unsuffixed root URL belongs to the permanent legacy bridge.
         path = "updates/" + ("firmware-app-c6.bin" if name == "firmware-app.bin" else name) if modern else name
@@ -62,13 +63,15 @@ def verify(repo, version, base):
     if manifest["version"] != version:
         raise ValueError("Manifest advertises another version")
     expected_chips = {"ESP32-C3", "ESP32-S3", "ESP32-C5", "ESP32-C6"}
+    if tuple(map(int, version.split("."))) >= (2, 6):
+        expected_chips.add("ESP32-S31")
     if {b["chipFamily"] for b in manifest["builds"]} != expected_chips:
-        raise ValueError("Manifest must cover all four supported boards")
+        raise ValueError("Manifest must cover all boards supported by this release")
     for build in manifest["builds"]:
         for part in build["parts"]:
             if part["path"] not in public:
                 raise ValueError("Manifest references an unchecked asset")
-    for board in ("c3", "s3", "c5", "c6"):
+    for board in (("c3", "s3", "c5", "c6", "s31") if tuple(map(int, version.split("."))) >= (2, 6) else ("c3", "s3", "c5", "c6")):
         if public[f"firmware-app-{board}.bin"] != public[f"firmware-app-{board}-{version}.bin"]:
             raise ValueError("Stable/versioned mismatch: " + board)
     for part in ("bootloader", "partitions", "boot_app0", "firmware", "firmware-app"):

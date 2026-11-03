@@ -3,32 +3,95 @@
   "notes": "Capacities are physical bytes, not free heap. SRAM includes instruction/data memory. Runtime allocations still require device qualification. S3 Plus is not a supported target.",
   "boards": [
     {
-      "id": "c3", "name": "XIAO ESP32-C3", "chip": "ESP32-C3", "fqbn": "esp32:esp32:XIAO_ESP32C3",
-      "flash_bytes": 4194304, "sram_bytes": 409600, "psram_bytes": 0, "psram_option": null,
-      "ota_slot_bytes": 2031616, "lto": true, "partition_csv": "tools/partitions/birdnet_4mb.csv",
+      "id": "c3",
+      "name": "XIAO ESP32-C3",
+      "chip": "ESP32-C3",
+      "fqbn": "esp32:esp32:XIAO_ESP32C3",
+      "flash_bytes": 4194304,
+      "sram_bytes": 409600,
+      "psram_bytes": 0,
+      "psram_option": null,
+      "ota_slot_bytes": 2031616,
+      "lto": true,
+      "partition_csv": "tools/partitions/birdnet_4mb.csv",
       "static_data_limit_bytes": 327680,
-      "sources": ["https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/"]
+      "sources": [
+        "https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/"
+      ]
     },
     {
-      "id": "s3", "name": "XIAO ESP32-S3", "chip": "ESP32-S3", "fqbn": "esp32:esp32:XIAO_ESP32S3",
-      "flash_bytes": 8388608, "sram_bytes": 524288, "psram_bytes": 8388608, "psram_option": "opi",
-      "ota_slot_bytes": 3342336, "lto": false, "partition_csv": null,
+      "id": "s3",
+      "name": "XIAO ESP32-S3",
+      "chip": "ESP32-S3",
+      "fqbn": "esp32:esp32:XIAO_ESP32S3",
+      "flash_bytes": 8388608,
+      "sram_bytes": 524288,
+      "psram_bytes": 8388608,
+      "psram_option": "opi",
+      "ota_slot_bytes": 3342336,
+      "lto": false,
+      "partition_csv": null,
       "static_data_limit_bytes": 327680,
-      "sources": ["https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/", "https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf"]
+      "sources": [
+        "https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/",
+        "https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf"
+      ]
     },
     {
-      "id": "c5", "name": "XIAO ESP32-C5", "chip": "ESP32-C5", "fqbn": "esp32:esp32:XIAO_ESP32C5",
-      "flash_bytes": 8388608, "sram_bytes": 393216, "psram_bytes": 8388608, "psram_option": "enabled",
-      "ota_slot_bytes": 3342336, "lto": false, "partition_csv": null,
+      "id": "c5",
+      "name": "XIAO ESP32-C5",
+      "chip": "ESP32-C5",
+      "fqbn": "esp32:esp32:XIAO_ESP32C5",
+      "flash_bytes": 8388608,
+      "sram_bytes": 393216,
+      "psram_bytes": 8388608,
+      "psram_option": "enabled",
+      "ota_slot_bytes": 3342336,
+      "lto": false,
+      "partition_csv": null,
       "static_data_limit_bytes": 327680,
-      "sources": ["https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/", "https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/esp32-c5_datasheet_en.pdf"]
+      "sources": [
+        "https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/",
+        "https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/esp32-c5_datasheet_en.pdf"
+      ]
     },
     {
-      "id": "c6", "name": "XIAO ESP32-C6", "chip": "ESP32-C6", "fqbn": "esp32:esp32:XIAO_ESP32C6",
-      "flash_bytes": 4194304, "sram_bytes": 524288, "psram_bytes": 0, "psram_option": null,
-      "ota_slot_bytes": 2031616, "lto": true, "partition_csv": "tools/partitions/birdnet_4mb.csv",
+      "id": "c6",
+      "name": "XIAO ESP32-C6",
+      "chip": "ESP32-C6",
+      "fqbn": "esp32:esp32:XIAO_ESP32C6",
+      "flash_bytes": 4194304,
+      "sram_bytes": 524288,
+      "psram_bytes": 0,
+      "psram_option": null,
+      "ota_slot_bytes": 2031616,
+      "lto": true,
+      "partition_csv": "tools/partitions/birdnet_4mb.csv",
       "static_data_limit_bytes": 327680,
-      "sources": ["https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/"]
+      "sources": [
+        "https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/"
+      ]
+    },
+    {
+      "id": "s31",
+      "device_id": "esp32-s31-function-coreboard-1",
+      "name": "ESP32-S31-Function-CoreBoard-1",
+      "chip": "ESP32-S31",
+      "fqbn": "esp32:esp32:esp32s31",
+      "flash_bytes": 16777216,
+      "sram_bytes": 524288,
+      "psram_bytes": 16777216,
+      "psram_option": null,
+      "fixed_psram": true,
+      "default_options": "FlashSize=16M,PartitionScheme=default_8MB",
+      "ota_slot_bytes": 3342336,
+      "lto": false,
+      "partition_csv": null,
+      "static_data_limit_bytes": 327680,
+      "sources": [
+        "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s31/esp32-s31-function-coreboard-1/user_guide.html",
+        "https://www.espressif.com/en/products/socs/esp32-s31"
+      ]
     }
   ]
 }

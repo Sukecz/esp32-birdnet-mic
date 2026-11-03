@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
-  const boards = ['c3', 's3', 'c5', 'c6'];
+  const boards = ['c3', 's3', 'c5', 'c6', 's31'];
   const kinds = ['web_flash', 'ota', 'manual', 'github_app', 'github_full'];
   const labels = {web_flash:'USB web flasher', ota:'Device OTA', manual:'Direct download', github_app:'GitHub app-only', github_full:'GitHub full image'};
   const number = new Intl.NumberFormat('en');

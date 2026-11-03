@@ -20,9 +20,9 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 REPO = "Sukecz/esp32-birdnet-mic"
-BOARDS = ("c3", "s3", "c5", "c6")
+BOARDS = ("c3", "s3", "c5", "c6", "s31")
 KINDS = ("web_flash", "ota", "manual", "github_app", "github_full")
-FIRMWARE = re.compile(r"^firmware(?P<app>-app)?(?:-(?P<board>c3|s3|c5|c6))?(?:-(?P<version>\d+(?:\.\d+){1,2}|bridge))?\.bin$")
+FIRMWARE = re.compile(r"^firmware(?P<app>-app)?(?:-(?P<board>c3|s31|s3|c5|c6))?(?:-(?P<version>\d+(?:\.\d+){1,2}|bridge))?\.bin$")
 COMBINED = re.compile(r'^\S+ - \S+ \[([^]]+)\] "(\S+) (\S+) [^"]+" (\d+) (\d+) "([^"]*)" "([^"]*)"')
 AUTOMATION = re.compile(r"curl/|wget/|release-verifier|download-stats|python|bot\b|crawler|spider", re.I)
 

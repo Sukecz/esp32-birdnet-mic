@@ -15,7 +15,7 @@ and Home Assistant MQTT Discovery.
 
 - Current firmware: **v2.06** — Manual audio setup and optional experimental noise reduction.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
-- Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
+- Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**, **ESP32-S31-Function-CoreBoard-1**
 - Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
 - Legacy microphones: **ICS-43434/INMP441** in default Philips I2S mode
 - User-facing overview and wiring: `../README.md`
@@ -779,8 +779,10 @@ When changing the embedded Web UI, first regenerate its assets as described unde
 ### Arduino IDE
 
 1. Open `esp32-birdnet-mic/esp32-birdnet-mic.ino`.
-2. Install an ESP32 Arduino core with support for the selected XIAO target.
-3. Select the matching board: *XIAO_ESP32C3*, *XIAO_ESP32S3*, *XIAO_ESP32C5*, or *XIAO_ESP32C6*.
+2. Install the pinned ESP32 Arduino core **4.0.0-RC1** for every target.
+3. Select the matching board: *XIAO_ESP32C3*, *XIAO_ESP32S3*, *XIAO_ESP32C5*, *XIAO_ESP32C6*, or *ESP32S31 Dev Module*.
+   For S31, set **Flash Size → 16 MB** and **Partition Scheme → Default 8MB**;
+   OPI PSRAM is fixed by the variant. See [S31 integration](../docs/esp32-s31.md).
    For *XIAO_ESP32S3*, set **Tools → PSRAM → OPI PSRAM**.
    For *XIAO_ESP32C5*, also set **Tools → PSRAM → Enabled**. Without it the C5 still works,
    but with the adaptive internal-RAM audio buffer and listening queue (4 KB).
@@ -937,3 +939,9 @@ CPU frequencies such as 80 MHz. It never changes CPU frequency itself. If resour
 are insufficient, the UI reports the reason and audio passes without reduction.
 Details include a spectrum and measured processing cost; the estimated noise floor
 includes environmental sound and is not a calibrated microphone self-noise measurement.
+
+## ESP32-S31 candidate
+
+See [ESP32-S31-Function-CoreBoard-1 integration](../docs/esp32-s31.md) for the local 2.06
+candidate, onboard ES8311 microphone, common core migration and qualification
+limits. S31 images are not yet published.

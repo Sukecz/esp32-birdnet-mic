@@ -12,7 +12,7 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = '3.3.12'
+EXPECTED_VERSION = '4.0.0-RC1'
 EXPECTED_SOURCE_SHA256 = 'fda00b53f23d4d93ab63a506b3197f27e24278a3f0d5da9c7590fff5ec37aa05'
 
 
@@ -28,7 +28,7 @@ def function_span(source, signature):
 
 def patch_source(source):
     if hashlib.sha256(source.encode()).hexdigest() != EXPECTED_SOURCE_SHA256:
-        raise ValueError('Arduino SD source differs from reviewed ESP32 3.3.12; review the SPI compatibility patch before building')
+        raise ValueError('Arduino SD source differs from reviewed ESP32 4.0.0-RC1; review the SPI compatibility patch before building')
     start, end = function_span(source, 'bool sdWait(')
     ready = source[start:end]
     ready = ready.replace('char resp;', 'uint8_t resp;')
@@ -57,7 +57,7 @@ def prepare(source_dir, output_dir):
     original = (source_dir / 'src/sd_diskio.cpp').read_text()
     patched = patch_source(original)  # Validate before creating any output.
     props = (source_dir / 'library.properties').read_text()
-    if f'version={EXPECTED_VERSION}\n' not in props:
+    if 'version=4.0.0\n' not in props:
         raise ValueError('Unexpected Arduino SD library version')
     for source in source_dir.rglob('*'):
         if not source.is_file():

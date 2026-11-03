@@ -1,7 +1,7 @@
 # Development and validation
 
-The shared target registry is `boards.json`. It describes the four supported XIAO
-boards, not every board using the same ESP32 chip. S3 Plus is excluded. Capacities
+The shared target registry is `boards.json`. It describes four XIAO boards and ESP32-S31-Function-CoreBoard-1, not every
+board using the same ESP32 chip. S3 Plus is excluded. Capacities
 are bytes; manufacturer KB/MB capacities have been converted as binary memory
 capacities. The registry includes manufacturer references. Arduino configuration
 and static data limits correspond to the pinned core in `build-dependencies.json`.
@@ -14,6 +14,7 @@ Use [the source map](architecture.md) to locate a feature's current owner before
 | S3 | 512 KiB | 8 MiB, OPI | 8 MiB | 3,264 KiB |
 | C5 | 384 KiB | 8 MiB | 8 MiB | 3,264 KiB |
 | C6 | 512 KiB | none | 4 MiB | 1,984 KiB |
+| S31 CoreBoard-1 | 512 KiB | 16 MiB, fixed OPI | 16 MiB | 3,264 KiB |
 
 This table is explanatory; build tools consume the JSON registry. SRAM includes
 instruction and data memory. It is not the amount available to malloc. The static
@@ -63,7 +64,7 @@ of viewport/theme/source/embedded combinations; passing the suite does not mean
 every feature has complete visual coverage.
 
 Development builds produce `tmp/build/<target>/` and a memory report without
-updating release binaries. Both CI and local development compile the six target
+updating release binaries. Both CI and local development compile the seven target
 configurations from the registry. The compile helper retains LTO and the custom
 C3/C6 partition table. Cache identity includes the effective FQBN.
 
@@ -116,7 +117,7 @@ tools/package_firmware.sh --skip-build
 python3 tools/test.py release
 ```
 
-Promotion checks all four standard builds before copying exported files into the
+Promotion checks all five standard builds before copying exported files into the
 packaging layout, so packaging does not compile a second time. Commit the reviewed
 artifacts/validation record before publication. The local publication helper
 creates a snapshot using `tools/release_stage.py create`, then both GitHub upload
@@ -142,3 +143,9 @@ has no hardcoded version; the release badge reads the manifest. Public release
 verification checks the served landing-page copy as well as firmware payloads.
 Device configuration JavaScript now assembles from `webui/src/js/setup.js` and
 shares the draft engine in `settings/fields.js`; regenerate assets before testing.
+
+## ESP32-S31 candidate
+
+See [ESP32-S31-Function-CoreBoard-1 integration](esp32-s31.md) for the local 2.06
+candidate, onboard ES8311 microphone, common core migration and qualification
+limits. S31 images are not yet published.

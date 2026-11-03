@@ -143,6 +143,7 @@ namespace recording {
 namespace flashlayout {bool blocked=false;bool busy(){return blocked;}}
 namespace devicesetup {bool current=false;void currentMode(bool rec){current=rec;}}
 bool recordingHardwareSupported(){return supported;}
+bool recordingModeSupported(){return supported;}
 void cancelThermalResume(){}
 bool webui_logModeChanged(bool){return logOk;}
 void browserAudioStop(){}

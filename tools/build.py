@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Compile registry targets without modifying release/public firmware artifacts."""
+from arduino_environment import activate
+activate()
 import argparse
 import json
 import subprocess
@@ -21,7 +23,7 @@ def main():
     subprocess.run(['esp32-birdnet-mic/tools/gen_webui_gzip_header.sh', '--check'], cwd=ROOT, check=True)
     selected = [target(args.board, args.no_psram)] if args.board else [
         target(b['id'], disabled) for b in boards()
-        for disabled in ([False, True] if args.matrix and b['psram_bytes'] else [False])]
+        for disabled in ([False, True] if args.matrix and b['psram_bytes'] and not b.get('fixed_psram') else [False])]
     for b in selected:
         directory = ROOT / 'tmp' / 'build' / b['key']
         command = ['tools/compile_firmware.sh', '--fqbn', b['fqbn'], '--output-dir', str(directory)]

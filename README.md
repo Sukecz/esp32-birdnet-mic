@@ -37,7 +37,7 @@ measured ranking of every microphone. Existing I2S microphones remain supported.
 
 ## Supported boards
 
-Four firmware images cover the boards below. Sense and AtomS3U use the **S3 image**;
+Five firmware images cover the boards below (S31 is new in the local 2.06 candidate). Sense and AtomS3U use the **S3 image**;
 choose their board variant in **Device configuration** during setup.
 
 | Board | Firmware | Microphone | Streaming | Recording storage |
@@ -47,6 +47,7 @@ choose their board variant in **Device configuration** during setup.
 | **XIAO ESP32-S3 Sense** | `s3` | Built-in PDM on Sense expansion board; external I2S also possible | ✓* | Built-in microSD slot on Sense expansion board* |
 | **XIAO ESP32-C5** | `c5` | External I2S or PDM | ✓ | External SPI microSD module |
 | **XIAO ESP32-C6** | `c6` | External I2S or PDM | ✓ | External SPI microSD module |
+| **ESP32-S31-Function-CoreBoard-1** | `s31` | Built-in ES8311 codec microphone | ✓ | Not supported; Recording mode remains selectable |
 | **M5Stack AtomS3U** | `s3` | Built-in PDM | ✓ | Not supported |
 
 **External SD module:** [Adafruit microSD Card BFF for QT Py and XIAO (#5683)](https://www.adafruit.com/product/5683)
@@ -564,3 +565,9 @@ settings used for the packaged firmware.
 ## Credits and license
 
 Created by **@Sukecz**, with thanks to everyone helping improve BirdNETMic. Released under the [MIT License](LICENSE).
+
+## ESP32-S31 candidate
+
+See [ESP32-S31-Function-CoreBoard-1 integration](docs/esp32-s31.md) for the local 2.06
+candidate, onboard ES8311 microphone, common core migration and qualification
+limits. S31 images are not yet published.

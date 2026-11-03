@@ -15,9 +15,18 @@ class BoardBudgetTests(unittest.TestCase):
         return b, [(0, 0x10, 0x10000, slot, 'app0'),
                    (0, 0x11, 0x10000 + slot, slot, 'app1')], {'.dram0.data': 20000, '.dram0.bss': 60000, '.iram0.text': 100000}
 
+    def test_s31_uses_real_flash_and_fixed_psram_configuration(self):
+        b = target('s31')
+        self.assertEqual(b['flash_bytes'], 16 * 1024 * 1024)
+        self.assertEqual(b['enabled_psram_bytes'], 16 * 1024 * 1024)
+        self.assertIn('FlashSize=16M', b['fqbn'])
+        self.assertNotIn('PSRAM=', b['fqbn'])
+        with self.assertRaises(ValueError):
+            target('s31', True)
+
     def test_matrix_includes_psram_fallbacks(self):
         targets = matrix()['include']
-        self.assertEqual(len(targets), 6)
+        self.assertEqual(len(targets), 7)
         self.assertEqual(target('s3')['fqbn'].split('PSRAM=')[1], 'opi')
         self.assertEqual(target('c5', True)['enabled_psram_bytes'], 0)
 

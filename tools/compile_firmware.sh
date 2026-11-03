@@ -2,6 +2,11 @@
 # Apply LTO only to the two targets with tight default OTA slots.
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Keep this project's prerelease core isolated from other sketches.
+if [[ -d "$ROOT_DIR/tmp/arduino-data/packages/esp32/hardware/esp32" ]]; then
+  export ARDUINO_DIRECTORIES_DATA="${ARDUINO_DIRECTORIES_DATA:-$ROOT_DIR/tmp/arduino-data}"
+  export ARDUINO_DIRECTORIES_DOWNLOADS="${ARDUINO_DIRECTORIES_DOWNLOADS:-$ROOT_DIR/tmp/arduino-downloads}"
+fi
 fqbn=""
 args=("$@")
 for ((i=0; i<${#args[@]}; i++)); do
@@ -27,11 +32,23 @@ print(b['psram_option'] or '')
 print(b['ota_slot_bytes'])
 print('1' if b['lto'] else '0')
 print(b['partition_csv'] or '')
+print(b.get('default_options', '-'))
 PYREG
 )"
 mapfile -t registry <<<"$registry_values"
 if [[ -n "${registry[0]}" && "$fqbn" != *PSRAM=* ]]; then
   if [[ "$fqbn" == *:*:*:* ]]; then normalized="$fqbn,PSRAM=${registry[0]}"; else normalized="$fqbn:PSRAM=${registry[0]}"; fi
+  for ((i=0; i<${#args[@]}; i++)); do
+    case "${args[i]}" in
+      --fqbn|-b) args[i+1]="$normalized" ;;
+      --fqbn=*) args[i]="--fqbn=$normalized" ;;
+    esac
+  done
+  set -- "${args[@]}"
+  fqbn="$normalized"
+fi
+if [[ "${registry[4]}" != - && "$fqbn" != *FlashSize=* ]]; then
+  if [[ "$fqbn" == *:*:*:* ]]; then normalized="$fqbn,${registry[4]}"; else normalized="$fqbn:${registry[4]}"; fi
   for ((i=0; i<${#args[@]}; i++)); do
     case "${args[i]}" in
       --fqbn|-b) args[i+1]="$normalized" ;;
@@ -64,7 +81,7 @@ fi
 # override is only for explicit A/B work; normal builds generate a private copy
 # from the pinned core and never patch its installed files.
 case "$fqbn" in
-  esp32:esp32:XIAO_ESP32C3*|esp32:esp32:XIAO_ESP32S3*|esp32:esp32:XIAO_ESP32C5*|esp32:esp32:XIAO_ESP32C6*)
+  esp32:esp32:XIAO_ESP32C3*|esp32:esp32:XIAO_ESP32S3*|esp32:esp32:XIAO_ESP32C5*|esp32:esp32:XIAO_ESP32C6*|esp32:esp32:esp32s31*)
     sd_library="${BIRDNETMIC_SD_LIBRARY:-}"
     if [[ -z "$sd_library" ]]; then
       sd_library="$(python3 "$ROOT_DIR/tools/prepare_sd_library.py")"

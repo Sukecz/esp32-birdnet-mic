@@ -68,7 +68,7 @@ int main(int argc,char** argv){
 
 class BatteryTests(unittest.TestCase):
     def test_production_monitor_all_boards(self):
-        for board, adc in [('C3', 2), ('S3', 1), ('C5', 6), ('C6', 0)]:
+        for board, adc in [('C3', 2), ('S3', 1), ('C5', 6), ('C6', 0), ('S31', 42)]:
             with self.subTest(board=board), tempfile.TemporaryDirectory() as directory:
                 tmp = Path(directory)
                 (tmp / 'Arduino.h').write_text(ARDUINO)
@@ -76,7 +76,7 @@ class BatteryTests(unittest.TestCase):
                 (tmp / 'test.cpp').write_text(HARNESS)
                 subprocess.run(['g++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                                 '-fsanitize=undefined', '-fno-sanitize-recover=all',
-                                '-DARDUINO_XIAO_ESP32' + board, '-DTEST_ADC=' + str(adc),
+                                ('-DCONFIG_IDF_TARGET_ESP32S31' if board == 'S31' else '-DARDUINO_XIAO_ESP32' + board), '-DTEST_ADC=' + str(adc),
                                 '-DTEST_S3=' + str(int(board == 'S3')),
                                 '-I', str(tmp), '-I', str(ROOT / 'esp32-birdnet-mic'),
                                 str(tmp / 'test.cpp'), str(ROOT / 'esp32-birdnet-mic/Battery.cpp'),

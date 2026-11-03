@@ -363,6 +363,9 @@ static void httpAudioStatus() {
     json += "\"mic_format\":" + String(micFormat) + ",";
     json += "\"s3_board_supported\":" + String(s3BoardSelectionSupported() ? "true" : "false") + ",";
     json += "\"s3_board\":" + String(s3BoardVariant) + ",";
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+    json += "\"audio_codec\":\"ES8311\",";
+#endif
     json += "\"builtin_mic\":" + String(builtinMicSelected() ? "true" : "false") + ",";
     json += "\"pdm_supported\":" + String(pdmMicSupported() ? "true" : "false") + ",";
     json += "\"pdm_decoder\":\"" + String(pdmDecoderName()) + "\",";
@@ -999,7 +1002,7 @@ static void httpSet() {
         handled = true;
         uint32_t v;
         if (argToUInt(v) && cpuFrequencySupported(v) && setCpuFrequencyMhz(v)) {
-            cpuFrequencyMhz = (uint8_t)v;
+            cpuFrequencyMhz = (uint16_t)v;
             saveAudioSettings();
             applied = true;
         }
@@ -1326,7 +1329,7 @@ static void httpRecordingConnection() {
     if (!requireMutationAuth()) return;
     const String connection = web.arg("connection");
     if ((connection != "home" && connection != "direct") ||
-        (connection == "direct" && !recordingHardwareSupported())) {
+        (connection == "direct" && !recordingpins::modeSupported(s3BoardVariant))) {
         web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid recording connection.\"}"); return;
     }
     if (recording::resumePending() || devicesetup::connectionBusy() ||
@@ -1351,7 +1354,7 @@ static void httpSetupSave() {
         (mode != "streaming" && mode != "recording") ||
         (connection != "home" && connection != "direct") ||
         (s3BoardSelectionSupported() && (!parseUInt32Strict(web.arg("variant"), variant) || variant > 2)) ||
-        ((mode == "recording" || connection == "direct") && !recordingpins::resolve(variant).supported) ||
+        ((mode == "recording" || connection == "direct") && !recordingpins::modeSupported(variant)) ||
         (batteryChoice.length() && batteryChoice != "0" && batteryChoice != "1") ||
         (batteryChoice == "1" && !battery::pins(variant).supported) ||
         (antenna::supported() && web.arg("antenna") != "external" && web.arg("antenna") != "internal")) {

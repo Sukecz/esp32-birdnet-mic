@@ -13,7 +13,7 @@ from check_device_status import validate
 
 
 def sample(status, audio, board, microphone_absent=False, sd_absent=False):
-    errors = validate(status, audio, datetime.now(timezone.utc), 'xiao-esp32' + board['id'])['errors']
+    errors = validate(status, audio, datetime.now(timezone.utc), board.get('device_id', 'xiao-esp32' + board['id']))['errors']
     if microphone_absent:
         errors = [e for e in errors if e != 'Microphone capture is not healthy']
     if sd_absent and status.get('recording', {}).get('card_ready'):
@@ -79,7 +79,7 @@ def main():
         with urllib.request.urlopen(args.url.rstrip('/') + path, timeout=8) as response:
             return json.load(response)
     status = get('/api/status')
-    if status.get('board_id') != 'xiao-esp32' + args.board:
+    if status.get('board_id') != board.get('device_id', 'xiao-esp32' + args.board):
         raise SystemExit('Unexpected board identity')
     stop = threading.Event()
     listen = {'bytes': 0, 'error': None}
