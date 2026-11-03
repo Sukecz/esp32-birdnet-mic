@@ -12,7 +12,6 @@
 #endif
 
 namespace recordingpins {
-inline bool senseSdPresent = false;
 struct Pins {
     int cs, sck, miso, mosi;
     bool supported, builtin;
@@ -25,7 +24,7 @@ inline Pins resolve(uint8_t variant = s3boards::External) {
 #if defined(ARDUINO_XIAO_ESP32S3)
     if (!s3boards::valid(variant) || variant == s3boards::AtomS3U)
         return {-1, -1, -1, -1, false, false};
-    if (variant == s3boards::Sense || senseSdPresent) return {21, 7, 8, 9, true, true};
+    if (variant == s3boards::Sense) return {21, 7, 8, 9, true, true};
 #else
     (void)variant; // A saved S3 profile cannot reroute another chip's GPIOs.
 #endif

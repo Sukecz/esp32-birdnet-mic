@@ -1379,7 +1379,6 @@ void resetToDefaultSettings() {
     i2sShiftBits = 12;  // compile-time default respected
     micFormat = DEFAULT_MIC_FORMAT;
     s3BoardVariant = s3boards::External;
-    micAutoDetect = s3BoardAutoDetect = true;
     updateS3BoardIdentity();
 
     autoRecoveryEnabled = true;
@@ -1552,17 +1551,12 @@ bool applyMicProfileConfig(uint8_t newFormat, bool recommended) {
 // Stop capture before changing GPIO routing, even when the format stays PDM.
 // Persist only after success in the authenticated API handler.
 s3boards::Config getS3BoardConfig() {
-    return {s3BoardVariant, micFormat, currentSampleRate, minAcceptableRate, highpassCutoffHz,
-        s3BoardAutoDetect, micAutoDetect, recordingpins::senseSdPresent, currentGainFactor, cpuFrequencyMhz};
+    return {s3BoardVariant, micFormat, currentSampleRate, minAcceptableRate, highpassCutoffHz};
 }
 
 bool restoreS3BoardConfig(const s3boards::Config& saved) {
     if (recording::busy()) return false;
     stopAudioProducer();
-    s3BoardAutoDetect=saved.autoBoard; micAutoDetect=saved.autoMic;
-    recordingpins::senseSdPresent=saved.sense; currentGainFactor=saved.gain;
-    if(cpuFrequencyMhz!=saved.cpu) setCpuFrequencyMhz(saved.cpu);
-    cpuFrequencyMhz=saved.cpu;
     s3BoardVariant = saved.variant;
     micFormat = saved.format;
     currentSampleRate = saved.rate;
@@ -1581,7 +1575,7 @@ bool applyS3BoardConfig(uint8_t variant) {
     const uint16_t oldCutoff = highpassCutoffHz;
     stopAudioProducer();
     s3BoardVariant = variant;
-    if (variant == s3boards::AtomS3U || (s3boards::builtin(variant) && micAutoDetect)) {
+    if (s3boards::builtin(variant)) {
         micFormat = MIC_FORMAT_PDM;
         currentSampleRate = PDM_SAMPLE_RATE;
     }
@@ -1728,7 +1722,6 @@ void setup() {
 
     // Load settings from flash
     loadAudioSettings();
-    detectMicrophoneAtBoot();
     noiseshadow::begin();
     recording::begin();
     fieldpower::begin();
@@ -1779,7 +1772,6 @@ void setup() {
         rtspServer.stop();
         simplePrintln("Startup: stream schedule outside window, RTSP server paused.");
     }
-    confirmMicrophoneBoot();
     // Web UI
     webui_begin();
     browserAudioBegin();

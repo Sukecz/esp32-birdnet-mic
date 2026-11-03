@@ -346,7 +346,6 @@ bool auth=true,boardSupport=true,antennaSupport=false,saveOk=true,applyOk=true;
 int mutations=0,reboots=0,modeChanges=0,lastCode=200;
 uint8_t s3BoardVariant=0,micFormat=0,cpuFrequencyMhz=160;
 float currentGainFactor=1.5f;
-bool s3BoardAutoDetect=false,micAutoDetect=true;
 bool setCpuFrequencyMhz(uint8_t){return true;}
 uint32_t currentSampleRate=32000,minAcceptableRate=30;
 uint16_t highpassCutoffHz=12000;
@@ -363,7 +362,7 @@ namespace recording {
  bool resumePending(){return pending;}bool mode(){return active;}bool busy(){return working;}
  bool checkCard(bool supported,uint8_t){++checks;working=true;return supported;}
 }
-namespace recordingpins {inline bool senseSdPresent=false;struct Pins{bool supported;};Pins resolve(uint8_t v){return {v!=2};}}
+namespace recordingpins {struct Pins{bool supported;};Pins resolve(uint8_t v){return {v!=2};}}
 namespace devicesetup {
  bool done=false,busy=false;String ssid="",state="idle";bool startup=false,direct=false;
  bool complete(){return done;}bool connectionBusy(){return busy;}
@@ -387,8 +386,7 @@ void simplePrintln(const char*){}
     's3boards::Config getS3BoardConfig()',
     'bool restoreS3BoardConfig(const s3boards::Config& saved)',
     'bool applyS3BoardConfig(uint8_t variant)')) + r'''
-bool applyBoardChoice(uint8_t v){return applyS3BoardConfig(v);}
-bool applyMicrophoneChoice(uint8_t){return true;}
+bool applyMicFormatConfig(uint8_t f){micFormat=f;if(f==2)currentSampleRate=48000;return true;}
 void saveAudioSettings(){++mutations;operations.push_back("board");persistedBoard=getS3BoardConfig();}
 bool setDeviceMode(bool rec){++modeChanges;recording::active=rec;return true;}
 void scheduleReboot(bool,uint32_t){++reboots;}
@@ -399,6 +397,9 @@ int main(){
  for(const char* bad:{"-1","3","256","1x","","999999999999999999999"}){
   web.args["variant"]=bad;httpSetupSave();assert(!mutations&&lastCode==400);
  }
+ web.args["variant"]="1";
+ for(const char* bad:{"3","-1","256","1x",""}){web.args["microphone"]=bad;httpSetupSave();assert(!mutations&&lastCode==400);}
+ web.args.erase("microphone");
  web.args["variant"]="2";httpSetupSave();assert(!mutations); // Atom has no SD interface.
  web.args["variant"]="1";recording::pending=true;httpSetupSave();assert(!mutations);recording::pending=false;
  for(const char* bad:{"2","-1","true","on"}){web.args["battery"]=bad;httpSetupSave();assert(!mutations&&lastCode==400);}
@@ -424,6 +425,13 @@ int main(){
  int before=mutations;web.args["connection"]="direct";httpSetupSave();assert(mutations==before);
  boardSupport=false;antennaSupport=true;web.args["connection"]="home";web.args["antenna"]="bad";
  httpSetupSave();assert(mutations==before);web.args["antenna"]="external";httpSetupSave();assert(!reboots);
+ // Changing only the microphone must be rolled back when the setup commit fails.
+ boardSupport=true;web.args["variant"]="1";web.args["microphone"]="1";
+ const auto previous=getS3BoardConfig();saveOk=false;httpSetupSave();
+ assert(micFormat==previous.format&&currentSampleRate==previous.rate&&s3BoardVariant==previous.variant);
+ saveOk=true;httpSetupSave();assert(micFormat==1);
+ web.args["variant"]="2";web.args["microphone"]="0";web.args["battery"]="0";
+ before=mutations;httpSetupSave();assert(mutations==before&&lastCode==400);
  before=mutations;web.args["ssid"]=String(std::string("ab\0cd",5));httpSetupConnect();assert(mutations==before);
 }
 '''

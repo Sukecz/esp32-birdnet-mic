@@ -261,13 +261,12 @@
 <td class='k'><label for='sel_s3_board'>S3 board</label></td>
 <td class='v'><div class='field'>
 <select id='sel_s3_board'>
-<option value='3'>Auto-detect board</option>
 <option value='0'>XIAO ESP32-S3</option>
 <option value='1'>XIAO ESP32-S3 Sense</option>
 <option value='2'>M5Stack AtomS3U</option>
 </select>
 <button id='btn_s3_board_apply' onclick='saveS3Board()'>Apply board</button>
-</div><p id='board_detection_note' class='section-note' role='status'></p><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
+</div><div class='hint'>Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -277,17 +276,16 @@
 <td class='v'>
 <div class='field'>
 <select id='sel_mic_format'>
-<option value='3'>Auto-detect microphone</option>
 <option value='0'>ICS-43434 / INMP441 (Philips I2S)</option>
 <option value='1'>Adafruit SPH0645 (MSB / left-justified)</option>
 <option value='2' id='opt_pdm'>PDM microphone (IM73D122)</option>
 </select>
 <button id='btn_mic_apply' onclick="chooseMicSettings()">Apply</button><button id='btn_mic_recommended' onclick="chooseMicSettings(true)">Recommended settings</button><small id='mic_format_label' class='muted'></small>
-</div><p id='mic_detection_note' class='section-note' role='status'></p>
+</div>
 </td>
 </tr>
 <tr id='row_mic_format_hint' style='display:none'>
-<td colspan='2'><div class='hint'>Existing installations retain their saved format. New installations start in Auto. Auto identifies the signal format, not the exact microphone model, and retains your tuned gain. Software PDM requires at least 160 MHz; Auto may select this frequency when needed. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
+<td colspan='2'><div class='hint'>Choose the format for your microphone. Software PDM requires at least 160 MHz. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -358,28 +356,6 @@
 <div class='hint' id='txt_hpf_cut_hint'>High-pass cutoff in Hz.</div>
 </td>
 </tr>
-<tr><td class='k'><label for='noise_mode'>Noise reduction</label><span class='badge'>Experimental</span></td>
-<td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
-<div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
-<p id='noise_status' class='section-note' role='status'>Off</p>
-<p id='noise_busy_hint' class='section-note' hidden>Stop and save your recording before changing this.</p></td></tr>
-<tr><td colspan='2'><p id='noise_help' class='section-note'>Reduces steady hiss and hum. High-pass can stay on.</p>
-<p class='section-note'>Changes live audio and SD recordings. May hide faint bird calls. BirdNET accuracy still needs testing.</p>
-<p class='section-note'>Uses more power. For C6, use 160 MHz.</p>
-<details id='noise_details' class='advanced'><summary>Options and help</summary>
-<table><tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12'>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select></div></td></tr>
-<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
-<p class='section-note'>Start with Normal. Strong removes more noise but may change quiet calls. Slow is safer for long bird songs.</p>
-<p class='section-note'>Use Save noise reduction above to save the switch and these options.</p>
-<p class='section-note'>The filter learns the background again after a restart or audio change. It takes a short time to start reducing noise.</p>
-<p class='section-note'>High-pass cuts low rumble. Noise reduction handles steady hiss and hum. You can use both.</p>
-<p class='section-note'>On C6, select 160 MHz in Thermal management. If audio cuts out, turn noise reduction off. It never changes CPU speed for you.</p>
-<p class='section-note'>If the filter cannot start, audio stays unchanged. After fixing the problem, turn it Off and On to retry.</p>
-<details id='noise_diagnostics' class='advanced'><summary>Sound graph and diagnostics</summary>
-<p id='noise_metrics' class='section-note'></p>
-<canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
-<p class='section-note'>Blue: current sound · Orange: estimated background · Green: learned noise. Frequency in kHz; level in dBFS per band. The graph includes sounds around the microphone.</p>
-</details></details></td></tr>
 </table><details id='audioadvanced' class='advanced'><summary>Advanced audio settings</summary><table>
 <tr>
 <td class='k'>
@@ -453,7 +429,31 @@
 <td colspan='2'>
 <div class='hint' id='txt_shift_hint'>Digital right shift before gain scaling.</div>
 </td>
-</tr></table><div id='adv' class='muted'></div></details></details>
+</tr></table><div id='adv' class='muted'></div></details>
+<table id='noise_settings'>
+<tr><td class='k'><label for='noise_mode'>Noise reduction</label><span class='badge'>Experimental</span></td>
+<td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
+<div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
+<p id='noise_status' class='section-note' role='status'>Off</p>
+<p id='noise_busy_hint' class='section-note' hidden>Stop and save your recording before changing this.</p></td></tr>
+<tr><td colspan='2'><p id='noise_help' class='section-note'>Reduces steady hiss and hum. High-pass can stay on.</p>
+<p class='section-note'>Changes live audio and SD recordings. May hide faint bird calls. BirdNET accuracy still needs testing.</p>
+<p class='section-note'>Uses more power. For C6, use 160 MHz.</p>
+<details id='noise_details' class='advanced'><summary>Options and help</summary>
+<table><tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12'>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select></div></td></tr>
+<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
+<p class='section-note'>Start with Normal. Strong removes more noise but may change quiet calls. Slow is safer for long bird songs.</p>
+<p class='section-note'>Use Save noise reduction above to save the switch and these options.</p>
+<p class='section-note'>The filter learns the background again after a restart or audio change. It takes a short time to start reducing noise.</p>
+<p class='section-note'>High-pass cuts low rumble. Noise reduction handles steady hiss and hum. You can use both.</p>
+<p class='section-note'>On C6, select 160 MHz in Thermal &amp; performance. If audio cuts out, turn noise reduction off. It never changes CPU speed for you.</p>
+<p class='section-note'>If the filter cannot start, audio stays unchanged. After fixing the problem, turn it Off and On to retry.</p>
+<details id='noise_diagnostics' class='advanced'><summary>Sound graph and diagnostics</summary>
+<p id='noise_metrics' class='section-note'></p>
+<canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
+<p class='section-note'>Blue: current sound · Orange: estimated background · Green: learned noise. Frequency in kHz; level in dBFS per band. The graph includes sounds around the microphone.</p>
+</details></details></td></tr>
+</table></details>
 <details id='timesec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_time'>Time &amp; Schedule</span><span class='section-note'>Clock, time zone and streaming window</span></span><span class='chev' aria-hidden='true'></span></summary>
 <table>
@@ -782,7 +782,37 @@ BAT− / GND ──────┘</pre>
 
 </details>
 <details id='thermalsec' class='card'>
-<summary class='sum'><span><span class='section-title' id='t_thermal'>Thermal management</span><span class='section-note'>Temperature, protection, cooling and CPU frequency</span></span><span class='chev' aria-hidden='true'></span></summary>
+<summary class='sum'><span><span class='section-title' id='t_thermal'>Thermal &amp; performance</span><span class='section-note'>CPU speed and overheat protection</span></span><span class='chev' aria-hidden='true'></span></summary>
+<h3>CPU performance</h3>
+<table>
+<tr>
+<td class='k' id='t_therm_cpu'>Current CPU speed</td>
+<td class='v' id='therm_cpu'>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_cpu'>CPU speed</span>
+<button type='button' class='help' id='h_cpu' aria-label='Help' aria-expanded='false' title="Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_cpu'>
+<option>80</option>
+
+<option selected>160</option>
+</select>
+<span class='unit'>MHz</span>
+<button id='btn_cpu_set' onclick="setv('cpu_freq',sel_cpu.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_cpu_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_cpu_hint'>Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.</div>
+</td>
+</tr></table>
+<h3>Temperature protection</h3>
 <table>
 <tr>
 <td class='k' id='t_therm_status'>Status</td>
@@ -876,33 +906,7 @@ BAT− / GND ──────┘</pre>
 </div>
 </td>
 </tr>
-<tr>
-<td class='k' id='t_therm_cpu'>CPU Clock</td>
-<td class='v' id='therm_cpu'>
-</td>
-</tr>
-<tr>
-<td class='k'>
-<span id='t_cpu'>CPU Frequency</span>
-<button type='button' class='help' id='h_cpu' aria-label='Help' aria-expanded='false' title="Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.">?</button>
-</td>
-<td class='v'>
-<div class='field'>
-<select id='sel_cpu'>
-<option>80</option>
-
-<option selected>160</option>
-</select>
-<span class='unit'>MHz</span>
-<button id='btn_cpu_set' onclick="setv('cpu_freq',sel_cpu.value)">Apply</button>
-</div>
-</td>
-</tr>
-<tr id='row_cpu_hint' style='display:none'>
-<td colspan='2'>
-<div class='hint' id='txt_cpu_hint'>Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.</div>
-</td>
-</tr></table>
+</table>
 </details>
 <details id='recoverysec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_perf'>Recovery &amp; Maintenance</span><span class='section-note'>Microphone recovery, stream warnings and scheduled reboot</span></span><span class='chev' aria-hidden='true'></span></summary>
@@ -1261,7 +1265,7 @@ async function saveWifiAp() {
   finally { wifiApBusy = false; renderWifiAp(); }
 }
 </script>
-<script>const T={en:{"title":"BirdNETMic","ip":"IP Address","wifi_rssi":"WiFi RSSI","uptime":"Uptime","local_time":"Device Local Time","utc_time":"UTC Time","time_unavailable":"Unavailable (unsynced)","net_reset_confirm":"Reset Wi-Fi credentials and reboot? You will need to reconfigure via the setup AP.","max_clients":"Max RTSP clients","audio":"Audio","gain":"Microphone gain","thermal":"Thermal management","restarting":"Restarting device...","resetting":"Restoring defaults and rebooting...","set":"Apply","adv_buf512":"If stream drops, try an RTP packet size of 512 or higher.","adv_buf1024":"For weak Wi-Fi on TCP clients, 1024 samples per RTP packet can help; use 512 for BirdNET-Pi UDP if 1024 stutters.","adv_gain":"High Gain can clip. Lower Gain or increase I2S Shift.","help_gain":"Amplifies audio after I2S shift; too high will clip.","therm_status_latched":"Cooling required - restart manually","therm_status_latched_persist":"Protection latched - acknowledge to re-enable","therm_last_none":"No shutdown recorded yet.","therm_last_fmt":"Stopped at %TEMP% C (limit %LIMIT% C) after %TIME% uptime (%AGO%).","therm_last_sensor_fault":"Thermal protection disabled: temperature sensor unavailable.","therm_time_unknown":"unknown time","therm_time_ago_unknown":"just now","clip_ok":"OK","clip_warn":"High level - close to clipping.","clip_bad":"CLIPPING! Reduce Gain or raise I2S Shift.","profile_ultra":"Ultra-Low Latency (Higher CPU, may have dropouts)","profile_balanced":"Balanced (Moderate CPU, good stability)","profile_stable":"Stable Streaming (Lower CPU, excellent stability)","profile_high":"High Stability (Lowest CPU, max stability)","yes":"YES","no":"NO"}};let lang='en'; let theme='auto';try{theme=localStorage.getItem('theme')||'auto';}catch(_){} const $=id=>document.getElementById(id);function applyTheme(){ const root=document.documentElement; if(theme==='light'||theme==='dark'){ root.setAttribute('data-theme', theme); } else { root.removeAttribute('data-theme'); theme='auto'; } const ts=$('themeSel'); if(ts) ts.value=theme; }const SCHED_TXT={en:{"state_off":"Schedule disabled","state_wait":"Time unavailable - fail-open (stream allowed)","state_allow":"Inside allowed window","state_block":"Outside allowed window","state_invalid":"Invalid window (start = stop) - stream blocked","ds_disabled":"Deep sleep disabled","ds_need_sched":"Enable Stream Schedule first","ds_invalid":"Invalid schedule window (start = stop) - deep sleep blocked","ds_need_time":"Time not synchronized - deep sleep blocked","ds_inside":"Inside stream window - device stays awake","ds_grace":"Startup grace period - waiting","ds_wait":"Outside window detected - waiting for stability","ds_client":"Client connected - sleep postponed","ds_streaming":"Streaming active - sleep postponed","ds_reboot":"Reboot pending - sleep postponed","ds_soon":"Next stream window is soon - no sleep","ds_ready":"Outside window - deep sleep armed"}};function minsToHHMM(mins){ mins=parseInt(mins,10); if(isNaN(mins)) mins=0; mins=((mins%1440)+1440)%1440; const h=Math.floor(mins/60), m=mins%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }function hhmmToMins(v){ if(!v || v.indexOf(':')<0) return null; const p=v.split(':'); if(p.length!==2) return null; const h=parseInt(p[0],10), m=parseInt(p[1],10); if(isNaN(h)||isNaN(m)||h<0||h>23||m<0||m>59) return null; return h*60+m; }function fmtSecondsBrief(sec){ sec=parseInt(sec,10); if(!isFinite(sec)||sec<0) sec=0; const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60; if(h>0) return h+'h '+m+'m'; if(m>0) return m+'m '+s+'s'; return s+'s'; }
+<script>const T={en:{"title":"BirdNETMic","ip":"IP Address","wifi_rssi":"WiFi RSSI","uptime":"Uptime","local_time":"Device Local Time","utc_time":"UTC Time","time_unavailable":"Unavailable (unsynced)","net_reset_confirm":"Reset Wi-Fi credentials and reboot? You will need to reconfigure via the setup AP.","max_clients":"Max RTSP clients","audio":"Audio","gain":"Microphone gain","thermal":"Thermal & performance","restarting":"Restarting device...","resetting":"Restoring defaults and rebooting...","set":"Apply","adv_buf512":"If stream drops, try an RTP packet size of 512 or higher.","adv_buf1024":"For weak Wi-Fi on TCP clients, 1024 samples per RTP packet can help; use 512 for BirdNET-Pi UDP if 1024 stutters.","adv_gain":"High Gain can clip. Lower Gain or increase I2S Shift.","help_gain":"Amplifies audio after I2S shift; too high will clip.","therm_status_latched":"Cooling required - restart manually","therm_status_latched_persist":"Protection latched - acknowledge to re-enable","therm_last_none":"No shutdown recorded yet.","therm_last_fmt":"Stopped at %TEMP% C (limit %LIMIT% C) after %TIME% uptime (%AGO%).","therm_last_sensor_fault":"Thermal protection disabled: temperature sensor unavailable.","therm_time_unknown":"unknown time","therm_time_ago_unknown":"just now","clip_ok":"OK","clip_warn":"High level - close to clipping.","clip_bad":"CLIPPING! Reduce Gain or raise I2S Shift.","profile_ultra":"Ultra-Low Latency (Higher CPU, may have dropouts)","profile_balanced":"Balanced (Moderate CPU, good stability)","profile_stable":"Stable Streaming (Lower CPU, excellent stability)","profile_high":"High Stability (Lowest CPU, max stability)","yes":"YES","no":"NO"}};let lang='en'; let theme='auto';try{theme=localStorage.getItem('theme')||'auto';}catch(_){} const $=id=>document.getElementById(id);function applyTheme(){ const root=document.documentElement; if(theme==='light'||theme==='dark'){ root.setAttribute('data-theme', theme); } else { root.removeAttribute('data-theme'); theme='auto'; } const ts=$('themeSel'); if(ts) ts.value=theme; }const SCHED_TXT={en:{"state_off":"Schedule disabled","state_wait":"Time unavailable - fail-open (stream allowed)","state_allow":"Inside allowed window","state_block":"Outside allowed window","state_invalid":"Invalid window (start = stop) - stream blocked","ds_disabled":"Deep sleep disabled","ds_need_sched":"Enable Stream Schedule first","ds_invalid":"Invalid schedule window (start = stop) - deep sleep blocked","ds_need_time":"Time not synchronized - deep sleep blocked","ds_inside":"Inside stream window - device stays awake","ds_grace":"Startup grace period - waiting","ds_wait":"Outside window detected - waiting for stability","ds_client":"Client connected - sleep postponed","ds_streaming":"Streaming active - sleep postponed","ds_reboot":"Reboot pending - sleep postponed","ds_soon":"Next stream window is soon - no sleep","ds_ready":"Outside window - deep sleep armed"}};function minsToHHMM(mins){ mins=parseInt(mins,10); if(isNaN(mins)) mins=0; mins=((mins%1440)+1440)%1440; const h=Math.floor(mins/60), m=mins%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }function hhmmToMins(v){ if(!v || v.indexOf(':')<0) return null; const p=v.split(':'); if(p.length!==2) return null; const h=parseInt(p[0],10), m=parseInt(p[1],10); if(isNaN(h)||isNaN(m)||h<0||h>23||m<0||m>59) return null; return h*60+m; }function fmtSecondsBrief(sec){ sec=parseInt(sec,10); if(!isFinite(sec)||sec<0) sec=0; const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60; if(h>0) return h+'h '+m+'m'; if(m>0) return m+'m '+s+'s'; return s+'s'; }
 
 function deepSleepStatusHTML(code,nextSec,L){ let cls='muted', txt=L.ds_disabled||'Deep sleep disabled'; if(code==='schedule_disabled'){ cls='bad'; txt=L.ds_need_sched; } else if(code==='schedule_invalid'){ cls='bad'; txt=L.ds_invalid; } else if(code==='time_invalid'){ cls='warn'; txt=L.ds_need_time; } else if(code==='inside_window'){ cls='ok'; txt=L.ds_inside; } else if(code==='grace_boot'){ cls='muted'; txt=L.ds_grace; } else if(code==='outside_stabilizing'){ cls='muted'; txt=L.ds_wait; } else if(code==='client_connected'){ cls='warn'; txt=L.ds_client; } else if(code==='streaming_active'){ cls='warn'; txt=L.ds_streaming; } else if(code==='reboot_pending'){ cls='warn'; txt=L.ds_reboot; } else if(code==='next_window_soon'){ cls='muted'; txt=L.ds_soon; } else if(code==='ready'){ cls='warn'; txt=L.ds_ready; } if(nextSec>0){ txt += ' ('+fmtSecondsBrief(nextSec)+')'; } return '<span class='+cls+'>'+txt+'</span>'; }function profileText(buf){const L=T[lang]; buf=parseInt(buf,10)||0; if(buf<=256) return L.profile_ultra; if(buf<=512) return L.profile_balanced; if(buf<=1024) return L.profile_stable; return L.profile_high;}function fmtBool(b){const L=T[lang]; return b?`<span class=ok>${L.yes||'YES'}</span>`:`<span class=bad>${L.no||'NO'}</span>`}function fmtSrv(b){return b?'<span class=ok>ENABLED</span>':'<span class=bad>DISABLED</span>'}function showOverlay(msg){ $('ovr_msg').textContent=msg; $('ovr').style.display='flex'; }function rebootSequence(kind){ const L=T[lang]; const msg=(kind==='factory_reset')?L.resetting:L.restarting; showOverlay(msg); function tick(){ fetch('/api/status',{cache:'no-store'}).then(r=>{ if(r.ok){ location.reload(); } else { setTimeout(tick,2000); } }).catch(()=>setTimeout(tick,2000)); } setTimeout(tick,4000); }function mutationFetch(url,body){return fetch(url,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-ESP32MIC-CSRF':'1'},body:body||'',signal:AbortSignal.timeout(10000)})}function act(a){
  const section=a.startsWith('mqtt')?'mqttsec':a==='time_sync'?'timesec':a.startsWith('server')?'streamssec':a.includes('wifi')||a==='network_reset'?'networksec':'recoverysec';
@@ -1509,13 +1513,12 @@ const micProfileKeys=['mic_format','rate','gain','buffer','shift','hp_enable','h
 async function chooseMicSettings(force=false){
  if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
  const format=Number($('sel_mic_format').value),label=$('sel_mic_format').selectedOptions[0]?.textContent||'';
- if(format===3){if(!differsFromSaved('mic_format'))return;await saveValues('/api/settings/microphone',{format:3,settings:'keep'},['mic_format'],'audiosec','Auto microphone selection saved. Check the detection result and signal level.');return;}
  micDialogLoading=true;
  try{
   const [p,a,t]=await Promise.all([fetchJSON('/api/microphone_profile?format='+format),fetchJSON('/api/audio_status'),fetchJSON('/api/thermal')]);
   if(!p.ok||p.mic_format!==format)throw new Error('profile');
   if(Number($('sel_mic_format').value)!==format||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
-  if(!force&&a.mic_format===format&&!a.detection?.mic_auto){feedback('audiosec','This microphone is already selected. Use Recommended settings to review its defaults.');return;}
+  if(!force&&a.mic_format===format){feedback('audiosec','This microphone is already selected. Use Recommended settings to review its defaults.');return;}
   const rows=$('mic_dialog_rows');rows.replaceChildren();
   const add=(label,old,value)=>{const tr=document.createElement('tr');for(const text of [label,old,value]){const td=document.createElement('td');td.textContent=String(text);tr.append(td);}rows.append(tr);};
   add('Sample rate',a.sample_rate+' Hz',p.sample_rate+' Hz');
@@ -1544,25 +1547,11 @@ async function saveMicSettings(mode){
  finally{if(cpuChange){sectionBusy.delete('thermalsec');updateDiscard($('thermalsec'));}}
 }
 $('mic_dialog').addEventListener('close',()=>{micDialogState=null;});
-// Render confirmed runtime values, never the unsaved selection in a form.
-// Shared by Audio and Device configuration; keep signal format distinct from model.
-function detectionDisplay(state){
- const d=state.detection||{},board=Number(state.s3_board??0),format=Number(state.mic_format??0);
- const boardName=d.board_name||state.board_name||['XIAO ESP32-S3','XIAO ESP32-S3 Sense','M5Stack AtomS3U'][board]||'Unknown board';
- const formatName=['Philips I2S','SPH0645 (MSB I2S)','PDM'][format]||'Unknown format';
- const boardConfirmed=d.board_auto&&Number.isInteger(d.detected_board)&&d.detected_board===board;
- const micConfirmed=d.mic_auto&&Number.isInteger(d.detected_format)&&d.detected_format===format;
- return {
-  board:boardConfirmed?`Detected: ${boardName}.`:d.board_auto?`Using: ${boardName}. Automatic identification not confirmed; previous configuration kept.`:`Using: ${boardName} (manual selection).`,
-  microphone:micConfirmed?`Detected: ${formatName}.`:d.mic_auto?`No microphone confirmed. Keeping: ${formatName}.`:`Using: ${formatName} (manual selection).`
- };
-}
-
 function renderMicFormat(j){
   const row=document.getElementById('row_s3_board');
   if(row){
     row.style.display=j.s3_board_supported===true?'':'none';
-    syncInput(document.getElementById('sel_s3_board'),'s3_board',String(j.detection?.board_auto?3:(j.s3_board??0)));
+    syncInput(document.getElementById('sel_s3_board'),'s3_board',String(j.s3_board??0));
   }
   const locked=j.s3_board_supported===true&&Number(j.s3_board)===2;
   const apply=document.getElementById('btn_mic_apply');
@@ -1570,11 +1559,7 @@ function renderMicFormat(j){
 
   const select=document.getElementById('sel_mic_format');
   const now=Date.now();
-  if(select){select.disabled=false;for(const option of select.options||[])if(Number(option.value)<2)option.disabled=locked;syncInput(select,'mic_format',String(j.detection?.mic_auto?3:j.mic_format));}
-  const current=detectionDisplay(j);
-  if($('board_detection_note'))$('board_detection_note').textContent=current.board;
-  $('mic_detection_note').textContent=current.microphone;
-  $('btn_mic_recommended').disabled=select?.value==='3';
+  if(select){select.disabled=false;for(const option of select.options||[])if(Number(option.value)<2)option.disabled=locked;syncInput(select,'mic_format',String(j.mic_format));}
   if(select){toggleDirty(select,'mic_format');document.getElementById('mic_format_label').textContent=select.selectedOptions[0]?.textContent||'';}
   const option=document.getElementById('opt_pdm');
   if(option){
@@ -1804,9 +1789,6 @@ async function saveAntenna(){
 </script>
 <script>
 let deviceSetupState=null,directAccessLoaded=false,directAccessLoading=false;
-document.getElementById('audiosec').addEventListener('toggle',function(){
- if(this.open)document.getElementById('audioadvanced').open=true;
-});
 document.getElementById('networksec').addEventListener('toggle',function(){
  if(this.open)loadDirectAccess();
 });

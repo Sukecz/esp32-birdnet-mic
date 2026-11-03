@@ -2,15 +2,10 @@ const $=id=>document.getElementById(id);
 const locks={},edits={},dirtyEls={},confirmedValues={},editVersions={},savingKeys=new Set(),pendingSyncKeys=new Set();
 function updateDiscard(){const b=$('discard_choices');if(b)b.hidden=!Object.keys(edits).length;}
 /* @include "settings/fields.js" */
-/* @include "detection-display.js" */
 const setupChoiceFields=['variant','microphone','mode','connection','antenna','battery_enabled'];
 function syncSetupChoices(s){
- const values={variant:String(s.detection?.board_auto?3:s.s3_board),microphone:String(s.detection?.mic_auto?3:(s.mic_format??0)),mode:s.default_mode,connection:s.connection,antenna:s.antenna,battery_enabled:!!s.battery_enabled};
+ const values={variant:String(s.s3_board),microphone:String(s.mic_format??0),mode:s.default_mode,connection:s.connection,antenna:s.antenna,battery_enabled:!!s.battery_enabled};
  for(const id of setupChoiceFields)syncInput($(id),id,values[id]);
- const current=detectionDisplay(s);
- $('board_detection_note').hidden=!s.s3_board_supported;
- $('board_detection_note').textContent=current.board;
- $('detection_note').textContent=current.microphone;
 }
 'use strict';
 const node=id=>document.getElementById(id);
@@ -29,7 +24,9 @@ async function request(path,values){
 function message(id,text,error=false){node(id).textContent=text;node(id).classList.toggle('error',error);}
 function controls(){
  if(!state)return;
- const atom=state.s3_board_supported&&(node('variant').value==='2'||node('variant').value==='3'&&state.s3_board===2);
+ const atom=state.s3_board_supported&&node('variant').value==='2';
+ for(const option of node('microphone').options)option.disabled=atom&&option.value!=='2';
+ if(atom)node('microphone').value='2';
  const batterySupported=!atom&&(state.s3_board_supported||state.battery_supported!==false);
  node('battery_enabled').disabled=working||!batterySupported;
  if(!batterySupported)node('battery_enabled').checked=false;
@@ -72,8 +69,8 @@ async function poll(){
    node('board_name').textContent=next.board_name;
    node('variant_field').hidden=!next.s3_board_supported;
    node('board_name').hidden=next.s3_board_supported;
-   node('variant').value=String(next.detection?.board_auto?3:next.s3_board);
-   node('microphone').value=String(next.detection?.mic_auto?3:(next.mic_format??0));
+   node('variant').value=String(next.s3_board);
+   node('microphone').value=String(next.mic_format??0);
    node('antenna_field').hidden=!next.antenna_supported;
    node('antenna').value=next.antenna;
    node('battery_enabled').checked=!!next.battery_enabled;
@@ -180,6 +177,7 @@ function batteryWiring(){
 node('battery_help').onclick=batteryWiring;
 node('battery_close').onclick=()=>node('battery_dialog').close();
 node('battery_enabled').onchange=()=>{if(node('battery_enabled').checked)batteryWiring();};
+node('variant').addEventListener('change',()=>{if(['1','2'].includes(node('variant').value)){node('microphone').value='2';reconcileEdit('microphone');}});
 for(const id of ['variant','antenna','mode','connection'])node(id).addEventListener('change',controls);
 for(const id of ['ssid','password'])node(id).addEventListener('input',()=>{networkEdited=true;controls();});
 node('show_password').onclick=()=>{const show=node('password').type==='password';node('password').type=show?'text':'password';node('show_password').textContent=show?'Hide':'Show';node('show_password').setAttribute('aria-pressed',String(show));};

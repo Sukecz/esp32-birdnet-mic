@@ -1,8 +1,5 @@
 
 let deviceSetupState=null,directAccessLoaded=false,directAccessLoading=false;
-document.getElementById('audiosec').addEventListener('toggle',function(){
- if(this.open)document.getElementById('audioadvanced').open=true;
-});
 document.getElementById('networksec').addEventListener('toggle',function(){
  if(this.open)loadDirectAccess();
 });

@@ -31,7 +31,7 @@ const {chromium}=require('playwright-core');
   await page.goto('http://ui.test/');await page.waitForFunction(()=>document.querySelector('#in_gain').value==='1.50');
   assert.match(await page.locator('#profile').textContent(),/Balanced/);
   assert.equal(await page.locator('#s1_stream').textContent(),'YES');
-  await page.evaluate(()=>openSection('audiosec'));
+  await page.evaluate(()=>{openSection('audiosec');document.getElementById('audioadvanced').open=true;});
   // Returning to the saved value clears markers, the discard button and unload warning.
   let initialWrites=writes.length;
   const dirty=async id=>page.locator('#'+id).evaluate(e=>e.classList.contains('dirty'));
@@ -65,7 +65,7 @@ const {chromium}=require('playwright-core');
   assert.equal(writes.length,initialWrites);
   assert.equal(await page.evaluate(()=>Object.keys(edits).length),0);
   await page.evaluate(()=>refreshAll());assert.equal(await page.evaluate(()=>Object.keys(edits).length),0);
-  await page.evaluate(()=>openSection('audiosec'));
+  await page.evaluate(()=>{openSection('audiosec');document.getElementById('audioadvanced').open=true;});
   await page.locator('#in_gain').fill('2.75');
   await page.evaluate(async()=>{const now=Date.now;Date.now=()=>now()+120000;try{await refreshAll();}finally{Date.now=now;}});
   assert.equal(await page.locator('#in_gain').inputValue(),'2.75');

@@ -1,6 +1,6 @@
 # BirdNETMic Web Flasher — ESP32 Microphone USB Installation and OTA Updates
 
-> **Firmware 2.06:** Automatic audio setup and optional experimental noise reduction. Streaming and standalone Recording. See the [main guide](../README.md).
+> **Firmware 2.06:** Optional experimental noise reduction. Streaming and standalone Recording. See the [main guide](../README.md).
 
 
 Firmware artifacts: **v2.06**. See [validation and hardware limits](../release-notes/2.06-validation.md).

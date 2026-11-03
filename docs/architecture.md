@@ -42,10 +42,9 @@ to their component. `StreamTypes.h` replaces duplicated cross-module layouts;
 Legacy hardware fragment fixtures follow actual owner files through explicit
 compatibility views; new policy tests include production modules directly.
 
-Automatic board/microphone choices are persisted separately from effective GPIO
-and format values (`MicrophoneDetection.h`, capture's bounded hardware probes).
-No failed probe can force a saved board identity. Device setup rolls back board,
-format, CPU, gain, rate and both Auto preferences together on failure.
+Board and microphone profiles are selected manually. Stored concrete board and
+format values retain their existing NVS/API contract; no hardware probing occurs
+at boot. Device setup rolls back board, format, rate and cutoff on failure.
 
 `NoiseShadow.cpp` owns the optional adaptive filter's lifecycle and saved settings;
 `NoiseSignature.h` is the contributor-derived pure DSP engine. Capture exclusively

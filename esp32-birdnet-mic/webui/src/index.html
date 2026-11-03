@@ -191,13 +191,12 @@
 <td class='k'><label for='sel_s3_board'>S3 board</label></td>
 <td class='v'><div class='field'>
 <select id='sel_s3_board'>
-<option value='3'>Auto-detect board</option>
 <option value='0'>XIAO ESP32-S3</option>
 <option value='1'>XIAO ESP32-S3 Sense</option>
 <option value='2'>M5Stack AtomS3U</option>
 </select>
 <button id='btn_s3_board_apply' onclick='saveS3Board()'>Apply board</button>
-</div><p id='board_detection_note' class='section-note' role='status'></p><div class='hint'>Auto checks supported S3 boards at startup and keeps the previous configuration if uncertain. Manual selection remains available. Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
+</div><div class='hint'>Sense: Experimental — needs more testing. It uses its built-in microSD slot; AtomS3U has a built-in PDM microphone and no supported SD slot.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -207,17 +206,16 @@
 <td class='v'>
 <div class='field'>
 <select id='sel_mic_format'>
-<option value='3'>Auto-detect microphone</option>
 <option value='0'>ICS-43434 / INMP441 (Philips I2S)</option>
 <option value='1'>Adafruit SPH0645 (MSB / left-justified)</option>
 <option value='2' id='opt_pdm'>PDM microphone (IM73D122)</option>
 </select>
 <button id='btn_mic_apply' onclick="chooseMicSettings()">Apply</button><button id='btn_mic_recommended' onclick="chooseMicSettings(true)">Recommended settings</button><small id='mic_format_label' class='muted'></small>
-</div><p id='mic_detection_note' class='section-note' role='status'></p>
+</div>
 </td>
 </tr>
 <tr id='row_mic_format_hint' style='display:none'>
-<td colspan='2'><div class='hint'>Existing installations retain their saved format. New installations start in Auto. Auto identifies the signal format, not the exact microphone model, and retains your tuned gain. Software PDM requires at least 160 MHz; Auto may select this frequency when needed. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
+<td colspan='2'><div class='hint'>Choose the format for your microphone. Software PDM requires at least 160 MHz. Selecting the wrong I2S alignment cannot damage the microphone, but produces bad audio. With the default board option, PDM requires PDM hardware and different wiring: CLK to D3, DATA to D2, SEL to GND; leave D1 (WS) and D7 (MCLK) disconnected. PDM uses 48 kHz and ignores I2S Shift. Switch off power before changing wires.</div></td>
 </tr>
 <tr>
 <td class='k'>
@@ -288,28 +286,6 @@
 <div class='hint' id='txt_hpf_cut_hint'>High-pass cutoff in Hz.</div>
 </td>
 </tr>
-<tr><td class='k'><label for='noise_mode'>Noise reduction</label><span class='badge'>Experimental</span></td>
-<td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
-<div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
-<p id='noise_status' class='section-note' role='status'>Off</p>
-<p id='noise_busy_hint' class='section-note' hidden>Stop and save your recording before changing this.</p></td></tr>
-<tr><td colspan='2'><p id='noise_help' class='section-note'>Reduces steady hiss and hum. High-pass can stay on.</p>
-<p class='section-note'>Changes live audio and SD recordings. May hide faint bird calls. BirdNET accuracy still needs testing.</p>
-<p class='section-note'>Uses more power. For C6, use 160 MHz.</p>
-<details id='noise_details' class='advanced'><summary>Options and help</summary>
-<table><tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12'>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select></div></td></tr>
-<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
-<p class='section-note'>Start with Normal. Strong removes more noise but may change quiet calls. Slow is safer for long bird songs.</p>
-<p class='section-note'>Use Save noise reduction above to save the switch and these options.</p>
-<p class='section-note'>The filter learns the background again after a restart or audio change. It takes a short time to start reducing noise.</p>
-<p class='section-note'>High-pass cuts low rumble. Noise reduction handles steady hiss and hum. You can use both.</p>
-<p class='section-note'>On C6, select 160 MHz in Thermal management. If audio cuts out, turn noise reduction off. It never changes CPU speed for you.</p>
-<p class='section-note'>If the filter cannot start, audio stays unchanged. After fixing the problem, turn it Off and On to retry.</p>
-<details id='noise_diagnostics' class='advanced'><summary>Sound graph and diagnostics</summary>
-<p id='noise_metrics' class='section-note'></p>
-<canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
-<p class='section-note'>Blue: current sound · Orange: estimated background · Green: learned noise. Frequency in kHz; level in dBFS per band. The graph includes sounds around the microphone.</p>
-</details></details></td></tr>
 </table><details id='audioadvanced' class='advanced'><summary>Advanced audio settings</summary><table>
 <tr>
 <td class='k'>
@@ -383,7 +359,31 @@
 <td colspan='2'>
 <div class='hint' id='txt_shift_hint'>Digital right shift before gain scaling.</div>
 </td>
-</tr></table><div id='adv' class='muted'></div></details></details>
+</tr></table><div id='adv' class='muted'></div></details>
+<table id='noise_settings'>
+<tr><td class='k'><label for='noise_mode'>Noise reduction</label><span class='badge'>Experimental</span></td>
+<td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
+<div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
+<p id='noise_status' class='section-note' role='status'>Off</p>
+<p id='noise_busy_hint' class='section-note' hidden>Stop and save your recording before changing this.</p></td></tr>
+<tr><td colspan='2'><p id='noise_help' class='section-note'>Reduces steady hiss and hum. High-pass can stay on.</p>
+<p class='section-note'>Changes live audio and SD recordings. May hide faint bird calls. BirdNET accuracy still needs testing.</p>
+<p class='section-note'>Uses more power. For C6, use 160 MHz.</p>
+<details id='noise_details' class='advanced'><summary>Options and help</summary>
+<table><tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12'>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select></div></td></tr>
+<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
+<p class='section-note'>Start with Normal. Strong removes more noise but may change quiet calls. Slow is safer for long bird songs.</p>
+<p class='section-note'>Use Save noise reduction above to save the switch and these options.</p>
+<p class='section-note'>The filter learns the background again after a restart or audio change. It takes a short time to start reducing noise.</p>
+<p class='section-note'>High-pass cuts low rumble. Noise reduction handles steady hiss and hum. You can use both.</p>
+<p class='section-note'>On C6, select 160 MHz in Thermal &amp; performance. If audio cuts out, turn noise reduction off. It never changes CPU speed for you.</p>
+<p class='section-note'>If the filter cannot start, audio stays unchanged. After fixing the problem, turn it Off and On to retry.</p>
+<details id='noise_diagnostics' class='advanced'><summary>Sound graph and diagnostics</summary>
+<p id='noise_metrics' class='section-note'></p>
+<canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
+<p class='section-note'>Blue: current sound · Orange: estimated background · Green: learned noise. Frequency in kHz; level in dBFS per band. The graph includes sounds around the microphone.</p>
+</details></details></td></tr>
+</table></details>
 <details id='timesec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_time'>Time &amp; Schedule</span><span class='section-note'>Clock, time zone and streaming window</span></span><span class='chev' aria-hidden='true'></span></summary>
 <table>
@@ -712,7 +712,37 @@ BAT− / GND ──────┘</pre>
 
 </details>
 <details id='thermalsec' class='card'>
-<summary class='sum'><span><span class='section-title' id='t_thermal'>Thermal management</span><span class='section-note'>Temperature, protection, cooling and CPU frequency</span></span><span class='chev' aria-hidden='true'></span></summary>
+<summary class='sum'><span><span class='section-title' id='t_thermal'>Thermal &amp; performance</span><span class='section-note'>CPU speed and overheat protection</span></span><span class='chev' aria-hidden='true'></span></summary>
+<h3>CPU performance</h3>
+<table>
+<tr>
+<td class='k' id='t_therm_cpu'>Current CPU speed</td>
+<td class='v' id='therm_cpu'>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_cpu'>CPU speed</span>
+<button type='button' class='help' id='h_cpu' aria-label='Help' aria-expanded='false' title="Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_cpu'>
+<option>80</option>
+
+<option selected>160</option>
+</select>
+<span class='unit'>MHz</span>
+<button id='btn_cpu_set' onclick="setv('cpu_freq',sel_cpu.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_cpu_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_cpu_hint'>Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.</div>
+</td>
+</tr></table>
+<h3>Temperature protection</h3>
 <table>
 <tr>
 <td class='k' id='t_therm_status'>Status</td>
@@ -806,33 +836,7 @@ BAT− / GND ──────┘</pre>
 </div>
 </td>
 </tr>
-<tr>
-<td class='k' id='t_therm_cpu'>CPU Clock</td>
-<td class='v' id='therm_cpu'>
-</td>
-</tr>
-<tr>
-<td class='k'>
-<span id='t_cpu'>CPU Frequency</span>
-<button type='button' class='help' id='h_cpu' aria-label='Help' aria-expanded='false' title="Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.">?</button>
-</td>
-<td class='v'>
-<div class='field'>
-<select id='sel_cpu'>
-<option>80</option>
-
-<option selected>160</option>
-</select>
-<span class='unit'>MHz</span>
-<button id='btn_cpu_set' onclick="setv('cpu_freq',sel_cpu.value)">Apply</button>
-</div>
-</td>
-</tr>
-<tr id='row_cpu_hint' style='display:none'>
-<td colspan='2'>
-<div class='hint' id='txt_cpu_hint'>Higher MHz gives more CPU headroom but can run hotter. 240 MHz is available on S3/C5.</div>
-</td>
-</tr></table>
+</table>
 </details>
 <details id='recoverysec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_perf'>Recovery &amp; Maintenance</span><span class='section-note'>Microphone recovery, stream warnings and scheduled reboot</span></span><span class='chev' aria-hidden='true'></span></summary>

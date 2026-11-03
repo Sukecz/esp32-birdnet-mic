@@ -3,11 +3,10 @@ const {chromium}=require('playwright-core');
 const assets=require('./ui_assets');
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
- fs.mkdirSync('tmp/qualification/auto-ui',{recursive:true});
+ fs.mkdirSync('tmp/qualification/manual-ui',{recursive:true});fs.mkdirSync('tmp/qualification/2.06-manual-ui',{recursive:true});
  const results=[];
  try{for(const packed of [false,true])for(const width of [320,390,1280])for(const theme of ['light','dark']){
   const fixture=JSON.parse(fs.readFileSync('tests/fixtures/ui-state.json'));
-  fixture.audio_status.detection={mic_auto:false,board_auto:false,note:'Manual board and microphone settings retained.'};
   fixture.audio_status.s3_board_supported=true;fixture.audio_status.s3_board=0;
   fixture.audio_status.noise={mode:0,floor_db:12,adapt_s:15,active:false,learn_pct:0,cpu_pct:0,cpu_peak_pct:0,est_reduction_db:0};
   const writes=[],errors=[];let fail=false,graphReads=0;
@@ -20,28 +19,29 @@ const assets=require('./ui_assets');
     const v=Object.fromEntries(new URLSearchParams(route.request().postData()));writes.push({path,v});
     if(fail)return route.fulfill({status:500,json:{ok:false,error:'test failure'}});
     if(path==='/api/noise/set')Object.assign(fixture.audio_status.noise,{mode:Number(v.mode),floor_db:Number(v.floor),adapt_s:Number(v.adapt)});
-    if(path==='/api/settings/s3_board')fixture.audio_status.detection.board_auto=v.variant==='3';
-    if(path==='/api/settings/microphone')fixture.audio_status.detection.mic_auto=v.format==='3';
+    if(path==='/api/settings/s3_board')fixture.audio_status.s3_board=Number(v.variant);
+    if(path==='/api/settings/microphone')fixture.audio_status.mic_format=Number(v.format);
     return route.fulfill({json:{ok:true}});
    }
+   if(path==='/api/microphone_profile')return route.fulfill({json:{ok:true,mic_format:Number(new URL(route.request().url()).searchParams.get('format')),sample_rate:48000,gain:1.5,buffer_size:512,i2s_shift:12,hp_enable:true,hp_cutoff_hz:500,cpu_mhz:0,board:'XIAO ESP32-S3 Sense'}});
    if(path==='/api/noise'){graphReads++;return route.fulfill({json:fixture.audio_status.noise});}
    if(path==='/api/logs')return route.fulfill({body:'test'});
    return route.fulfill({json:fixture[path.slice(5)]||{ok:true,available:false}});
   });
   await page.goto('http://auto.test/');await page.waitForFunction(()=>document.getElementById('in_gain').value==='1.50');
   await page.selectOption('#themeSel',theme);await page.evaluate(()=>openSection('audiosec'));
-  assert.match(await page.locator('#board_detection_note').textContent(),/Using: XIAO ESP32-S3 .*manual/);
-  assert.match(await page.locator('#mic_detection_note').textContent(),/Using: Philips I2S .*manual/);
   const placement=await page.locator('#noise_save').evaluate(button=>{
    const select=document.getElementById('noise_mode'),cell=button.closest('td');
    const b=button.getBoundingClientRect(),s=select.getBoundingClientRect();
    return {sameCell:cell===select.closest('td'),below:b.top>=s.bottom,within:b.right<=cell.getBoundingClientRect().right};
   });assert(placement.sameCell&&placement.below&&placement.within,'Save is below On/Off in the same cell');
   assert(await page.locator('#noise_details').evaluate(e=>!e.open));
+  assert(await page.locator('#audioadvanced').evaluate(e=>!e.open&&!!(e.compareDocumentPosition(document.getElementById('noise_mode'))&Node.DOCUMENT_POSITION_FOLLOWING)));
+  for(const id of ['sel_s3_board','sel_mic_format'])assert.deepEqual(await page.locator('#'+id+' option').evaluateAll(es=>es.map(e=>e.value)),['0','1','2']);
   assert(await page.locator('#noise_busy_hint').isHidden());
   assert.match(await page.locator('#noise_help').textContent(),/High-pass can stay on/);
   const dirty=async id=>page.locator('#'+id).evaluate(e=>e.classList.contains('dirty'));
-  for(const [id,changed,original] of [['sel_s3_board','3','0'],['sel_mic_format','3','0'],['noise_mode','1','0']]){
+  for(const [id,changed,original] of [['sel_s3_board','1','0'],['sel_mic_format','1','0'],['noise_mode','1','0']]){
    await page.selectOption('#'+id,changed);assert(await dirty(id));
    await page.evaluate(()=>refreshAll());assert.equal(await page.inputValue('#'+id),changed);
    await page.selectOption('#'+id,original);assert(!await dirty(id));
@@ -49,9 +49,9 @@ const assets=require('./ui_assets');
   assert.equal(writes.length,0);
   if(packed){
    const row=page.locator('#noise_mode').locator('xpath=ancestor::tr[1]');await row.scrollIntoViewIfNeeded();
-   await row.screenshot({path:`tmp/qualification/2.06-noise-ui/control-${width}-${theme}.png`});
+   await row.screenshot({path:`tmp/qualification/2.06-manual-ui/control-${width}-${theme}.png`});
    const clip=await row.evaluate(el=>{const a=el.getBoundingClientRect(),b=el.nextElementSibling.getBoundingClientRect();return {x:a.x,y:a.y,width:a.width,height:b.bottom-a.top};});
-   await page.screenshot({clip,path:`tmp/qualification/2.06-noise-ui/preview-${width}-${theme}.png`});
+   await page.screenshot({clip,path:`tmp/qualification/2.06-manual-ui/preview-${width}-${theme}.png`});
   }
   await page.locator('#noise_details').evaluate(e=>e.open=true);
   const reads=graphReads;await page.evaluate(()=>updateNoiseSpectrum());assert.equal(graphReads,reads,'Closed diagnostics does not poll spectra');
@@ -81,31 +81,26 @@ const assets=require('./ui_assets');
   await page.selectOption('#noise_adapt','60');await page.locator('#audiosec>.discard').click();
   assert.equal(await page.inputValue('#noise_adapt'),'15');assert(!await dirty('noise_adapt'));
   // Saved board and mic choices are independent, and saving one preserves other drafts.
-  await page.selectOption('#sel_mic_format','3');await page.selectOption('#sel_s3_board','3');
+  await page.selectOption('#sel_mic_format','1');await page.selectOption('#sel_s3_board','1');
   await page.click('#btn_s3_board_apply');await page.waitForFunction(()=>!sectionBusy.has('audiosec'));
   assert(await dirty('sel_mic_format'));assert(!await dirty('sel_s3_board'));
-  await page.click('#btn_mic_apply');await page.waitForFunction(()=>!sectionBusy.has('audiosec'));
+  await page.click('#btn_mic_apply');await page.locator('#mic_dialog').waitFor();await page.click('#btn_mic_keep');await page.waitForFunction(()=>!sectionBusy.has('audiosec'));
   assert(!await dirty('sel_mic_format'));
-  assert.match(await page.locator('#board_detection_note').textContent(),/Using: XIAO ESP32-S3.*not confirmed/);
-  assert.match(await page.locator('#mic_detection_note').textContent(),/No microphone confirmed.*Keeping: Philips I2S/);
-  fixture.audio_status.detection.detected_board=0;fixture.audio_status.detection.detected_format=0;
-  await page.evaluate(()=>refreshAll());
-  assert.equal(await page.locator('#board_detection_note').textContent(),'Detected: XIAO ESP32-S3.');
-  assert.equal(await page.locator('#mic_detection_note').textContent(),'Detected: Philips I2S.');
-  await page.selectOption('#sel_mic_format','1');await page.evaluate(()=>refreshAll());
-  assert.equal(await page.locator('#mic_detection_note').textContent(),'Detected: Philips I2S.');
-  await page.selectOption('#sel_mic_format','3');
-  fixture.audio_status.detection.detected_board=-1;fixture.audio_status.detection.detected_format=-1;
-  await page.evaluate(()=>refreshAll());
   let count=writes.length;await page.evaluate(()=>{saveS3Board();chooseMicSettings();saveNoiseSettings();});assert.equal(writes.length,count);
   await page.selectOption('#noise_adapt','60');
   const styles=await page.locator('#noise_adapt').evaluate(e=>({border:getComputedStyle(e).borderColor,font:getComputedStyle(e).fontSize,reference:getComputedStyle(document.getElementById('sel_hp')).fontSize}));
   assert.equal(styles.font,styles.reference);assert.match(styles.border,/rgb\((217, 119, 6|245, 158, 11)\)/);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  if(packed)await page.locator('#audiosec').screenshot({path:`tmp/qualification/auto-ui/audio-${width}-${theme}.png`});
-  assert.deepEqual(errors,[]);results.push({packed,width,theme,styles});await page.close();
+  if(packed)await page.locator('#audiosec').screenshot({path:`tmp/qualification/manual-ui/audio-${width}-${theme}.png`});
+  await page.evaluate(()=>openSection('thermalsec'));
+  assert.equal(await page.locator('#t_thermal').textContent(),'Thermal & performance');
+  assert.deepEqual(await page.locator('#thermalsec>h3').allTextContents(),['CPU performance','Temperature protection']);
+  const thermal=await page.locator('#sel_cpu').evaluate(e=>({separate:e.closest('table')!==document.getElementById('sel_oh_enable').closest('table'),font:getComputedStyle(e).fontSize,reference:getComputedStyle(document.getElementById('sel_oh_enable')).fontSize,heading:getComputedStyle(document.querySelector('#thermalsec>h3')).fontSize,headingReference:getComputedStyle(document.querySelector('#networksec h3')).fontSize}));
+  assert(thermal.separate);assert.equal(thermal.font,thermal.reference);assert.equal(thermal.heading,thermal.headingReference);
+  if(packed)await page.locator('#thermalsec').screenshot({path:`tmp/qualification/manual-ui/performance-${width}-${theme}.png`});
+  assert.deepEqual(errors,[]);results.push({packed,width,theme,styles,thermal});await page.close();
  }
- fs.writeFileSync('tmp/qualification/auto-ui/results.json',JSON.stringify(results,null,2));
- console.log('Auto board/mic + noise: source/embedded, 320/390/1280, light/dark, typography, drafts, polling, revert/save/error/discard and scopes passed');
+ fs.writeFileSync('tmp/qualification/manual-ui/results.json',JSON.stringify(results,null,2));
+ console.log('Manual board/mic + noise: source/embedded, 320/390/1280, light/dark, typography, drafts, polling, revert/save/error/discard and scopes passed');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

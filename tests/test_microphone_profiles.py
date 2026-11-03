@@ -151,11 +151,12 @@ bool authorized=true,applyOk=true;int calls=0,saves=0;uint8_t lastFormat=99;bool
 bool requireMutationAuth(){return authorized;}
 void apiSendJSON(const char* s){reply=s;}
 void saveAudioSettings(){++saves;}
-bool applyMicrophoneChoice(uint8_t f,bool r){++calls;lastFormat=f;lastRecommended=r;return applyOk;}
+bool applyMicProfileConfig(uint8_t f,bool r){++calls;lastFormat=f;lastRecommended=r;return applyOk;}
 ''' + parse + function(WEB, 'static void httpSaveMicProfile()') + r'''
 int main(){
  web.args={{"format","2"},{"settings","recommended"}};authorized=false;httpSaveMicProfile();assert(!calls&&!saves);authorized=true;
  for(const char* bad:{"3","-1","256","2x","","9999999999999999999999"}){web.args["format"]=bad;httpSaveMicProfile();assert(!calls&&!saves);}
+ web.args["format"]="3";web.args["settings"]="keep";httpSaveMicProfile();assert(!calls&&!saves);
  web.args["format"]="2";web.args["settings"]="invalid";httpSaveMicProfile();assert(!calls&&!saves);
  web.args["settings"]="recommended";applyOk=false;httpSaveMicProfile();assert(calls==1&&!saves&&reply.find("i2s_restart_failed")!=std::string::npos);
  applyOk=true;httpSaveMicProfile();assert(saves==1&&lastFormat==2&&lastRecommended);

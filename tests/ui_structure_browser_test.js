@@ -35,7 +35,7 @@ const fixture=require('./fixtures/ui-state.json');
   await page.keyboard.press('Home');assert.equal(await page.locator('#listen_volume_value').textContent(),'0%');
   for(const [id,section] of Object.entries({sel_max_clients:'streamssec',in_shift:'audiosec',sel_tx:'networksec',sel_cpu:'thermalsec',in_chk:'recoverysec',b_sync_now:'timesec',b_defaults:'recoverysec'}))
    assert.equal(await page.locator('#'+id).evaluate(el=>el.closest('details.card').id),section);
-  await page.locator('#audiosec>summary').click();await page.locator('#healthsec>summary').click();
+  await page.locator('#audiosec>summary').click();assert(!await page.locator('#audioadvanced').evaluate(e=>e.open));await page.locator('#audioadvanced>summary').click();await page.locator('#healthsec>summary').click();
   await page.locator('#in_gain').fill('2.75');
   await page.evaluate(()=>refreshAll());
   assert.equal(await page.locator('details.card[open]').count(),2);

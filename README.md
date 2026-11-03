@@ -15,14 +15,13 @@ to BirdNET-Go, BirdNET-Pi, VLC or ffmpeg; **Recording** saves WAV files to a mic
 card, even away from your home Wi-Fi. Use **Listen** for a quick sound check in either mode.
 Bird identification runs on the receiving computer, not on the ESP32.
 
-> **Firmware 2.06** — adds automatic microphone and S3 board setup, plus optional experimental noise reduction.
+> **Firmware 2.06** — adds optional experimental noise reduction.
 > [Validation and hardware limits](release-notes/2.06-validation.md).
 
 **[Boards](#supported-boards) · [Quick start](#quick-start) · [Modes](#streaming-and-recording) · [Battery](#battery) · [Features](#features) · [Wiring](#microphones-and-wiring) · [Help](#everyday-use-and-troubleshooting)**
 
-New installations start with independent **Auto** choices for microphone format
-and supported S3 board variants. Existing saved manual choices are retained after
-updating. Manual selection remains available in **Audio** and **Device configuration**.
+Select your board and microphone in **Device configuration** during setup.
+Saved selections are retained after updating.
 Optional **Adaptive noise reduction (Experimental)** is in Audio after High-pass;
 it defaults Off and affects RTSP, Listen and SD recordings when enabled. Its
 benefit for BirdNET recognition still needs comparison on real recordings.
@@ -74,7 +73,7 @@ BirdNETMic now has its own mobile-friendly setup page in place of WiFiManager.
    This initial setup network is open.
 2. Open **http://192.168.4.1** if the welcome page does not appear automatically.
    Stay connected if your phone reports that this network has no internet.
-3. Under **Board**, check the detected board. On S3, choose **XIAO ESP32-S3**,
+3. Under **Board**, select your board. On S3, choose **XIAO ESP32-S3**,
    **XIAO ESP32-S3 Sense** or **M5Stack AtomS3U**. C6 also offers its antenna selection.
 4. Choose **Default mode**: **Streaming** or **Recording**. This is the mode used
    after power-on; the main UI lets you switch the current mode separately.
@@ -343,9 +342,8 @@ This pin mapping is used for C3/S3/C5/C6 with the external module.
 **Sense:** use the built-in slot on the expansion board with its factory SD connection
 enabled, a **FAT32 card up to 32 GB**, and the **XIAO ESP32-S3 Sense** profile.
 Its SD CS routing differs from the external module and is selected automatically.
-The camera is not used. Auto board selection can retain the Sense SD slot while
-using a detected external microphone. Manual Sense selection routes PDM to its
-built-in microphone; manual standard S3 selection uses the external SD mapping.
+The camera is not used. Sense selection routes PDM to its built-in microphone;
+external I2S is also supported. Standard S3 selection uses the external SD mapping.
 
 ### C6 antenna selection
 
@@ -414,7 +412,7 @@ When upgrading from the v15 PDM firmware, start with
 For example, Shift 12 / Gain 1.5 becomes Gain 24. Saved Gain is not changed automatically.
 
 **On C3/C5, set Audio → Advanced audio settings → RTP packet size to 512 samples,
-and use 160 MHz CPU in Thermal management.** The default packet size is already 512, but
+and use 160 MHz CPU in Thermal & performance.** The default packet size is already 512, but
 choosing **Keep saved values and save** preserves a previously saved larger size. The firmware reduces its internal audio
 reserve when RAM is limited; this does not automatically change the packet-size setting.
 

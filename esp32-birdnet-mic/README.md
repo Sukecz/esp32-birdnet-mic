@@ -13,7 +13,7 @@ Arduino firmware for Seeed Studio XIAO ESP32 and M5Stack AtomS3U, using I2S or P
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Current firmware: **v2.06** — Automatic audio setup and optional experimental noise reduction.
+- Current firmware: **v2.06** — Manual audio setup and optional experimental noise reduction.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**
 - Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
@@ -347,7 +347,7 @@ actual drafts, including edits made while a save is still pending.
 ### Recommended microphone settings
 
 Changing **Microphone format → Apply** opens a dialog before writing anything. It shows
-saved and recommended values for the detected board. Choose **Use recommended and save**,
+saved and recommended values for the selected board. Choose **Use recommended and save**,
 **Keep saved values and save**, or **Cancel**. **Recommended settings** opens the same
 review for the currently selected microphone. Pending audio edits are replaced only when
 applying the recommendations; keeping saved values leaves other pending edits available.
@@ -376,7 +376,7 @@ API continues to preserve custom settings. Profiles can be read using
 `POST /api/settings/microphone` with `format` and `settings=recommended|keep`, using
 the normal mutation header. Profile CPU value zero means keep the current setting.
 
-**Thermal management → CPU frequency** also offers **240 MHz on S3/C5**. C3/C6 are
+**Thermal & performance → CPU frequency** also offers **240 MHz on S3/C5**. C3/C6 are
 limited to 160 MHz. This is an optional performance setting; existing defaults remain
 160 MHz. Firmware validates the board capability before applying or loading a saved value.
 Higher frequency can increase heat; thermal-protection settings are preserved.
@@ -448,7 +448,7 @@ confirmation and lists what is reset.
 - **Audio**: microphone, signal level, gain and HPF, followed by **Advanced audio settings** for sample rate, RTP packet size and I2S shift. **Audio per packet** is packet duration, not total listening delay. Both RTSP streams share these settings. PDM fixes the sample rate at 48 kHz and disables unused I2S Shift.
 - **Time & Schedule**: NTP, time zone, streaming window and optional deep sleep.
 - **Network**: IP, RSSI, access point selection, Wi-Fi transmit power, mDNS and connection actions.
-- **Thermal management**: current/peak temperature, shutdown limit, cooling recovery, latch/history, acknowledgement and CPU frequency.
+- **Thermal & performance**: current/peak temperature, shutdown limit, cooling recovery, latch/history, acknowledgement and CPU frequency.
 - **Recovery & Maintenance**: microphone auto-recovery, output-rate warnings, warning check interval, scheduled reboot and service actions. A slow network does not restart a healthy microphone; automatic recovery requires stopped capture reads and has a cooldown.
 - **MQTT & Home Assistant**: broker connection, publishing, discovery and connection status.
 - **Logs**: device log and download.
@@ -904,15 +904,12 @@ Current validation ranges include `sampleRate=8000..192000`, `bufferSize=256..81
 
 This firmware is released under the MIT License. See `../LICENSE`.
 
-## Automatic microphone setup and noise reduction
+## Microphone setup and noise reduction
 
-New installations start with Auto microphone selection; existing saved choices
-stay manual after updating. The shared S3 image also offers Auto board selection
-for XIAO ESP32-S3, Sense and AtomS3U. Board and microphone choices are independent
-and can be changed manually in Audio or Device configuration. Detection identifies
-a signal format, not the exact microphone model. Uncertain results retain the
-previous configuration. Auto retains tuned gain; fresh PDM setup uses a starting
-gain of 24. Software PDM may require the CPU to run at 160 MHz.
+Choose the board and microphone format in Device configuration or Audio.
+Saved board, microphone and tuned audio settings are retained after updating.
+Selecting Sense or AtomS3U sets its built-in PDM profile; Sense also supports
+external I2S. Software PDM requires at least 160 MHz.
 
 **Adaptive noise reduction (Experimental)** is in Audio after High-pass and is
 Off by default. High-pass removes low-frequency rumble; adaptive reduction learns

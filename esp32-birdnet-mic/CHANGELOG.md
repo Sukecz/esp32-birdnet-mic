@@ -1,11 +1,9 @@
 # Changelog
 
-## 2.06 — Automatic audio setup and experimental noise reduction
+## 2.06 — Experimental noise reduction
 
-- New installations default to independent Auto choices for microphone format and
-  supported S3 board variants. Existing saved manual selections are retained.
-  Unconfirmed detection preserves the previous configuration and manual selection
-  remains available. Auto retains tuned gain; only fresh PDM setup gets a starting gain.
+- Board and microphone selection remain manual in Audio and Device configuration.
+  Saved concrete profiles and tuned audio values are retained after updating.
 - Optional experimental adaptive noise reduction in Audio, after High-pass.
   It processes Listen, RTSP and SD audio, defaults Off and learns again after
   relevant changes. DSP based on a contributor's fixed-point spectral subtraction
@@ -13,7 +11,8 @@
 - Noise settings use the shared draft/save/discard lifecycle. Spectrum and CPU
   diagnostics are under details. Memory/CPU failures keep unfiltered audio flowing;
   the filter never raises CPU frequency. Low-frequency CPU operation needs qualification.
-- Device configuration offers independent Auto/manual board and microphone choices.
+- Advanced audio settings stays collapsed above experimental noise reduction.
+  Thermal & performance separates CPU speed from temperature protection.
 - Web flasher installation copy uses the manifest version badge. Packaging and
   public verification check current release copy. Poll warnings require two
   consecutive failures from the same endpoint.
