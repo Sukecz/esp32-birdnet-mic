@@ -3,7 +3,7 @@ const {chromium}=require('playwright-core');
 const assets=require('./ui_assets');
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||chromium.executablePath(),headless:true,args:['--no-sandbox']});
- fs.mkdirSync('tmp/qualification/filter-layout',{recursive:true});fs.mkdirSync('tmp/qualification/manual-ui',{recursive:true});fs.mkdirSync('tmp/qualification/2.06-manual-ui',{recursive:true});
+ fs.mkdirSync('tmp/qualification/flat-noise',{recursive:true});fs.mkdirSync('tmp/qualification/manual-ui',{recursive:true});fs.mkdirSync('tmp/qualification/2.06-manual-ui',{recursive:true});
  const results=[];
  try{for(const packed of [false,true])for(const width of [320,390,1280])for(const theme of ['light','dark']){
   const fixture=JSON.parse(fs.readFileSync('tests/fixtures/ui-state.json'));
@@ -32,18 +32,21 @@ const assets=require('./ui_assets');
   });
   await page.goto('http://auto.test/');await page.waitForFunction(()=>document.getElementById('in_gain').value==='1.50');
   await page.selectOption('#themeSel',theme);await page.evaluate(()=>{openSection('audiosec');openSection('noisesec');});
-  const placement=await page.locator('#noise_save').evaluate(button=>{
-   const select=document.getElementById('noise_mode'),cell=button.closest('td');
-   const b=button.getBoundingClientRect(),s=select.getBoundingClientRect();
-   return {sameCell:cell===select.closest('td'),below:b.top>=s.bottom,within:b.right<=cell.getBoundingClientRect().right};
-  });assert(placement.sameCell&&placement.below&&placement.within,'Save is below On/Off in the same cell');
-  assert(await page.locator('#noise_details').evaluate(e=>!e.open));
+  for(const [control,button] of [['noise_mode','noise_save'],['noise_floor','noise_floor_apply'],['noise_adapt','noise_adapt_apply']]){
+   assert.equal(await page.locator('#'+button).textContent(),'Apply');
+   const style=await page.locator('#'+button).evaluate((e,id)=>{const ref=document.getElementById('btn_hp_set');return {sameField:e.closest('.field')===document.getElementById(id).closest('.field'),font:getComputedStyle(e).fontSize,reference:getComputedStyle(ref).fontSize,padding:getComputedStyle(e).padding,paddingReference:getComputedStyle(ref).padding};},control);
+   assert(style.sameField);assert.equal(style.font,style.reference);assert.equal(style.padding,style.paddingReference);
+   assert(await page.locator('#'+control).isVisible());assert(await page.locator('#'+button).isDisabled());
+  }
+  assert.equal(await page.locator('#noisesec details').count(),0);
+  assert(await page.locator('#noise_spectrum').isVisible());assert(await page.locator('#noise_status').isHidden());
+  const text=await page.locator('#noisesec').textContent();assert(!/C6|160 MHz|80 MHz|Save noise reduction/.test(text));assert.match(text,/Low CPU speeds.*dropouts/);
   assert.equal(await page.locator('#audioadvanced').count(),0);
   for(const id of ['in_rate','sel_buf','in_shift'])assert(await page.locator('#'+id).isVisible());
   for(const id of ['sel_hp','in_hp_cutoff','noise_mode'])assert.equal(await page.locator('#'+id).evaluate(e=>e.closest('details.card').id),'noisesec');
   for(const id of ['sel_s3_board','sel_mic_format'])assert.deepEqual(await page.locator('#'+id+' option').evaluateAll(es=>es.map(e=>e.value)),['0','1','2']);
   assert(await page.locator('#noise_busy_hint').isHidden());
-  assert.match(await page.locator('#noise_help').textContent(),/High-pass can stay on/);
+  assert.match(await page.locator('#noise_help').textContent(),/High-pass cuts low rumble/);
   const dirty=async id=>page.locator('#'+id).evaluate(e=>e.classList.contains('dirty'));
   for(const [id,changed,original] of [['sel_s3_board','1','0'],['sel_mic_format','1','0'],['noise_mode','1','0']]){
    await page.selectOption('#'+id,changed);assert(await dirty(id));
@@ -51,18 +54,8 @@ const assets=require('./ui_assets');
    await page.selectOption('#'+id,original);assert(!await dirty(id));
   }
   assert.equal(writes.length,0);
-  if(packed){
-   const row=page.locator('#noise_mode').locator('xpath=ancestor::tr[1]');await row.scrollIntoViewIfNeeded();
-   await row.screenshot({path:`tmp/qualification/2.06-manual-ui/control-${width}-${theme}.png`});
-   const clip=await row.evaluate(el=>{const a=el.getBoundingClientRect(),b=el.nextElementSibling.getBoundingClientRect();return {x:a.x,y:a.y,width:a.width,height:b.bottom-a.top};});
-   await page.screenshot({clip,path:`tmp/qualification/2.06-manual-ui/preview-${width}-${theme}.png`});
-  }
-  await page.locator('#noise_details').evaluate(e=>e.open=true);
-  const reads=graphReads;await page.evaluate(()=>updateNoiseSpectrum());assert.equal(graphReads,reads,'Closed diagnostics does not poll spectra');
-  await page.locator('#noise_diagnostics').evaluate(e=>e.open=true);
-  await page.waitForFunction(()=>!noiseGraphBusy);await page.evaluate(()=>updateNoiseSpectrum());assert(graphReads>reads);
+  await page.waitForFunction(()=>!noiseGraphBusy);const reads=graphReads;await page.evaluate(()=>updateNoiseSpectrum());assert(graphReads>reads,'Visible graph polls directly');
   const openReads=graphReads;await page.evaluate(()=>{document.getElementById('noisesec').open=false;return updateNoiseSpectrum();});assert.equal(graphReads,openReads);await page.evaluate(()=>openSection('noisesec'));
-  await page.locator('#noise_diagnostics').evaluate(e=>e.open=false);
   for(const [id,changed,original] of [['noise_floor','6','12'],['noise_adapt','60','15']]){
    await page.selectOption('#'+id,changed);assert(await dirty(id));
    await page.evaluate(()=>refreshAll());assert.equal(await page.inputValue('#'+id),changed);
@@ -73,7 +66,17 @@ const assets=require('./ui_assets');
   await page.waitForFunction(()=>!sectionBusy.has('noisesec'));assert(await dirty('noise_mode'));assert(await dirty('noise_floor'));
   assert.match(await page.locator('#noisesec>.feedback').textContent(),/kept/);
   fail=false;await page.click('#noise_save');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));
-  assert(!await dirty('noise_mode'));assert(!await dirty('noise_floor'));assert(await dirty('in_gain'));
+  assert(!await dirty('noise_mode'));assert(await dirty('noise_floor'));assert(await dirty('in_gain'));
+  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'12',adapt:'15'},'Mode Apply sends saved values for other drafts');
+  assert(await page.locator('#noise_status').isHidden(),'No repeated On label');
+  await page.selectOption('#noise_adapt','60');
+  await page.click('#noise_floor_apply');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));assert(!await dirty('noise_floor'));assert(await dirty('noise_adapt'));
+  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'6',adapt:'15'},'Strength Apply keeps the speed draft pending');
+  await page.selectOption('#noise_mode','0');
+  await page.click('#noise_adapt_apply');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));assert(!await dirty('noise_adapt'));assert(await dirty('noise_mode'));
+  assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'6',adapt:'60'},'Speed Apply keeps the On/Off draft pending');
+  await page.selectOption('#noise_mode','1');
+  await page.selectOption('#noise_adapt','15');await page.click('#noise_adapt_apply');await page.waitForFunction(()=>!sectionBusy.has('noisesec'));
   assert.deepEqual(Object.keys(writes.at(-1).v).sort(),['adapt','floor','mode']);
   assert(await dirty('in_hp_cutoff'),'Noise save preserves a High-pass draft');
   assert.equal(await page.inputValue('#sel_hp'),'on','Noise save preserves High-pass');
@@ -90,11 +93,12 @@ const assets=require('./ui_assets');
   await page.locator('#audiosec>.discard').click();assert(!await dirty('in_gain'));assert(await dirty('noise_adapt'),'Discard Audio preserves filter drafts');
   await page.locator('#noisesec>.discard').click();assert(!await dirty('noise_adapt'));
 
+  await page.selectOption('#noise_adapt','60');assert(await page.locator('#noise_adapt_apply').isEnabled());
   fixture.status.recording={...(fixture.status.recording||{}),busy:true};await page.evaluate(()=>refreshAll());
-  assert(await page.locator('#noise_save').isDisabled());assert(await page.locator('#noise_busy_hint').isVisible());
-  fixture.status.recording.busy=false;await page.evaluate(()=>refreshAll());assert(await page.locator('#noise_busy_hint').isHidden());
+  for(const id of ['noise_save','noise_floor_apply','noise_adapt_apply'])assert(await page.locator('#'+id).isDisabled());assert(await page.locator('#noise_busy_hint').isVisible());
+  fixture.status.recording.busy=false;await page.evaluate(()=>refreshAll());assert(await page.locator('#noise_busy_hint').isHidden());assert(await page.locator('#noise_adapt_apply').isEnabled());await page.selectOption('#noise_adapt','15');
   fixture.audio_status.noise.error='CPU too slow; audio is unfiltered. Raise CPU frequency.';
-  await page.evaluate(()=>refreshAll());assert.match(await page.locator('#noise_status').textContent(),/Cannot keep up.*Audio stays unchanged/);
+  await page.evaluate(()=>refreshAll());assert.match(await page.locator('#noise_status').textContent(),/Cannot keep up.*Audio is unchanged/);
   fixture.audio_status.noise.error='';await page.evaluate(()=>refreshAll());
   await page.selectOption('#noise_adapt','60');await page.locator('#noisesec>.discard').click();
   assert.equal(await page.inputValue('#noise_adapt'),'15');assert(!await dirty('noise_adapt'));
@@ -104,12 +108,12 @@ const assets=require('./ui_assets');
   assert(await dirty('sel_mic_format'));assert(!await dirty('sel_s3_board'));
   await page.click('#btn_mic_apply');await page.locator('#mic_dialog').waitFor();await page.click('#btn_mic_keep');await page.waitForFunction(()=>!sectionBusy.has('audiosec'));
   assert(!await dirty('sel_mic_format'));
-  let count=writes.length;await page.evaluate(()=>{saveS3Board();chooseMicSettings();saveNoiseSettings();});assert.equal(writes.length,count);
+  let count=writes.length;await page.evaluate(()=>{saveS3Board();chooseMicSettings();saveNoiseSettings();saveNoiseSettings('noise_floor');saveNoiseSettings('noise_adapt');});assert.equal(writes.length,count);
   await page.selectOption('#noise_adapt','60');
   const styles=await page.locator('#noise_adapt').evaluate(e=>({border:getComputedStyle(e).borderColor,font:getComputedStyle(e).fontSize,reference:getComputedStyle(document.getElementById('sel_hp')).fontSize}));
   assert.equal(styles.font,styles.reference);assert.match(styles.border,/rgb\((217, 119, 6|245, 158, 11)\)/);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  if(packed){await page.locator('#audiosec').screenshot({path:`tmp/qualification/filter-layout/audio-${width}-${theme}.png`});await page.locator('#noisesec').screenshot({path:`tmp/qualification/filter-layout/filters-${width}-${theme}.png`});}
+  if(packed){await page.locator('#audiosec').screenshot({path:`tmp/qualification/flat-noise/audio-${width}-${theme}.png`});await page.locator('#noisesec').screenshot({path:`tmp/qualification/flat-noise/filters-${width}-${theme}.png`});}
   await page.evaluate(()=>openSection('thermalsec'));
   assert.equal(await page.locator('#t_thermal').textContent(),'Thermal & performance');
   assert.deepEqual(await page.locator('#thermalsec>h3').allTextContents(),['CPU performance','Temperature protection']);

@@ -8,8 +8,8 @@
   It processes Listen, RTSP and SD audio, defaults Off and learns again after
   relevant changes. DSP based on a contributor's fixed-point spectral subtraction
   implementation. Better BirdNET recognition is not yet established.
-- Noise settings use the shared draft/save/discard lifecycle. Spectrum and CPU
-  diagnostics are under details. Memory/CPU failures keep unfiltered audio flowing;
+- Noise settings use the shared draft/save/discard lifecycle. The spectrum and brief help
+  are directly visible; each filter setting has its own Apply action. Memory/CPU failures keep unfiltered audio flowing;
   the filter never raises CPU frequency. Low-frequency CPU operation needs qualification.
 - Audio settings are directly visible. High-pass and adaptive noise reduction
   have a separate Audio noise reduction section with independent save scopes.

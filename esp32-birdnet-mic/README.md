@@ -446,7 +446,7 @@ confirmation and lists what is reset.
 - **Streams**: `/audio1` and `/audio2`, target system, transport, URLs, client states and shared RTSP client limit.
 - **Stream health**: microphone signal, audio load, recent/total DMA overruns, capture state, I2S errors, TCP counters, buffer drops and last stop. Lifetime counters are informational; old errors do not keep a current warning active.
 - **Audio**: microphone, signal level, gain, sample rate, audio buffer size and I2S shift, all directly visible. **Audio per packet** is packet duration, not total listening delay. Both RTSP streams share these settings. PDM fixes the sample rate at 48 kHz and disables unused I2S Shift.
-- **Audio noise reduction**: High-pass, cutoff and optional experimental adaptive noise reduction, with independent saving.
+- **Audio noise reduction**: High-pass, cutoff and optional experimental adaptive noise reduction. All controls, the graph and brief help are visible; each Apply saves only its own setting.
 - **Time & Schedule**: NTP, time zone, streaming window and optional deep sleep.
 - **Network**: IP, RSSI, access point selection, Wi-Fi transmit power, mDNS and connection actions.
 - **Thermal & performance**: current/peak temperature, shutdown limit, cooling recovery, latch/history, acknowledgement and CPU frequency.

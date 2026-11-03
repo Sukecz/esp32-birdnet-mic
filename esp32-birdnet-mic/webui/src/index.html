@@ -364,29 +364,22 @@
 </td>
 </tr>
 
-<tr><td class='k'><label for='noise_mode'>Noise reduction</label><span class='badge'>Experimental</span></td>
-<td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
-<div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
-<p id='noise_status' class='section-note' role='status'>Off</p>
-<p id='noise_busy_hint' class='section-note' hidden>Stop and save your recording before changing this.</p></td></tr>
-<tr><td colspan='2'><p id='noise_help' class='section-note'>Reduces steady hiss and hum. High-pass can stay on.</p>
-<p class='section-note'>Changes live audio and SD recordings. May hide faint bird calls. BirdNET accuracy still needs testing.</p>
-<p class='section-note'>Uses more power. For C6, use 160 MHz.</p>
-<details id='noise_details' class='advanced'><summary>Options and help</summary>
-<table><tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12'>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select></div></td></tr>
-<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15'>Normal</option><option value='60'>Slow</option></select></div></td></tr></table>
-<p class='section-note'>Start with Normal. Strong removes more noise but may change quiet calls. Slow is safer for long bird songs.</p>
-<p class='section-note'>Use Save noise reduction above to save the switch and these options.</p>
-<p class='section-note'>The filter learns the background again after a restart or audio change. It takes a short time to start reducing noise.</p>
-<p class='section-note'>High-pass cuts low rumble. Noise reduction handles steady hiss and hum. You can use both.</p>
-<p class='section-note'>On C6, select 160 MHz in Thermal &amp; performance. If audio cuts out, turn noise reduction off. It never changes CPU speed for you.</p>
-<p class='section-note'>If the filter cannot start, audio stays unchanged. After fixing the problem, turn it Off and On to retry.</p>
-<details id='noise_diagnostics' class='advanced'><summary>Sound graph and diagnostics</summary>
-<p id='noise_metrics' class='section-note'></p>
-<canvas id='noise_spectrum' width='800' height='240' aria-label='Live spectrum, estimated noise floor and learned noise profile'></canvas>
-<p class='section-note'>Blue: current sound · Orange: estimated background · Green: learned noise. Frequency in kHz; level in dBFS per band. The graph includes sounds around the microphone.</p>
-</details></details></td></tr>
-</table></details>
+<tr><td class='k'><label for='noise_mode'>Noise reduction</label> <span class='badge'>Experimental</span></td>
+<td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select>
+<button id='noise_save' onclick="saveNoiseSettings('noise_mode')" disabled>Apply</button></div></td></tr>
+<tr><td class='k'><label for='noise_floor'>Strength</label></td><td class='v'><div class='field'><select id='noise_floor'><option value='6'>Gentle (6 dB)</option><option value='12' selected>Normal (12 dB)</option><option value='20'>Strong (20 dB)</option></select><button id='noise_floor_apply' onclick="saveNoiseSettings('noise_floor')" disabled>Apply</button></div></td></tr>
+<tr><td class='k'><label for='noise_adapt'>Follow background changes</label></td><td class='v'><div class='field'><select id='noise_adapt'><option value='4'>Fast</option><option value='15' selected>Normal</option><option value='60'>Slow</option></select><button id='noise_adapt_apply' onclick="saveNoiseSettings('noise_adapt')" disabled>Apply</button></div></td></tr>
+</table>
+<p id='noise_status' class='section-note warn' role='status' hidden></p>
+<p id='noise_busy_hint' class='section-note' hidden>Stop and save your recording before changing this.</p>
+<p id='noise_help' class='section-note'>Learns the background to reduce steady hiss and hum. High-pass cuts low rumble; you can use both.</p>
+<p class='section-note'>Start with Normal. Strong may hide quiet bird calls. Slow follows background changes more gently.</p>
+<p class='section-note'>Changes streaming, Listen and SD audio. Low CPU speeds may cause streaming dropouts.</p>
+<p id='noise_metrics' class='section-note' role='status' hidden></p>
+<canvas id='noise_spectrum' width='800' height='240' aria-label='Input sound, estimated background and learned background'></canvas>
+<p class='section-note'>Blue: input sound · Orange: current background estimate · Green: learned background.</p>
+<p class='section-note'>Left to right: low to high pitch (kHz). Higher lines mean louder sound (dBFS).</p>
+</details>
 <details id='timesec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_time'>Time &amp; Schedule</span><span class='section-note'>Clock, time zone and streaming window</span></span><span class='chev' aria-hidden='true'></span></summary>
 <table>
