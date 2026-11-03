@@ -4,7 +4,7 @@ function updateDiscard(){const b=$('discard_choices');if(b)b.hidden=!Object.keys
 /* @include "settings/fields.js" */
 const setupChoiceFields=['variant','microphone','mode','connection','antenna','battery_enabled'];
 function syncSetupChoices(s){
- const values={variant:String(s.s3_board),microphone:String(s.mic_format??0),mode:s.default_mode,connection:s.connection,antenna:s.antenna,battery_enabled:!!s.battery_enabled};
+ const values={variant:String(s.s3_board),microphone:String(s.mic_format??0),mode:s.default_mode,connection:s.connection,antenna:s.antenna,battery_enabled:String(Number(!!s.battery_enabled))};
  for(const id of setupChoiceFields)syncInput($(id),id,values[id]);
 }
 'use strict';
@@ -29,18 +29,19 @@ function controls(){
  if(atom)node('microphone').value='2';
  const batterySupported=!atom&&(state.s3_board_supported||state.battery_supported!==false);
  node('battery_enabled').disabled=working||!batterySupported;
- if(!batterySupported)node('battery_enabled').checked=false;
+ if(!batterySupported)node('battery_enabled').value='0';
  node('battery_help').disabled=!batterySupported;
  node('battery_note').textContent=batterySupported?'Show estimated charge and voltage at the top of the main UI in both modes.':'Battery monitoring is not supported on this board.';
  node('mode').querySelector('[value=recording]').disabled=atom;
  if(atom&&node('mode').value==='recording')node('mode').value='streaming';
  const recording=node('mode').value==='recording';
- if(!recording)node('connection').value='home';
+ if(atom)node('connection').value='home';
+ node('connection').disabled=working||atom;
  const direct=recording&&node('connection').value==='direct';
  node('mode_note').hidden=!atom;
- node('connection_field').hidden=!recording;
+ node('connection_field').hidden=atom;
  node('home_fields').hidden=direct;
- node('connection_note').textContent=recording?(direct?'Connect directly to control the device. Audio stays on SD.':'Wi-Fi is for control. Audio stays on SD.'):'Wi-Fi carries the audio and gives access to controls.';
+ node('connection_note').textContent=recording?(direct?'Device Wi-Fi is available for control. An existing home connection stays connected. Audio stays on SD.':'Wi-Fi is for control. Audio stays on SD.'):'Streaming uses home Wi-Fi. The choice above applies when you switch to Recording.';
  node('fallback').textContent=direct?'No router or internet needed. Your phone can disconnect while recording.':`Wi-Fi unavailable? Join ${state.ap_name} to open controls. `+(recording?'Recording continues offline.':'Streaming to your home network resumes when Wi-Fi returns.');
  node('choices').disabled=working;
  node('ssid').disabled=testing;
@@ -73,7 +74,7 @@ async function poll(){
    node('microphone').value=String(next.mic_format??0);
    node('antenna_field').hidden=!next.antenna_supported;
    node('antenna').value=next.antenna;
-   node('battery_enabled').checked=!!next.battery_enabled;
+   node('battery_enabled').value=next.battery_enabled?'1':'0';
    node('mode').value=next.default_mode;
    node('connection').value=next.connection;
    node('ssid').value=next.ssid;
@@ -81,7 +82,7 @@ async function poll(){
    node('finish').textContent=next.complete?'Save changes':'Finish setup';
    node('cancel').hidden=!next.complete;
    node('ap_name').textContent=next.ap_name;
-   node('access_details').open=!next.complete;
+   node('access_details').open=true;
    testing=['queued','connecting','connected'].includes(next.test_state);
    try{const access=await request('/api/setup/access',{});accessKey=access.password;node('ap_password').textContent=accessKey;apEditor.confirmed(accessKey);}catch(_){node('ap_password').textContent='Could not load. Reload before finishing.';}
    message('feedback','');
@@ -152,14 +153,14 @@ async function finish(later=false){
  if(state.complete&&!networkEdited&&state.test_state!=='connected'&&!setupChoiceFields.some(id=>differsFromSaved(id))){message('feedback','No settings changed.');return;}
  working=true;controls();message('feedback','Saving…');
  try{
-  const result=await request('/api/setup',{mode:node('mode').value,connection:node('connection').value,variant:node('variant').value,microphone:node('microphone').value,antenna:node('antenna').value,battery:node('battery_enabled').checked?'1':'0',allow_offline:later?'1':'0'});
+  const result=await request('/api/setup',{mode:node('mode').value,connection:node('connection').value,variant:node('variant').value,microphone:node('microphone').value,antenna:node('antenna').value,battery:node('battery_enabled').value,allow_offline:later?'1':'0'});
   finished=true;node('setup_form').hidden=true;node('done').hidden=false;
   node('done_note').textContent=(result.reboot_required?'Restarting. ':'')+(state.complete?'Your default mode is saved for the next power-on.':'Setup complete. Other settings are in the main UI.');
   const direct=result.use_ap===undefined?node('connection').value==='direct':result.use_ap;
   node('done_access').textContent=`Direct access: ${state.ap_name} · Password: ${accessKey}. `+(!state.complete?'The setup network will now require this password. Reconnect if needed.':'');
   const link=node('open_controls');
-  link.href=direct?'http://192.168.4.1/':state.connected&&state.ip!=='0.0.0.0'?`http://${state.ip}/`:'/';
-  if(!direct&&state.connected)node('done_note').textContent+=' To use the home-network address, reconnect your phone to that Wi-Fi.';
+  link.href=state.complete?'/':direct?'http://192.168.4.1/':state.connected&&state.ip!=='0.0.0.0'?`http://${state.ip}/`:'/';
+  if(!state.complete&&!direct&&state.connected)node('done_note').textContent+=' To use the home-network address, reconnect your phone to that Wi-Fi.';
   if(result.reboot_required)link.textContent='Open controls after restart';
  }catch(e){message('feedback',e.message||'Could not confirm save. Reload to check settings.',true);}
  finally{working=false;controls();}
@@ -176,7 +177,6 @@ function batteryWiring(){
 }
 node('battery_help').onclick=batteryWiring;
 node('battery_close').onclick=()=>node('battery_dialog').close();
-node('battery_enabled').onchange=()=>{if(node('battery_enabled').checked)batteryWiring();};
 node('variant').addEventListener('change',()=>{if(['1','2'].includes(node('variant').value)){node('microphone').value='2';reconcileEdit('microphone');}});
 for(const id of ['variant','antenna','mode','connection'])node(id).addEventListener('change',controls);
 for(const id of ['ssid','password'])node(id).addEventListener('input',()=>{networkEdited=true;controls();});

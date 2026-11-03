@@ -17,6 +17,12 @@
 - Shared feature hierarchy groups switches with indented dependent settings.
   Independently saved details require confirmed On; disabled drafts are retained.
   MQTT, schedule and other grouped forms remain configurable before enabling.
+- Persistent feature switches use shared On/Off controls, including Battery in setup.
+  Battery monitoring uses Apply; calibration is directly visible and nested help/settings
+  open by default. Network shows current Home/device connections before backup access details.
+- Recording connection is independent of startup mode. Entering Standalone Recording
+  preserves an existing home connection; explicit Wi-Fi power saving still turns off
+  both connections. Standalone Recording does not retry a lost router connection.
 - Web flasher installation copy uses the manifest version badge. Packaging and
   public verification check current release copy. Poll warnings require two
   consecutive failures from the same endpoint.

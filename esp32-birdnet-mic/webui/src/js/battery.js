@@ -2,7 +2,7 @@
 let batteryState=null,batteryDraft=null,batteryPending=false,batteryDevice=null;
 function batteryDraftChanged(){
  if(!batteryState)return;
- batteryDraft=document.getElementById('battery_monitor').checked;
+ batteryDraft=document.getElementById('battery_monitor').value==='1';
  if(batteryDraft===!!batteryState.enabled)batteryDraft=null;
  renderBattery(batteryDevice);
 }
@@ -16,16 +16,16 @@ function renderBattery(j){
  n('battery_pack_note').hidden=!supported;
  if(!supported)batteryDraft=null;
  if(batteryDraft===!!b.enabled)batteryDraft=null;
- n('battery_monitor').checked=supported&&(batteryDraft===null?!!b.enabled:batteryDraft);
+ n('battery_monitor').value=supported&&(batteryDraft===null?!!b.enabled:batteryDraft)?'1':'0';
  const locked=batteryPending||fieldPowerPending||!!j.recording?.busy||!!j.recording?.cooling_pending;
- n('battery_monitor').disabled=!supported||locked||!!(j.field_power?.enabled&&b.enabled);let dependency=n('battery_monitor_dependency');if(!dependency){dependency=document.createElement('p');dependency.id='battery_monitor_dependency';dependency.className='section-note';n('battery_monitor').closest('.actions').after(dependency);}dependency.textContent=locked?'Stop recording before changing battery settings.':j.field_power?.enabled?(j.recording?.mode==='recording'?'To turn battery monitoring off, first disable low-battery protection below.':'Battery monitoring is required by the saved low-battery protection setting in Recording mode.'):'';
+ n('battery_monitor').disabled=!supported||locked||!!(j.field_power?.enabled&&b.enabled);let dependency=n('battery_monitor_dependency');if(!dependency){dependency=document.createElement('p');dependency.id='battery_monitor_dependency';dependency.className='section-note';n('battery_monitor').closest('.feature-main').after(dependency);}dependency.textContent=locked?'Stop recording before changing battery settings.':j.field_power?.enabled?(j.recording?.mode==='recording'?'To turn battery monitoring off, first disable low-battery protection below.':'Battery monitoring is required by the saved low-battery protection setting in Recording mode.'):'';
  n('battery_save').disabled=!supported||locked||batteryDraft===null;
  n('battery_dirty').textContent=batteryDraft===null?'':'Unsaved';
  const valid=b.valid&&Number.isFinite(b.voltage);
  n('battery_reading').textContent=!supported?'Unsupported':!b.enabled?'Monitoring disabled':valid?`${b.voltage.toFixed(2)} V · ~${b.percent}%`:'Voltage unavailable; waiting for a valid reading.';
  const correction=Number.isFinite(b.calibration_percent)?b.calibration_percent:0;
  n('battery_correction').textContent=`Applied correction: ${correction>=0?'+':''}${correction.toFixed(2)}%`;
- const monitoringReady=b.enabled&&n('battery_monitor').checked&&batteryDraft===null;
+ const monitoringReady=b.enabled&&n('battery_monitor').value==='1'&&batteryDraft===null;
  n('battery_options')?.classList.toggle('is-disabled',!monitoringReady);
  n('battery_reference').disabled=!supported||!monitoringReady||locked;
  n('battery_calibrate').disabled=!supported||!monitoringReady||!valid||locked;

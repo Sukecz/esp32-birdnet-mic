@@ -185,7 +185,7 @@ selection disconnects existing streams while Wi-Fi reconnects.
 The selected BSSID is saved across reconnects, restarts and OTA updates. The device does not
 fall back to another access point while locked. In the current firmware, after
 15 seconds offline the device creates **BirdNETMic-XXXXXX**. Use the password from
-**Network → Direct Wi-Fi access**, then open **http://192.168.4.1** to change the selection.
+**Network → Device Wi-Fi**, then open **http://192.168.4.1** to change the selection.
 Recovery Wi-Fi stays available while a client is connected. With no clients, it closes after
 home Wi-Fi has been connected for at least 60 seconds. Standalone Recording keeps its AP.
 Reset Wi-Fi and factory reset also clear the saved AP selection.
@@ -207,9 +207,19 @@ POST requests require the existing `X-ESP32MIC-CSRF: 1` header. Saving reconnect
    Microphone, SD and recording options are configured in the main UI.
 
 Existing configured devices retain their credentials and settings and skip the welcome page.
-After updating, save the recovery password from **Network → Direct Wi-Fi access**.
+After updating, save the recovery password from **Network → Device Wi-Fi**.
 **Device configuration** changes the default startup mode and connection later; the main
 mode switch changes only the current mode. Recording auto-start remains a separate option.
+The Recording connection preference is independent of the default startup mode.
+Switching to Standalone Recording adds device Wi-Fi while retaining an existing
+home connection; it does not attempt a new router connection if Home is lost.
+Booting directly into Standalone Recording starts only device Wi-Fi. Streaming
+and Home Recording connect/retry the saved home network, with device Wi-Fi as
+fallback after 15 seconds. Wi-Fi power saving remains an explicit Recording
+action: after its configured delay it turns the radio off, including both Home
+and device Wi-Fi, and prevents reconnect/AP recovery until restart. Actual
+connections appear first in Network; saved access details appear below.
+
 An unavailable home network automatically enables the control AP in both modes without
 erasing credentials or rebooting. Recording does not depend on a network connection.
 Older published firmware still uses the original WiFiManager portal.

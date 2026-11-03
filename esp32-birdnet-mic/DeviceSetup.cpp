@@ -136,7 +136,7 @@ void begin(bool legacyRecording) {
     recordingMode = config.recording;
     offlineAt = millis();
     connectSaved();
-    if (!config.complete || config.direct) startAp();
+    if (!config.complete || (config.direct && recordingMode)) startAp();
 }
 
 bool complete() { return config.complete; }
@@ -148,6 +148,15 @@ bool setBatteryMonitoring(bool enabled) {
     next.batteryEnabled = enabled;
     if ((!configPersisted || config.batteryEnabled != next.batteryEnabled) && !persist(next)) return false;
     config = next; configPersisted = true;
+    return true;
+}
+bool setRecordingConnection(bool direct) {
+    if (connectionBusy() || suspended || suspendPending) return false;
+    Config next = config;
+    next.direct = direct;
+    if ((!configPersisted || config.direct != next.direct) && !persist(next)) return false;
+    config = next; configPersisted = true;
+    currentMode(recordingMode);
     return true;
 }
 bool apActive() { return active; }
@@ -243,12 +252,12 @@ bool testCredentials(const String& ssid, const String& password) {
 }
 
 bool save(bool recording, bool direct, bool finish, int8_t batteryEnabled) {
-    if (connectionBusy() || (direct && !recording) || batteryEnabled < -1 || batteryEnabled > 1) return false;
+    if (connectionBusy() || batteryEnabled < -1 || batteryEnabled > 1) return false;
     Config next = config;
     next.recording = recording;
     next.direct = direct;
     if (batteryEnabled >= 0) next.batteryEnabled = batteryEnabled;
-    if (!direct && verified) {
+    if ((!recording || !direct) && verified) {
         if (WiFi.status() != WL_CONNECTED || WiFi.SSID() != trialSsid) return false;
         memset(next.ssid, 0, sizeof(next.ssid));
         memset(next.password, 0, sizeof(next.password));
@@ -257,7 +266,7 @@ bool save(bool recording, bool direct, bool finish, int8_t batteryEnabled) {
     }
     if (finish) next.complete = 1;
     uint8_t previousPin[6] = {};
-    const bool clearPin = verified && !direct && wifiApPinned();
+    const bool clearPin = verified && (!recording || !direct) && wifiApPinned();
     if (clearPin) {
         memcpy(previousPin, wifiApPinned(), sizeof(previousPin));
         if (!wifiApSave(nullptr)) return false;
@@ -314,8 +323,10 @@ void loop() {
         if (wantsStation(config, recordingMode)) {
             if (WiFi.status() != WL_CONNECTED || WiFi.SSID() != config.ssid) connectSaved();
         } else if (config.direct && recordingMode) {
+            // Preserve an existing home connection when entering Recording.
+            // Standalone stops new station attempts; explicit power saving
+            // still takes precedence through suspendPending/suspended above.
             startAp();
-            WiFi.disconnect(false);
         }
     }
     if (rekeyAt && int32_t(now - rekeyAt) >= 0) {

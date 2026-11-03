@@ -35,7 +35,7 @@
 </section>
 <section>
 <h2>3. Connection &amp; control</h2>
-<label id="connection_field" hidden>Control connection
+<label id="connection_field">Recording connection
 <select id="connection"><option value="home">Home Wi-Fi</option><option value="direct">Device Wi-Fi — standalone</option></select></label>
 <p id="connection_note" class="note"></p>
 <div id="home_fields">
@@ -49,7 +49,7 @@
 <p id="wifi_status" class="status" role="status" aria-live="polite"></p>
 </div>
 <p id="fallback" class="note"></p>
-<details id="access_details"><summary>Direct Wi-Fi access</summary>
+<details id="access_details" open><summary>Direct Wi-Fi access</summary>
 <p class="note">Save these details for standalone use or Wi-Fi outages.</p>
 <dl><dt>Network</dt><dd id="ap_name"></dd><dt>Password</dt><dd id="ap_password"></dd><dt>Control page</dt><dd>http://192.168.4.1</dd></dl>
 <div id="ap_password_control">
@@ -67,7 +67,7 @@
 </section>
 <section id="battery_section">
 <h2>4. Battery monitoring</h2>
-<label class="check"><input id="battery_enabled" type="checkbox"> Enable battery monitoring</label>
+<label for="battery_enabled">Battery monitoring</label><div class="field"><select id="battery_enabled"><option value="0">Off</option><option value="1">On</option></select></div>
 <p class="note" id="battery_note">Show estimated charge and voltage at the top of the main UI in both modes.</p>
 <button id="battery_help" type="button" aria-haspopup="dialog">Battery wiring</button>
 </section>

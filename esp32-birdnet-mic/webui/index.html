@@ -36,6 +36,9 @@
 .feature-settings input:disabled:not(.dirty),.feature-settings select:disabled:not(.dirty){color:var(--muted);opacity:.6;cursor:not-allowed}
 .feature-settings .dirty:disabled{opacity:1}
 @media(max-width:600px){.feature-settings{margin-left:10px;padding-left:8px}}
+
+/* Responsive table display must still respect the hidden attribute. */
+tr[hidden]{display:none!important}
 </style>
 <style>
 #direct_access{margin:14px 0 20px;padding:14px;border:1px solid var(--border);border-left:3px solid var(--acc);border-radius:12px;background:var(--row)}#direct_access h3{margin:0 0 6px}#direct_access>p{margin:0 0 12px;font-size:12px;line-height:1.45}#direct_access table{margin:0}
@@ -171,7 +174,7 @@
 <div id='recording_duration_options' class='feature-settings' role='group' aria-label='Recording duration settings' data-feature-parent='recording_duration_mode' hidden>
 <div class='field'><label id='recording_minutes_label' for='recording_hours'>Minutes</label><input id='recording_hours' type='number' min='0' max='10080' step='1' required value='0' oninput='recordingDraftChanged()'></div>
 </div></div>
-<div class='actions'><label><input id='recording_auto' type='checkbox' onchange='recordingDraftChanged()'> Start recording after power-on</label></div>
+<table class='feature-main'><tr><td class='k'><label for='recording_auto'>Start recording after power-on</label></td><td class='v'><div class='field'><select id='recording_auto' onchange='recordingDraftChanged()'><option value='0'>Off</option><option value='1'>On</option></select></div></td></tr></table>
 <div class='recording-settings'>
 <h3>Recording settings</h3>
 <div class='field'>
@@ -652,27 +655,16 @@
 </details>
 <details id='networksec' class='card'>
 <summary class='sum'><span><span class='section-title' id='t_network'>Network</span><span class='section-note'>Wi-Fi connection, access point and mDNS</span></span><span class='chev' aria-hidden='true'></span></summary>
+<h3>Current connection</h3>
+<table><tr><td class='k'>Home Wi-Fi</td><td class='v' id='home_wifi_status'>Loading…</td></tr>
+<tr id='home_wifi_network_row' hidden><td class='k'>Network</td><td class='v' id='home_wifi_network'></td></tr>
+<tr><td class='k'>Device Wi-Fi</td><td class='v' id='device_wifi_status'>Loading…</td></tr></table>
 <p id='device_setup_summary' class='section-note'></p>
-<section id='direct_access' aria-labelledby='direct_access_title'>
-<h3 id='direct_access_title'>Device Wi-Fi</h3>
-<p class='muted'>Connect here when home Wi-Fi is unavailable, or for standalone recording.</p>
-<table>
-<tr><td class='k'>Status</td><td class='v' id='direct_access_status'>Loading…</td></tr>
-<tr><td class='k'>Network</td><td class='v' id='direct_access_name'></td></tr>
-<tr><td class='k'>Password</td><td class='v' id='direct_access_password'>Loading…</td></tr>
-<tr><td class='k'>Control page</td><td class='v'><a href='http://192.168.4.1/'>http://192.168.4.1</a></td></tr>
-</table>
-<div id="ap_password_control">
-<button type="button" id="ap_password_change" aria-expanded="false" aria-controls="ap_password_editor">Change password</button>
-<div id="ap_password_editor" hidden>
-<label for="ap_password_input">Device Wi-Fi password</label>
-<div class="field password"><input id="ap_password_input" type="password" maxlength="63" autocomplete="new-password" aria-describedby="ap_password_help ap_password_dirty"><button type="button" id="ap_password_show" aria-pressed="false">Show</button><span id="ap_password_dirty" class="edit-note"></span></div>
-<p id="ap_password_help" class="muted">Use 8–63 characters: letters without accents, numbers, spaces or symbols. Stop recording before saving. Devices connected to this Wi-Fi will need to reconnect with the new password.</p>
-<div class="actions"><button type="button" id="ap_password_save" disabled>Save password</button><button type="button" id="ap_password_cancel">Cancel</button></div>
-</div>
-<p id="ap_password_feedback" class="feedback" role="status" aria-live="polite"></p>
-</div>
-</section>
+<table><tr><td class='k'><label for='recording_connection'>Recording connection</label></td><td class='v'><div class='field'><select id='recording_connection'><option value='home'>Home Wi-Fi</option><option value='direct'>Standalone Wi-Fi</option></select><button id='recording_connection_apply' onclick='saveRecordingConnection()'>Apply</button></div></td></tr></table>
+<p class='section-note'>Standalone creates device Wi-Fi without searching for a router. Switching to Recording keeps an existing home connection. Wi-Fi power saving can still turn both connections off.</p>
+<p id='recording_connection_feedback' class='feedback' role='status' aria-live='polite'></p>
+<h3>Home Wi-Fi settings</h3>
+
 <table>
 <tr><td class='k' id='t_ip'>IP Address</td><td class='v' id='ip'></td></tr>
 <tr><td class='k' id='t_wifi_rssi'>WiFi RSSI</td><td class='v' id='rssi'></td></tr>
@@ -722,7 +714,7 @@
 </div>
 <p><button id='wifi_ap_save' onclick='saveWifiAp()' disabled>Save and connect</button></p>
 <p class='muted'>Changing the access point briefly interrupts the stream. The selection is kept after a restart.</p>
-<p id='wifi_ap_recovery_hint' class='muted'>If home Wi-Fi is unavailable, the device creates its own Wi-Fi for control. See Device Wi-Fi above for connection details.</p>
+<p id='wifi_ap_recovery_hint' class='muted'>If home Wi-Fi is unavailable, the device creates its own Wi-Fi for control. See Device Wi-Fi below for connection details.</p>
 <div id='wifi_ap_message' role='status' aria-live='polite'></div>
 </td>
 </tr>
@@ -758,11 +750,38 @@
 </td>
 </tr>
 </table>
+<section id='direct_access' aria-labelledby='direct_access_title'>
+<h3 id='direct_access_title'>Device Wi-Fi</h3>
+<p class='muted'>Join this network for standalone recording or when home Wi-Fi is unavailable. It is separate from your home network.</p>
+<table>
+<tr><td class='k'>Status</td><td class='v' id='direct_access_status'>Loading…</td></tr>
+<tr><td class='k'>Network</td><td class='v' id='direct_access_name'></td></tr>
+<tr><td class='k'>Password</td><td class='v' id='direct_access_password'>Loading…</td></tr>
+<tr><td class='k'>Control page</td><td class='v'><a href='http://192.168.4.1/'>http://192.168.4.1</a></td></tr>
+</table>
+<div id="ap_password_control">
+<button type="button" id="ap_password_change" aria-expanded="false" aria-controls="ap_password_editor">Change password</button>
+<div id="ap_password_editor" hidden>
+<label for="ap_password_input">Device Wi-Fi password</label>
+<div class="field password"><input id="ap_password_input" type="password" maxlength="63" autocomplete="new-password" aria-describedby="ap_password_help ap_password_dirty"><button type="button" id="ap_password_show" aria-pressed="false">Show</button><span id="ap_password_dirty" class="edit-note"></span></div>
+<p id="ap_password_help" class="muted">Use 8–63 characters: letters without accents, numbers, spaces or symbols. Stop recording before saving. Devices connected to this Wi-Fi will need to reconnect with the new password.</p>
+<div class="actions"><button type="button" id="ap_password_save" disabled>Save password</button><button type="button" id="ap_password_cancel">Cancel</button></div>
+</div>
+<p id="ap_password_feedback" class="feedback" role="status" aria-live="polite"></p>
+</div>
+</section>
 <div class='actions'><button onclick="act('wifi_reconnect')" id='b_wifi_reconnect'>Reconnect Wi-Fi</button><button onclick="confirmNetReset()" id='b_net_reset' class='danger'>Reset Wi-Fi</button></div>
 </details>
 <details id='batterysec' class='card'>
 <summary class='sum'><span><span class='section-title'>Battery</span><span class='section-note'>Monitoring, wiring and voltage calibration</span></span><span class='chev' aria-hidden='true'></span></summary>
-<details><summary>Battery connection help</summary><p id='battery_board' class='section-note'></p>
+<div class='feature-group'><table class='feature-main'><tr><td class='k'><label for='battery_monitor'>Battery monitoring</label></td><td class='v'><div class='field'><select id='battery_monitor' onchange='batteryDraftChanged()'><option value='0'>Off</option><option value='1'>On</option></select><button id='battery_save' onclick="batteryAction('enable')" disabled>Apply</button><span id='battery_dirty' class='edit-note'></span></div></td></tr></table><div id='battery_options' class='feature-settings' role='group' aria-label='Battery monitoring settings' data-feature-parent='battery_monitor'>
+<p id='battery_reading' role='status' aria-live='polite'></p>
+<div id='battery_calibration'><h3>Calibrate voltage measurement</h3><div class='field'><label for='battery_reference'>Voltage measured with a multimeter (V)</label><input id='battery_reference' type='number' min='2.5' max='4.3' step='0.001' inputmode='decimal' placeholder='4.100'></div>
+<p class='muted'>Compare stable readings at the same time. Calibration adjusts voltage and the estimated percentage. Maximum correction: ±10%.</p>
+<p id='battery_correction'></p>
+<div class='actions'><button id='battery_calibrate' onclick="batteryAction('calibrate')">Calibrate</button><button id='battery_reset' onclick="batteryAction('reset')">Reset calibration</button></div>
+<p id='battery_feedback' class='feedback' role='status' aria-live='polite'></p>
+</div></div></div><details open><summary>Battery connection help</summary><p id='battery_board' class='section-note'></p>
 <p id='battery_wiring'></p>
 <pre id='battery_divider' class='mono'>BAT+ ── 100 kΩ ──┬── D0 / A0
                  │
@@ -770,18 +789,11 @@
                  │
 BAT− / GND ──────┘</pre>
 <p id='battery_pack_note' class='muted'>One Li-ion/LiPo cell or parallel cells (1S, 4.2 V max). Percentage is a voltage estimate. USB power can produce a voltage reading even without a battery.</p>
-</details><div class='feature-group'><div class='feature-main'><div class='actions'><label><input id='battery_monitor' type='checkbox' onchange='batteryDraftChanged()'> Enable battery monitoring</label><button id='battery_save' onclick="batteryAction('enable')" disabled>Save</button><span id='battery_dirty' class='edit-note'></span></div></div><div id='battery_options' class='feature-settings' role='group' aria-label='Battery monitoring settings' data-feature-parent='battery_monitor'>
-<p id='battery_reading' role='status' aria-live='polite'></p>
-<details><summary>Calibrate voltage measurement</summary><div class='field'><label for='battery_reference'>Voltage measured with a multimeter (V)</label><input id='battery_reference' type='number' min='2.5' max='4.3' step='0.001' inputmode='decimal' placeholder='4.100'></div>
-<p class='muted'>Compare stable readings at the same time. Calibration adjusts voltage and the estimated percentage. Maximum correction: ±10%.</p>
-<p id='battery_correction'></p>
-<div class='actions'><button id='battery_calibrate' onclick="batteryAction('calibrate')">Calibrate</button><button id='battery_reset' onclick="batteryAction('reset')">Reset calibration</button></div>
-<p id='battery_feedback' class='feedback' role='status' aria-live='polite'></p>
-</details></div></div><div data-recording-only><h3>Low-battery protection</h3>
+</details><div data-recording-only><h3>Low-battery protection</h3>
 <p class='section-note'>Stops recording and closes the WAV file before the selected action. Requires battery monitoring and a correct voltage reading.</p>
-<div class='feature-group'><div class='feature-main'><div class='actions'><label><input id='field_guard' type='checkbox' onchange='fieldPowerDraftChanged()'> Enable low-battery protection</label></div></div><div id='battery_guard_options' class='feature-settings' role='group' aria-label='Low-battery protection settings' data-feature-parent='field_guard'>
+<div class='feature-group'><table class='feature-main'><tr><td class='k'><label for='field_guard'>Low-battery protection</label></td><td class='v'><div class='field'><select id='field_guard' onchange='fieldPowerDraftChanged()'><option value='0'>Off</option><option value='1'>On</option></select></div></td></tr></table><div id='battery_guard_options' class='feature-settings' role='group' aria-label='Low-battery protection settings' data-feature-parent='field_guard'>
 <div class='field'><label for='field_cutoff'>Stop voltage (V)</label><input id='field_cutoff' type='number' min='3.0' max='4.2' step='0.01' value='3.50' oninput='fieldPowerDraftChanged()'></div>
-<details id='battery_protection_advanced'><summary>Advanced protection settings</summary><div class='field'><label for='field_confirm'>Ignore brief voltage drops (seconds)</label><input id='field_confirm' type='number' min='0' max='300' step='1' value='30' oninput='fieldPowerDraftChanged()'></div>
+<details open id='battery_protection_advanced'><summary>Advanced protection settings</summary><div class='field'><label for='field_confirm'>Ignore brief voltage drops (seconds)</label><input id='field_confirm' type='number' min='0' max='300' step='1' value='30' oninput='fieldPowerDraftChanged()'></div>
 <div class='field'><label for='field_hysteresis'>Voltage rise required before restarting (V)</label><input id='field_hysteresis' type='number' min='0' max='0.3' step='0.01' value='0.10' oninput='fieldPowerDraftChanged()'></div>
 <div class='field'><label for='field_sleep'>After a low-battery stop</label><select id='field_sleep' onchange='fieldPowerDraftChanged()'><option value='1'>Sleep until switched off and on</option><option value='0'>Stay awake, recording stopped</option></select></div>
 <p class='section-note'>Confirmation ignores brief dips. Recovery requires voltage above the stop voltage plus the recovery margin. Deep sleep has no automatic wake-up. This does not replace the battery pack's hardware protection.</p>
@@ -1154,11 +1166,11 @@ BAT− / GND ──────┘</pre>
 <button onclick="loadLatestLogs()" id='b_log_latest'>Latest</button>
 <button onclick="downloadLogs()" id='b_log_dl'>Download Logs</button>
 </div>
-<details id='recording_log_settings' data-recording-only class='recording-settings'>
+<details open id='recording_log_settings' data-recording-only class='recording-settings'>
 <summary>Log settings</summary>
 <p class='section-note'>Normal logs contain recording starts, saved WAV files, stops and errors. Detailed logging adds diagnostics and periodic progress.</p>
 <div class='field'><label for='recording_log_level'>Detail</label><select id='recording_log_level' onchange='recordingLogDraftChanged()'><option value='0'>Normal</option><option value='1'>Detailed diagnostics</option></select></div>
-<div class='feature-group'><div class='feature-main'><div class='actions'><label><input id='recording_log_sd' type='checkbox' onchange='recordingLogDraftChanged()'> Append the device log to microSD in Recording mode</label></div></div><div id='sd_log_options' class='feature-settings' role='group' aria-label='SD logging settings' data-feature-parent='recording_log_sd'>
+<div class='feature-group'><table class='feature-main'><tr><td class='k'><label for='recording_log_sd'>Save log to microSD</label></td><td class='v'><div class='field'><select id='recording_log_sd' onchange='recordingLogDraftChanged()'><option value='0'>Off</option><option value='1'>On</option></select></div></td></tr></table><div id='sd_log_options' class='feature-settings' role='group' aria-label='SD logging settings' data-feature-parent='recording_log_sd'>
 <div class='field'><label for='recording_log_max'>Log size limit (MB)</label><input id='recording_log_max' type='number' min='0.07' max='16.78' step='0.01' value='1.00' oninput='recordingLogDraftChanged()'></div>
 <p class='section-note'>The same device events are saved to microSD during recording. Older messages are replaced automatically when the storage limit is reached. Files on the card retain history across restarts.</p>
 </div></div><div class='actions'><button id='recording_log_save' onclick='saveRecordingLogSettings()' disabled>Save log settings</button><span id='recording_log_dirty' class='edit-note'></span></div>
@@ -1848,10 +1860,19 @@ document.getElementById('networksec').addEventListener('toggle',function(){
 });
 function renderDeviceSetup(j){
  const s=j.setup;if(!s)return;deviceSetupState=s;
- document.getElementById('direct_access_status').textContent=s.ap_active?'Active — join this network to open controls':'Standby — available when home Wi-Fi is unavailable';
+ const recording=j.recording?.mode==='recording',standalone=recording&&s.connection==='direct';
+ const apStatus=s.ap_active?(!s.complete?'Active · Setup':standalone?'Active · Standalone':s.connected?'Active · Backup access':'Active · Home Wi-Fi unavailable'):'Off · Available as backup';
+ document.getElementById('home_wifi_status').textContent=s.connected?'Connected · '+s.ip:'Not connected';
+ document.getElementById('home_wifi_network_row').hidden=!s.connected;
+ document.getElementById('home_wifi_network').textContent=s.connected?(s.home_ssid||s.ssid):'';
+ document.getElementById('device_wifi_status').textContent=apStatus;
+ document.getElementById('direct_access_status').textContent=apStatus;
+ syncInput(document.getElementById('recording_connection'),'recording_connection',s.connection);
+ document.getElementById('recording_connection').disabled=j.recording?.supported===false||!!j.wifi_off_pending||!!j.wifi_suspended;
+ updateRecordingConnection();
  document.getElementById('direct_access_name').textContent=s.ap_name;
  if(document.getElementById('networksec').open)loadDirectAccess();
- document.getElementById('device_setup_summary').textContent='Startup: '+(s.default_mode==='recording'?'Recording':'Streaming')+' · '+(s.connection==='direct'?'Standalone Wi-Fi':s.connected?'Home Wi-Fi connected':'Waiting for home Wi-Fi')+(s.ap_active?' · Device Wi-Fi active':'');
+ document.getElementById('device_setup_summary').textContent='Mode after power-on: '+(s.default_mode==='recording'?'Recording':'Streaming')+'.';
  if(j.recording&&j.recording.mode==='streaming'&&!s.connected){
   const status=document.getElementById('device_mode_status');status.textContent='Streaming: Waiting for Wi-Fi';status.className='warn';
  }
@@ -1868,12 +1889,24 @@ async function loadDirectAccess(){
  }catch(_){message.textContent='Could not load. Reopen Network to retry.';}
  finally{directAccessLoading=false;}
 }
+
+trackEdit(document.getElementById('recording_connection'),'recording_connection');
+function updateRecordingConnection(){
+ const input=document.getElementById('recording_connection');
+ document.getElementById('recording_connection_apply').disabled=!deviceSetupState||input.disabled||sectionBusy.has('networksec')||!differsFromSaved('recording_connection');
+}
+document.getElementById('recording_connection').addEventListener('change',updateRecordingConnection);
+async function saveRecordingConnection(){
+ if(!deviceSetupState||!differsFromSaved('recording_connection'))return;
+ await saveValues('/api/setup/recording_connection',{connection:document.getElementById('recording_connection').value},['recording_connection'],'networksec','Recording connection saved.',{feedbackId:'recording_connection_feedback',refresh:loadStatus,rawErrors:true});
+ updateRecordingConnection();
+}
 </script>
 <script id='battery_script'>
 let batteryState=null,batteryDraft=null,batteryPending=false,batteryDevice=null;
 function batteryDraftChanged(){
  if(!batteryState)return;
- batteryDraft=document.getElementById('battery_monitor').checked;
+ batteryDraft=document.getElementById('battery_monitor').value==='1';
  if(batteryDraft===!!batteryState.enabled)batteryDraft=null;
  renderBattery(batteryDevice);
 }
@@ -1887,16 +1920,16 @@ function renderBattery(j){
  n('battery_pack_note').hidden=!supported;
  if(!supported)batteryDraft=null;
  if(batteryDraft===!!b.enabled)batteryDraft=null;
- n('battery_monitor').checked=supported&&(batteryDraft===null?!!b.enabled:batteryDraft);
+ n('battery_monitor').value=supported&&(batteryDraft===null?!!b.enabled:batteryDraft)?'1':'0';
  const locked=batteryPending||fieldPowerPending||!!j.recording?.busy||!!j.recording?.cooling_pending;
- n('battery_monitor').disabled=!supported||locked||!!(j.field_power?.enabled&&b.enabled);let dependency=n('battery_monitor_dependency');if(!dependency){dependency=document.createElement('p');dependency.id='battery_monitor_dependency';dependency.className='section-note';n('battery_monitor').closest('.actions').after(dependency);}dependency.textContent=locked?'Stop recording before changing battery settings.':j.field_power?.enabled?(j.recording?.mode==='recording'?'To turn battery monitoring off, first disable low-battery protection below.':'Battery monitoring is required by the saved low-battery protection setting in Recording mode.'):'';
+ n('battery_monitor').disabled=!supported||locked||!!(j.field_power?.enabled&&b.enabled);let dependency=n('battery_monitor_dependency');if(!dependency){dependency=document.createElement('p');dependency.id='battery_monitor_dependency';dependency.className='section-note';n('battery_monitor').closest('.feature-main').after(dependency);}dependency.textContent=locked?'Stop recording before changing battery settings.':j.field_power?.enabled?(j.recording?.mode==='recording'?'To turn battery monitoring off, first disable low-battery protection below.':'Battery monitoring is required by the saved low-battery protection setting in Recording mode.'):'';
  n('battery_save').disabled=!supported||locked||batteryDraft===null;
  n('battery_dirty').textContent=batteryDraft===null?'':'Unsaved';
  const valid=b.valid&&Number.isFinite(b.voltage);
  n('battery_reading').textContent=!supported?'Unsupported':!b.enabled?'Monitoring disabled':valid?`${b.voltage.toFixed(2)} V · ~${b.percent}%`:'Voltage unavailable; waiting for a valid reading.';
  const correction=Number.isFinite(b.calibration_percent)?b.calibration_percent:0;
  n('battery_correction').textContent=`Applied correction: ${correction>=0?'+':''}${correction.toFixed(2)}%`;
- const monitoringReady=b.enabled&&n('battery_monitor').checked&&batteryDraft===null;
+ const monitoringReady=b.enabled&&n('battery_monitor').value==='1'&&batteryDraft===null;
  n('battery_options')?.classList.toggle('is-disabled',!monitoringReady);
  n('battery_reference').disabled=!supported||!monitoringReady||locked;
  n('battery_calibrate').disabled=!supported||!monitoringReady||!valid||locked;
@@ -1929,7 +1962,7 @@ async function batteryAction(action){
 <script id='recording_script'>
 let recordingState=null, recordingPending=false, recordingDirty=false;
 let recordingLogState=null,recordingLogDirty=false,recordingLogPending=false;
-function recordingLogValues(){return {sd_enabled:recordingNode('recording_log_sd').checked?'1':'0',detailed:recordingNode('recording_log_level').value,max_kib:String(Number(recordingNode('recording_log_max').value)===Number((recordingLogState.max_kib*1024/1e6).toFixed(2))?recordingLogState.max_kib:(Number(recordingNode('recording_log_max').value)===16.78?16384:Math.round(Number(recordingNode('recording_log_max').value)*1e6/1024)))};}
+function recordingLogValues(){return {sd_enabled:recordingNode('recording_log_sd').value,detailed:recordingNode('recording_log_level').value,max_kib:String(Number(recordingNode('recording_log_max').value)===Number((recordingLogState.max_kib*1024/1e6).toFixed(2))?recordingLogState.max_kib:(Number(recordingNode('recording_log_max').value)===16.78?16384:Math.round(Number(recordingNode('recording_log_max').value)*1e6/1024)))};}
 function recordingLogDraftChanged(){
  if(!recordingLogState)return;
  const v=recordingLogValues();recordingLogDirty=Number(v.sd_enabled)!==Number(recordingLogState.sd_enabled)||Number(v.detailed)!==Number(recordingLogState.detailed)||Number(v.max_kib)!==recordingLogState.max_kib;
@@ -1939,7 +1972,7 @@ function recordingLogDraftChanged(){
 }
 function renderRecordingLog(r){
  if(!r.logging)return;recordingLogState=r.logging;
- if(!recordingLogDirty){recordingNode('recording_log_sd').checked=r.logging.sd_enabled;recordingNode('recording_log_level').value=r.logging.detailed?'1':'0';recordingNode('recording_log_max').value=(r.logging.max_kib*1024/1e6).toFixed(2);}
+ if(!recordingLogDirty){recordingNode('recording_log_sd').value=r.logging.sd_enabled?'1':'0';recordingNode('recording_log_level').value=r.logging.detailed?'1':'0';recordingNode('recording_log_max').value=(r.logging.max_kib*1024/1e6).toFixed(2);}
  const busy=r.busy||r.cooling_pending||recordingLogPending||recordingPending;
  for(const id of ['recording_log_sd','recording_log_level','recording_log_max'])recordingNode(id).disabled=busy;
  recordingNode('recording_log_status').textContent=r.logging.error||(!r.logging.sd_enabled?'SD logging disabled.':'SD log: '+r.logging.file+' · '+friendlyBytes(r.logging.bytes)+' · limit '+friendlyBytes(r.logging.max_kib*1024)+' per file.');
@@ -1959,7 +1992,7 @@ async function saveRecordingLogSettings(){
 let fieldPowerState=null,fieldPowerDirty=false,fieldPowerPending=false;
 const fieldPowerIds=['field_wifi_delay','field_guard','field_cutoff','field_confirm','field_hysteresis','field_sleep'];
 function fieldPowerDraft(){
- return {wifi_delay_seconds:Number(recordingNode('field_wifi_delay').value),enabled:recordingNode('field_guard').checked?1:0,cutoff_mv:Math.round(Number(recordingNode('field_cutoff').value)*1000),confirm_seconds:Number(recordingNode('field_confirm').value),hysteresis_mv:Math.round(Number(recordingNode('field_hysteresis').value)*1000),sleep_after_save:Number(recordingNode('field_sleep').value)};
+ return {wifi_delay_seconds:Number(recordingNode('field_wifi_delay').value),enabled:Number(recordingNode('field_guard').value),cutoff_mv:Math.round(Number(recordingNode('field_cutoff').value)*1000),confirm_seconds:Number(recordingNode('field_confirm').value),hysteresis_mv:Math.round(Number(recordingNode('field_hysteresis').value)*1000),sleep_after_save:Number(recordingNode('field_sleep').value)};
 }
 function fieldPowerDraftChanged(){
  if(!fieldPowerState)return;
@@ -1978,7 +2011,7 @@ function renderFieldPower(j){
  const f=j.field_power;fieldPowerState=f;
  if(!fieldPowerDirty){
   recordingNode('field_wifi_delay').value=f.wifi_delay_seconds;
-  recordingNode('field_guard').checked=f.enabled;
+  recordingNode('field_guard').value=f.enabled?'1':'0';
   recordingNode('field_cutoff').value=(f.cutoff_mv/1000).toFixed(2);
   recordingNode('field_confirm').value=f.confirm_seconds;
   recordingNode('field_hysteresis').value=(f.hysteresis_mv/1000).toFixed(2);
@@ -2072,7 +2105,7 @@ const recordingNode=id=>document.getElementById(id);
 function recordingDurationModeChanged(){const limited=recordingNode('recording_duration_mode').value==='1';recordingNode('recording_hours').value=limited?(Number(recordingNode('recording_hours').value)||60):0;recordingNode('recording_hours').hidden=!limited;recordingNode('recording_minutes_label').hidden=!limited;const group=recordingNode('recording_duration_options');if(group)group.hidden=!limited;recordingDraftChanged();}
 function recordingDraftChanged(){
  if(!recordingState)return;
- recordingDirty=!recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(recordingState.duration_minutes?'1':'0')||Math.round(Number(recordingNode('recording_hours').value))!==recordingState.duration_minutes||Number(recordingNode('recording_segment').value)!==recordingState.segment_minutes||recordingNode('recording_auto').checked!==recordingState.auto_start;
+ recordingDirty=!recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(recordingState.duration_minutes?'1':'0')||Math.round(Number(recordingNode('recording_hours').value))!==recordingState.duration_minutes||Number(recordingNode('recording_segment').value)!==recordingState.segment_minutes||recordingNode('recording_auto').value!==(recordingState.auto_start?'1':'0');
  recordingNode('recording_dirty').textContent=recordingDirty?'Unsaved':'';
  recordingNode('recording_save').disabled=!recordingDirty||recordingPending||recordingState.busy||recordingState.cooling_pending;
  recordingNode('recording_start').disabled=recordingDirty||recordingPending||fieldPowerPending||recordingState.busy||recordingState.cooling_pending||!recordingState.supported||(fieldPowerState&&fieldPowerState.start_allowed===false);
@@ -2114,7 +2147,7 @@ function renderRecording(j){
   capacity.className='section-note'+(insufficient?' warn':'');
  }
  recordingNode('recording_file').textContent=r.file||'';
- if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').checked=r.auto_start;}
+ if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').value=r.auto_start?'1':'0';}
  for(const id of ['recording_duration_mode','recording_hours','recording_segment','recording_auto'])recordingNode(id).disabled=r.busy||r.cooling_pending||recordingPending;
  recordingNode('recording_stop').disabled=(!r.busy&&!r.cooling_pending)||recordingPending;
  const check=recordingNode('recording_check');if(check)check.disabled=r.busy||r.cooling_pending||recordingPending||!r.supported;
@@ -2149,7 +2182,7 @@ async function saveRecordingSettings(){
  const rawMinutes=Number(recordingNode('recording_hours').value);
  const minutes=Math.abs(rawMinutes-Math.round(rawMinutes))<1e-8?Math.round(rawMinutes):rawMinutes;
  if(!Number.isInteger(minutes)||minutes<0||minutes>10080||(recordingNode('recording_duration_mode').value==='1'&&minutes===0)){recordingNode('recording_feedback').textContent='Choose a duration from 0 to 10080 minutes.';return;}
- await saveRecordingGroup('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').checked?'1':'0'},draftGroups[0],'recording_panel','recording_feedback','Recording settings saved.');
+ await saveRecordingGroup('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').value},draftGroups[0],'recording_panel','recording_feedback','Recording settings saved.');
 }
 </script>
 <script id='browser_audio_script'>
@@ -2289,7 +2322,7 @@ function friendlyBytes(n){const u=['B','KB','MB','GB'];let i=0;while(n>=1000&&i<
 const draftGroups=[['recording_duration_mode','recording_hours','recording_segment','recording_auto'],['recording_log_level','recording_log_sd','recording_log_max'],['field_wifi_delay','field_guard','field_cutoff','field_confirm','field_hysteresis','field_sleep'],['battery_monitor']];
 function highlightNewDrafts(){
  if(!recordingState||!fieldPowerState||!batteryState)return;
- const saved={recording_duration_mode:recordingState.duration_minutes?1:0,recording_hours:recordingState.duration_minutes,recording_segment:recordingState.segment_minutes,recording_auto:recordingState.auto_start,recording_log_level:Number(recordingLogState?.detailed),recording_log_sd:recordingLogState?.sd_enabled,recording_log_max:Number(((recordingLogState?.max_kib||0)*1024/1e6).toFixed(2)),field_wifi_delay:fieldPowerState.wifi_delay_seconds,field_guard:fieldPowerState.enabled,field_cutoff:fieldPowerState.cutoff_mv/1000,field_confirm:fieldPowerState.confirm_seconds,field_hysteresis:fieldPowerState.hysteresis_mv/1000,field_sleep:Number(fieldPowerState.sleep_after_save),battery_monitor:batteryState.enabled};
+ const saved={recording_duration_mode:recordingState.duration_minutes?1:0,recording_hours:recordingState.duration_minutes,recording_segment:recordingState.segment_minutes,recording_auto:String(Number(!!recordingState.auto_start)),recording_log_level:Number(recordingLogState?.detailed),recording_log_sd:String(Number(!!recordingLogState?.sd_enabled)),recording_log_max:Number(((recordingLogState?.max_kib||0)*1024/1e6).toFixed(2)),field_wifi_delay:fieldPowerState.wifi_delay_seconds,field_guard:String(Number(!!fieldPowerState.enabled)),field_cutoff:fieldPowerState.cutoff_mv/1000,field_confirm:fieldPowerState.confirm_seconds,field_hysteresis:fieldPowerState.hysteresis_mv/1000,field_sleep:Number(fieldPowerState.sleep_after_save),battery_monitor:String(Number(!!batteryState.enabled))};
  for(const ids of draftGroups)for(const id of ids)syncInput(document.getElementById(id),id,saved[id]);
  for(const rootId of ['recording_panel','batterysec','logssec']){
   const root=document.getElementById(rootId);updateDiscard(root);

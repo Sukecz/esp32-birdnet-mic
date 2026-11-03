@@ -97,10 +97,22 @@ change the board, startup mode or Wi-Fi, then **Save changes**. New Wi-Fi creden
 are tested before saving; a failed connection test leaves the saved network intact.
 Existing installations retain their saved Wi-Fi through the upgrade.
 
+**Recording connection** is saved separately from the default mode. You can start
+in Streaming and choose Standalone for later Recording. Switching to Recording
+keeps an existing home connection; Standalone also opens device Wi-Fi and stops
+new router connection attempts. After a restart into Standalone Recording, only
+device Wi-Fi starts. Choose Home Wi-Fi to reconnect through your router.
+**Network → Current connection** shows which connections are actually active;
+device Wi-Fi access details are lower in that section. Explicit **Wi-Fi power
+saving** in Recording still turns off both connections after the configured delay.
+Restart or power off/on to regain access unless a wake source was configured.
+
+
 **Home Wi-Fi unavailable?** After about 15 seconds offline, the device opens its
 password-protected Wi-Fi for local control. Access details are also shown under
 **Network → Device Wi-Fi**. Recording can continue offline; Streaming to your home
-network resumes when that connection returns.
+network resumes when that connection returns. In Recording, Home Wi-Fi reconnects
+automatically; Standalone does not search for the router.
 
 ### 3. Check the microphone
 

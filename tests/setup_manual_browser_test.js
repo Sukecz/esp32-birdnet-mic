@@ -30,6 +30,14 @@ const {chromium}=require('playwright-core');
    if(id==='variant')await page.selectOption('#microphone','0');
   }
   await page.click('#finish');assert.equal(writes.length,0);
+  assert.equal(await page.locator('#battery_enabled').evaluate(e=>e.tagName),'SELECT');
+  assert.equal(await page.locator('#access_details').getAttribute('open'),'');
+  // Recording connection is independent of the startup mode, including polling.
+  await page.selectOption('#connection','direct');await page.selectOption('#mode','recording');await page.selectOption('#mode','streaming');
+  await page.evaluate(()=>poll());assert.equal(await page.inputValue('#connection'),'direct');assert(await page.locator('#home_fields').isVisible());
+  await page.selectOption('#battery_enabled','1');await page.evaluate(()=>poll());assert.equal(await page.inputValue('#battery_enabled'),'1');
+  await page.click('#discard_choices');assert.equal(await page.inputValue('#connection'),'home');assert.equal(await page.inputValue('#battery_enabled'),'0');
+
   await page.selectOption('#variant','1');await page.selectOption('#microphone','1');
   await page.click('#discard_choices');assert.equal(await page.inputValue('#variant'),'0');assert(!await dirty('microphone'));
   await page.selectOption('#variant','1');await page.selectOption('#microphone','1');
@@ -39,8 +47,9 @@ const {chromium}=require('playwright-core');
   assert.equal(style.font,style.reference);assert.match(style.border,/rgb\((217, 119, 6|245, 158, 11)\)/);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   if(packed)await page.screenshot({path:`tmp/qualification/manual-ui/setup-${width}-${theme}.png`,fullPage:true});
+  await page.selectOption('#connection','direct');
   fail=false;await page.click('#finish');await page.locator('#done').waitFor();
-  assert.equal(writes.at(-1).variant,'1');assert.equal(writes.at(-1).microphone,'1');
+  assert.equal(writes.at(-1).variant,'1');assert.equal(writes.at(-1).microphone,'1');assert.equal(writes.at(-1).connection,'direct');assert.equal(writes.at(-1).mode,'streaming');assert.equal(await page.locator('#open_controls').getAttribute('href'),'/');
   // Saved concrete profiles remain selected after reload; no Auto choice exists.
   info.s3_board=1;info.mic_format=1;
   await page.reload();await page.waitForFunction(()=>!document.getElementById('choices').disabled);

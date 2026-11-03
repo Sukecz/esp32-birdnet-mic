@@ -23,7 +23,7 @@ inline bool validApPassword(const char* key, size_t length) {
 }
 inline bool valid(const Config& c) {
     return c.magic == Config{}.magic && c.complete <= 1 && c.recording <= 1 && c.direct <= 1 &&
-        (!c.direct || c.recording) && c.batteryEnabled <= 1 && c.ssid[32] == 0 && c.password[64] == 0 && c.apKey[63] == 0 &&
+        c.batteryEnabled <= 1 && c.ssid[32] == 0 && c.password[64] == 0 && c.apKey[63] == 0 &&
         validApPassword(c.apKey, strlen(c.apKey));
 }
 // Decode the old blob explicitly: enlarging the passphrase must never reset Wi-Fi or setup.

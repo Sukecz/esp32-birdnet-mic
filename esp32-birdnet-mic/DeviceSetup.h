@@ -10,6 +10,7 @@ bool defaultRecording();
 bool standalone();
 bool batteryMonitoring();
 bool setBatteryMonitoring(bool enabled);
+bool setRecordingConnection(bool direct);
 void currentMode(bool recording);
 bool apActive();
 bool requestWifiOff(uint32_t delayMs);

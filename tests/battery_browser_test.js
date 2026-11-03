@@ -29,8 +29,8 @@ const base={ok:true,complete:true,default_mode:'streaming',connection:'home',con
     return route.fulfill({json:info});
    });
    await page.goto('http://battery.test/');await page.waitForFunction(()=>!document.getElementById('choices').disabled);
-   assert.equal(await page.locator('#battery_enabled').isChecked(),false);
-   await page.check('#battery_enabled');assert(await page.locator('#battery_dialog').isVisible());
+   assert.equal(await page.locator('#battery_enabled').inputValue()==='1',false);
+   await page.selectOption('#battery_enabled','1');assert.equal(await page.locator('#battery_dialog').isVisible(),false);await page.click('#battery_help');assert(await page.locator('#battery_dialog').isVisible());
    assert.match(await page.locator('#battery_wiring').textContent(),/100 kΩ/);
    assert.match(await page.locator('#battery_dialog').textContent(),/parallel \(1S, 4\.2 V max\)/);
    assert.doesNotMatch(await page.locator('#battery_dialog').textContent(),/1%|100 nF|capacitor/i);
@@ -47,18 +47,18 @@ const base={ok:true,complete:true,default_mode:'streaming',connection:'home',con
     assert(fits,'battery wiring fits mobile dialog');
     if(!packed&&(family==='C5'||family==='C6'))await page.screenshot({path:`tmp/battery-monitoring/wiring-${family}-${theme}.png`});
    }
-   await page.keyboard.press('Escape');assert(await page.locator('#battery_enabled').isChecked());
-   await page.evaluate(()=>poll());assert(await page.locator('#battery_enabled').isChecked(),'poll preserves unsaved choice');
+   await page.keyboard.press('Escape');assert(await page.locator('#battery_enabled').inputValue()==='1');
+   await page.evaluate(()=>poll());assert(await page.locator('#battery_enabled').inputValue()==='1','poll preserves unsaved choice');
    await page.click('#battery_help');assert(await page.locator('#battery_dialog').isVisible());await page.click('#battery_close');
    await page.click('#finish');await page.locator('#done').waitFor();assert.equal(saved.battery,'1');
    info.battery_enabled=true;await page.reload();await page.waitForFunction(()=>!document.getElementById('choices').disabled);
-   assert(await page.locator('#battery_enabled').isChecked());assert.equal(await page.locator('#battery_dialog').isVisible(),false);
+   assert(await page.locator('#battery_enabled').inputValue()==='1');assert.equal(await page.locator('#battery_dialog').isVisible(),false);
    if(family==='S3'){
     await page.selectOption('#variant','1');await page.click('#battery_help');assert.match(await page.locator('#battery_board').textContent(),/Sense/);await page.click('#battery_close');
-    await page.selectOption('#variant','2');assert(await page.locator('#battery_enabled').isDisabled());assert.equal(await page.locator('#battery_enabled').isChecked(),false);
+    await page.selectOption('#variant','2');assert(await page.locator('#battery_enabled').isDisabled());assert.equal(await page.locator('#battery_enabled').inputValue()==='1',false);
     await page.selectOption('#variant','0');assert(await page.locator('#battery_enabled').isEnabled());
    }
-   await page.uncheck('#battery_enabled');await page.click('#finish');await page.locator('#done').waitFor();assert.equal(saved.battery,'0');
+   await page.selectOption('#battery_enabled','0');await page.click('#finish');await page.locator('#done').waitFor();assert.equal(saved.battery,'0');
    await page.close();
   }
   for(const packed of [false,true]){
@@ -102,13 +102,13 @@ const base={ok:true,complete:true,default_mode:'streaming',connection:'home',con
     }
     assert.match(await page.locator('#battery_wiring').textContent(),family==='C5'?/No external divider.*BAT/:/100 kΩ/);
     const before=batteryWrites.length;
-    await page.check('#battery_monitor');assert.equal(await page.locator('#battery_dirty').textContent(),'Unsaved');
-    await page.evaluate(()=>loadStatus());assert(await page.locator('#battery_monitor').isChecked());
-    await page.uncheck('#battery_monitor');assert.equal(await page.locator('#battery_dirty').textContent(),'');assert(await page.locator('#battery_save').isDisabled());assert.equal(batteryWrites.length,before);
+    await page.selectOption('#battery_monitor','1');assert.equal(await page.locator('#battery_dirty').textContent(),'Unsaved');
+    await page.evaluate(()=>loadStatus());assert(await page.locator('#battery_monitor').inputValue()==='1');
+    await page.selectOption('#battery_monitor','0');assert.equal(await page.locator('#battery_dirty').textContent(),'');assert(await page.locator('#battery_save').isDisabled());assert.equal(batteryWrites.length,before);
    }
    fixture.status.chip_family='ESP32-C5';fixture.status.board_name='XIAO ESP32-C5';
    fixture.status.battery={enabled:false,supported:true,valid:true,voltage:4.05,raw_voltage:4.05,percent:80,calibration_percent:0};await page.evaluate(()=>loadStatus());
-   await page.check('#battery_monitor');await page.click('#battery_save');
+   await page.selectOption('#battery_monitor','1');await page.click('#battery_save');
    await page.waitForFunction(()=>!batteryPending);assert.equal(batteryWrites.at(-1).enabled,'1');
    assert(await page.locator('#battery_calibrate').isEnabled());
    await page.fill('#battery_reference','4.100');await page.evaluate(()=>loadStatus());assert.equal(await page.locator('#battery_reference').inputValue(),'4.100');

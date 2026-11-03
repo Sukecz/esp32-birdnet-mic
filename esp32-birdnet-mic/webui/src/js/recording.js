@@ -1,7 +1,7 @@
 
 let recordingState=null, recordingPending=false, recordingDirty=false;
 let recordingLogState=null,recordingLogDirty=false,recordingLogPending=false;
-function recordingLogValues(){return {sd_enabled:recordingNode('recording_log_sd').checked?'1':'0',detailed:recordingNode('recording_log_level').value,max_kib:String(Number(recordingNode('recording_log_max').value)===Number((recordingLogState.max_kib*1024/1e6).toFixed(2))?recordingLogState.max_kib:(Number(recordingNode('recording_log_max').value)===16.78?16384:Math.round(Number(recordingNode('recording_log_max').value)*1e6/1024)))};}
+function recordingLogValues(){return {sd_enabled:recordingNode('recording_log_sd').value,detailed:recordingNode('recording_log_level').value,max_kib:String(Number(recordingNode('recording_log_max').value)===Number((recordingLogState.max_kib*1024/1e6).toFixed(2))?recordingLogState.max_kib:(Number(recordingNode('recording_log_max').value)===16.78?16384:Math.round(Number(recordingNode('recording_log_max').value)*1e6/1024)))};}
 function recordingLogDraftChanged(){
  if(!recordingLogState)return;
  const v=recordingLogValues();recordingLogDirty=Number(v.sd_enabled)!==Number(recordingLogState.sd_enabled)||Number(v.detailed)!==Number(recordingLogState.detailed)||Number(v.max_kib)!==recordingLogState.max_kib;
@@ -11,7 +11,7 @@ function recordingLogDraftChanged(){
 }
 function renderRecordingLog(r){
  if(!r.logging)return;recordingLogState=r.logging;
- if(!recordingLogDirty){recordingNode('recording_log_sd').checked=r.logging.sd_enabled;recordingNode('recording_log_level').value=r.logging.detailed?'1':'0';recordingNode('recording_log_max').value=(r.logging.max_kib*1024/1e6).toFixed(2);}
+ if(!recordingLogDirty){recordingNode('recording_log_sd').value=r.logging.sd_enabled?'1':'0';recordingNode('recording_log_level').value=r.logging.detailed?'1':'0';recordingNode('recording_log_max').value=(r.logging.max_kib*1024/1e6).toFixed(2);}
  const busy=r.busy||r.cooling_pending||recordingLogPending||recordingPending;
  for(const id of ['recording_log_sd','recording_log_level','recording_log_max'])recordingNode(id).disabled=busy;
  recordingNode('recording_log_status').textContent=r.logging.error||(!r.logging.sd_enabled?'SD logging disabled.':'SD log: '+r.logging.file+' · '+friendlyBytes(r.logging.bytes)+' · limit '+friendlyBytes(r.logging.max_kib*1024)+' per file.');
@@ -31,7 +31,7 @@ async function saveRecordingLogSettings(){
 let fieldPowerState=null,fieldPowerDirty=false,fieldPowerPending=false;
 const fieldPowerIds=['field_wifi_delay','field_guard','field_cutoff','field_confirm','field_hysteresis','field_sleep'];
 function fieldPowerDraft(){
- return {wifi_delay_seconds:Number(recordingNode('field_wifi_delay').value),enabled:recordingNode('field_guard').checked?1:0,cutoff_mv:Math.round(Number(recordingNode('field_cutoff').value)*1000),confirm_seconds:Number(recordingNode('field_confirm').value),hysteresis_mv:Math.round(Number(recordingNode('field_hysteresis').value)*1000),sleep_after_save:Number(recordingNode('field_sleep').value)};
+ return {wifi_delay_seconds:Number(recordingNode('field_wifi_delay').value),enabled:Number(recordingNode('field_guard').value),cutoff_mv:Math.round(Number(recordingNode('field_cutoff').value)*1000),confirm_seconds:Number(recordingNode('field_confirm').value),hysteresis_mv:Math.round(Number(recordingNode('field_hysteresis').value)*1000),sleep_after_save:Number(recordingNode('field_sleep').value)};
 }
 function fieldPowerDraftChanged(){
  if(!fieldPowerState)return;
@@ -50,7 +50,7 @@ function renderFieldPower(j){
  const f=j.field_power;fieldPowerState=f;
  if(!fieldPowerDirty){
   recordingNode('field_wifi_delay').value=f.wifi_delay_seconds;
-  recordingNode('field_guard').checked=f.enabled;
+  recordingNode('field_guard').value=f.enabled?'1':'0';
   recordingNode('field_cutoff').value=(f.cutoff_mv/1000).toFixed(2);
   recordingNode('field_confirm').value=f.confirm_seconds;
   recordingNode('field_hysteresis').value=(f.hysteresis_mv/1000).toFixed(2);
@@ -144,7 +144,7 @@ const recordingNode=id=>document.getElementById(id);
 function recordingDurationModeChanged(){const limited=recordingNode('recording_duration_mode').value==='1';recordingNode('recording_hours').value=limited?(Number(recordingNode('recording_hours').value)||60):0;recordingNode('recording_hours').hidden=!limited;recordingNode('recording_minutes_label').hidden=!limited;const group=recordingNode('recording_duration_options');if(group)group.hidden=!limited;recordingDraftChanged();}
 function recordingDraftChanged(){
  if(!recordingState)return;
- recordingDirty=!recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(recordingState.duration_minutes?'1':'0')||Math.round(Number(recordingNode('recording_hours').value))!==recordingState.duration_minutes||Number(recordingNode('recording_segment').value)!==recordingState.segment_minutes||recordingNode('recording_auto').checked!==recordingState.auto_start;
+ recordingDirty=!recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(recordingState.duration_minutes?'1':'0')||Math.round(Number(recordingNode('recording_hours').value))!==recordingState.duration_minutes||Number(recordingNode('recording_segment').value)!==recordingState.segment_minutes||recordingNode('recording_auto').value!==(recordingState.auto_start?'1':'0');
  recordingNode('recording_dirty').textContent=recordingDirty?'Unsaved':'';
  recordingNode('recording_save').disabled=!recordingDirty||recordingPending||recordingState.busy||recordingState.cooling_pending;
  recordingNode('recording_start').disabled=recordingDirty||recordingPending||fieldPowerPending||recordingState.busy||recordingState.cooling_pending||!recordingState.supported||(fieldPowerState&&fieldPowerState.start_allowed===false);
@@ -186,7 +186,7 @@ function renderRecording(j){
   capacity.className='section-note'+(insufficient?' warn':'');
  }
  recordingNode('recording_file').textContent=r.file||'';
- if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').checked=r.auto_start;}
+ if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').value=r.auto_start?'1':'0';}
  for(const id of ['recording_duration_mode','recording_hours','recording_segment','recording_auto'])recordingNode(id).disabled=r.busy||r.cooling_pending||recordingPending;
  recordingNode('recording_stop').disabled=(!r.busy&&!r.cooling_pending)||recordingPending;
  const check=recordingNode('recording_check');if(check)check.disabled=r.busy||r.cooling_pending||recordingPending||!r.supported;
@@ -221,5 +221,5 @@ async function saveRecordingSettings(){
  const rawMinutes=Number(recordingNode('recording_hours').value);
  const minutes=Math.abs(rawMinutes-Math.round(rawMinutes))<1e-8?Math.round(rawMinutes):rawMinutes;
  if(!Number.isInteger(minutes)||minutes<0||minutes>10080||(recordingNode('recording_duration_mode').value==='1'&&minutes===0)){recordingNode('recording_feedback').textContent='Choose a duration from 0 to 10080 minutes.';return;}
- await saveRecordingGroup('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').checked?'1':'0'},draftGroups[0],'recording_panel','recording_feedback','Recording settings saved.');
+ await saveRecordingGroup('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').value},draftGroups[0],'recording_panel','recording_feedback','Recording settings saved.');
 }

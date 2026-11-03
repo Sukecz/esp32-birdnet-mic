@@ -11,3 +11,6 @@
 .feature-settings input:disabled:not(.dirty),.feature-settings select:disabled:not(.dirty){color:var(--muted);opacity:.6;cursor:not-allowed}
 .feature-settings .dirty:disabled{opacity:1}
 @media(max-width:600px){.feature-settings{margin-left:10px;padding-left:8px}}
+
+/* Responsive table display must still respect the hidden attribute. */
+tr[hidden]{display:none!important}

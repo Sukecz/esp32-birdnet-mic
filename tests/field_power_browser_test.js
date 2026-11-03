@@ -33,7 +33,7 @@ const {chromium}=require('playwright-core');
   await page.goto('http://power.test/');await page.waitForFunction(()=>fieldPowerState!==null);
   assert(await page.locator('#recording_wifi_off').isDisabled());await page.fill('#field_wifi_delay','5');assert.equal(await page.locator('#field_power_dirty').textContent(),'Unsaved');
   await page.evaluate(()=>loadStatus());assert.equal(await page.locator('#field_wifi_delay').inputValue(),'5');await page.fill('#field_wifi_delay','3');assert.equal(await page.locator('#field_power_dirty').textContent(),'');assert.equal(posts.length,0);
-  await page.locator('#batterysec > summary').click();await page.check('#field_guard');await page.locator('#battery_protection_advanced > summary').click();await page.fill('#field_cutoff','3.60');await page.fill('#field_confirm','15');await page.fill('#field_hysteresis','0.12');await page.selectOption('#field_sleep','0');
+  await page.locator('#batterysec > summary').click();await page.selectOption('#field_guard','1');await page.locator('#battery_protection_advanced').evaluate(e=>e.open=true);await page.fill('#field_cutoff','3.60');await page.fill('#field_confirm','15');await page.fill('#field_hysteresis','0.12');await page.selectOption('#field_sleep','0');
   await page.click('#field_power_save');await page.waitForFunction(()=>!fieldPowerDirty&&!fieldPowerPending);
   assert.deepEqual(posts[0].body,{enabled:'1',cutoff_mv:'3600',confirm_seconds:'15',hysteresis_mv:'120',sleep_after_save:'0'});
   fixture.status.field_power.start_allowed=false;fixture.status.field_power.state='measurement_unavailable';await page.evaluate(()=>loadStatus());assert(await page.locator('#recording_start').isDisabled());

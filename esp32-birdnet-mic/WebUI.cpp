@@ -179,6 +179,7 @@ static String setupStatusJson() {
     json += ",\"connection\":\"" + String(devicesetup::standalone() ? "direct" : "home") + "\"";
     json += ",\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false");
     json += ",\"ssid\":\"" + jsonEscape(devicesetup::savedSsid()) + "\"";
+    json += ",\"home_ssid\":\"" + jsonEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String()) + "\"";
     json += ",\"ap_name\":\"" + jsonEscape(devicesetup::apName()) + "\"";
     json += ",\"ap_active\":" + String(devicesetup::apActive() ? "true" : "false");
     json += ",\"ap_ip\":\"192.168.4.1\",\"ip\":\"" + WiFi.localIP().toString() + "\"";
@@ -1321,6 +1322,24 @@ static void httpSetupConnect() {
     apiSendJSON(F("{\"ok\":true}"));
 }
 
+static void httpRecordingConnection() {
+    if (!requireMutationAuth()) return;
+    const String connection = web.arg("connection");
+    if ((connection != "home" && connection != "direct") ||
+        (connection == "direct" && !recordingHardwareSupported())) {
+        web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid recording connection.\"}"); return;
+    }
+    if (recording::resumePending() || devicesetup::connectionBusy() ||
+        devicesetup::wifiSuspended() || devicesetup::wifiOffPending()) {
+        web.send(409, "application/json", "{\"ok\":false,\"error\":\"Wait for the current operation.\"}"); return;
+    }
+    if (connection == "home" && !devicesetup::savedSsid().length()) {
+        web.send(409, "application/json", "{\"ok\":false,\"error\":\"Set up home Wi-Fi in Device configuration first.\"}"); return;
+    }
+    apiSendJSON(devicesetup::setRecordingConnection(connection == "direct") ?
+        F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"Could not save recording connection.\"}"));
+}
+
 static void httpSetupSave() {
     if (!requireMutationAuth()) return;
     const String mode = web.arg("mode"), connection = web.arg("connection");
@@ -1331,9 +1350,8 @@ static void httpSetupSave() {
     if ((hasMicrophone && (!parseUInt32Strict(web.arg("microphone"), microphone) || microphone > 2)) ||
         (mode != "streaming" && mode != "recording") ||
         (connection != "home" && connection != "direct") ||
-        (mode == "streaming" && connection == "direct") ||
         (s3BoardSelectionSupported() && (!parseUInt32Strict(web.arg("variant"), variant) || variant > 2)) ||
-        (mode == "recording" && !recordingpins::resolve(variant).supported) ||
+        ((mode == "recording" || connection == "direct") && !recordingpins::resolve(variant).supported) ||
         (batteryChoice.length() && batteryChoice != "0" && batteryChoice != "1") ||
         (batteryChoice == "1" && !battery::pins(variant).supported) ||
         (antenna::supported() && web.arg("antenna") != "external" && web.arg("antenna") != "internal")) {
@@ -1346,7 +1364,7 @@ static void httpSetupSave() {
     if (devicesetup::connectionBusy() || recording::resumePending()) {
         web.send(409, "application/json", "{\"ok\":false,\"error\":\"Wait for the current operation.\"}"); return;
     }
-    if (connection == "home" && !devicesetup::savedSsid().length() &&
+    if ((mode == "streaming" || connection == "home") && !devicesetup::savedSsid().length() &&
         String(devicesetup::connectionState()) != "connected" && web.arg("allow_offline") != "1") {
         web.send(409, "application/json", "{\"ok\":false,\"error\":\"Connect to Wi-Fi first, or choose Finish later.\"}"); return;
     }
@@ -1392,7 +1410,7 @@ static void httpSetupSave() {
         recording::checkCard(recordingHardwareSupported(), s3BoardVariant);
     devicesetup::currentMode(recording::mode());
     apiSendJSON(String("{\"ok\":true,\"reboot_required\":") + (antennaRestart || !applied ? "true" : "false") +
-        ",\"use_ap\":" + (connection == "direct" && recording::mode() ? "true" : "false") + "}");
+        ",\"use_ap\":" + (connection == "direct" && recording::mode() && WiFi.status() != WL_CONNECTED ? "true" : "false") + "}");
     if (antennaRestart || !applied) scheduleReboot(false, 1500);
 }
 
@@ -1555,6 +1573,7 @@ void webui_begin() {
     web.on("/api/setup", HTTP_GET, httpSetupStatus);
     web.on("/api/setup", HTTP_POST, httpSetupSave);
     web.on("/api/setup/connect", HTTP_POST, httpSetupConnect);
+    web.on("/api/setup/recording_connection", HTTP_POST, httpRecordingConnection);
     web.on("/api/setup/access", HTTP_POST, httpSetupAccess);
     web.on("/api/setup/scan", HTTP_POST, httpWifiApScanStart);
     web.on("/api/setup/scan", HTTP_GET, httpWifiApScanResults);

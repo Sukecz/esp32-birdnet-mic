@@ -58,7 +58,7 @@ constexpr int WIFI_OFF=0,WIFI_STA=1,WL_CONNECTED=3,WIFI_SCAN_RUNNING=-1;
 using arduino_event_id_t=int;
 constexpr int ARDUINO_EVENT_WIFI_STA_GOT_IP=1,ARDUINO_EVENT_WIFI_STA_DISCONNECTED=2;
 struct WiFiMock {
- int statusCode=0,scanning=-2,clients=0,starts=0,stops=0,begins=0;
+ int statusCode=0,scanning=-2,clients=0,starts=0,stops=0,begins=0,disconnects=0;
  bool ap=false,autoconnect=true,pinUsed=false;
  bool staleDisconnect=false,stationEnabled=true;
  void(*event)(int)=nullptr;
@@ -74,7 +74,7 @@ struct WiFiMock {
  IPAddress softAPIP(){return {};}
  void softAPdisconnect(bool){ap=false;++stops;}
  int softAPgetStationNum(){return clients;}
- void disconnect(bool){if(staleDisconnect)return;if(statusCode==WL_CONNECTED&&event)event(ARDUINO_EVENT_WIFI_STA_DISCONNECTED);statusCode=0;}
+ void disconnect(bool){++disconnects;if(staleDisconnect)return;if(statusCode==WL_CONNECTED&&event)event(ARDUINO_EVENT_WIFI_STA_DISCONNECTED);statusCode=0;}
  void begin(const char* s,const char* p,int=0,const uint8_t* b=nullptr,bool=true){++begins;ssid=s;lastPass=p?p:"";pinUsed=b!=nullptr;}
  int scanComplete(){return scanning;}
 };
@@ -106,6 +106,41 @@ void setLegacy(){strcpy((char*)legacy.sta.ssid,"Original");strcpy((char*)legacy.
 Config stored(){Config c;auto& v=nvs["setup/config"];assert(v.size()==sizeof(c));memcpy(&c,v.data(),sizeof(c));assert(valid(c));return c;}
 int main(int argc,char** argv){
  assert(argc==2);std::string scenario=argv[1];
+ if(scenario=="streaming-trial-standalone-preference"){
+  setLegacy();begin(false);
+  assert(testCredentials("New network","new-password"));tick(300);
+  WiFi.statusCode=WL_CONNECTED;WiFi.event(ARDUINO_EVENT_WIFI_STA_GOT_IP);tick(1);
+  assert(save(false,true,true)); // Home credentials are still needed for Streaming.
+  assert(savedSsid()=="New network"&&stored().password==std::string("new-password"));
+  assert(!defaultRecording()&&standalone()&&!pinnedEnabled);
+  return 0;
+ }
+ if(scenario=="recording-connection"){
+  setLegacy();begin(false);WiFi.statusCode=WL_CONNECTED;tick(1);
+  const Config before=stored();const int begins=WiFi.begins,disconnects=WiFi.disconnects;
+  failWrite=true;assert(!setRecordingConnection(true)&&!standalone());failWrite=false;
+  assert(setRecordingConnection(true)&&standalone()&&!defaultRecording());tick(500);
+  assert(!apActive()&&WiFi.status()==WL_CONNECTED&&WiFi.begins==begins&&WiFi.disconnects==disconnects);
+  assert(!stored().recording&&stored().direct&&stored().password==std::string(before.password));
+  // Entering Recording must keep the home connection alive while adding AP.
+  currentMode(true);tick(500);
+  assert(apActive()&&WiFi.status()==WL_CONNECTED&&WiFi.begins==begins&&WiFi.disconnects==disconnects);
+  // Explicit Wi-Fi power saving still stops BOTH connections and suppresses retries.
+  assert(requestWifiOff(3000));tick(2999);assert(!wifiSuspended()&&WiFi.status()==WL_CONNECTED);
+  tick(1);assert(wifiSuspended()&&!apActive()&&WiFi.radioMode==WIFI_OFF);
+  assert(!setRecordingConnection(false));tick(60000);assert(WiFi.begins==begins&&!apActive());
+  // Boot Streaming still connects Home despite Standalone preference for Recording.
+  begin(false);assert(!defaultRecording()&&standalone()&&WiFi.begins==begins+1);
+  WiFi.statusCode=WL_CONNECTED;currentMode(true);tick(500);assert(WiFi.status()==WL_CONNECTED);
+  // A naturally lost home connection in Standalone Recording is not retried.
+  WiFi.statusCode=0;const int attempts=WiFi.begins;
+  tick(60000);assert(apActive()&&WiFi.begins==attempts);
+  currentMode(false);tick(500);assert(WiFi.begins==attempts+1);
+  WiFi.statusCode=WL_CONNECTED;tick(1);tick(60000);assert(!apActive());
+  assert(save(true,true,true)); // Boot Recording standalone never searches Home.
+  const int bootAttempts=WiFi.begins;begin(true);tick(60000);assert(apActive()&&WiFi.begins==bootAttempts);
+  return 0;
+ }
  if(scenario=="wifi-off-failure"){
   setLegacy();begin(true);currentMode(true);WiFi.statusCode=WL_CONNECTED;
   const auto savedNvs=nvs;const int mode=WiFi.getMode();
@@ -350,6 +385,8 @@ bool setCpuFrequencyMhz(uint8_t){return true;}
 uint32_t currentSampleRate=32000,minAcceptableRate=30;
 uint16_t highpassCutoffHz=12000;
 bool autoThresholdEnabled=true;
+constexpr int WL_CONNECTED=3;
+struct {int status(){return WL_CONNECTED;}} WiFi;
 constexpr uint8_t MIC_FORMAT_PDM=2;
 constexpr uint32_t PDM_SAMPLE_RATE=48000;
 s3boards::Config persistedBoard{0,0,32000,30,12000};
@@ -366,6 +403,8 @@ namespace recordingpins {struct Pins{bool supported;};Pins resolve(uint8_t v){re
 namespace devicesetup {
  bool done=false,busy=false;String ssid="",state="idle";bool startup=false,direct=false;
  bool complete(){return done;}bool connectionBusy(){return busy;}
+ bool wifiSuspended(){return false;}bool wifiOffPending(){return false;}
+ bool setRecordingConnection(bool value){++mutations;if(!saveOk)return false;direct=value;return true;}
  String savedSsid(){return ssid;}const char* connectionState(){return state.c_str();}
  bool batteryOn=false;
  bool save(bool rec,bool ap,bool finish,int8_t battery=-1){++mutations;operations.push_back("setup");if(!saveOk)return false;startup=rec;direct=ap;done=finish;if(battery>=0)batteryOn=battery;return true;}
@@ -390,7 +429,7 @@ bool applyMicFormatConfig(uint8_t f){micFormat=f;if(f==2)currentSampleRate=48000
 void saveAudioSettings(){++mutations;operations.push_back("board");persistedBoard=getS3BoardConfig();}
 bool setDeviceMode(bool rec){++modeChanges;recording::active=rec;return true;}
 void scheduleReboot(bool,uint32_t){++reboots;}
-''' + uint_parser() + '\n' + function('static void httpSetupSave()') + '\n' + function('static void httpSetupConnect()') + r'''
+''' + uint_parser() + '\n' + function('static void httpSetupSave()') + '\n' + function('static void httpSetupConnect()') + '\n' + function('static void httpRecordingConnection()') + r'''
 int main(){
  web.args={{"mode","recording"},{"connection","direct"},{"variant","1"},{"antenna","external"}};
  auth=false;httpSetupSave();httpSetupConnect();assert(!mutations);auth=true;
@@ -422,7 +461,8 @@ int main(){
  assert(recording::checks==1&&recording::working);recording::working=false;
  web.args["mode"]="streaming";web.args["connection"]="home";web.args["allow_offline"]="1";
  httpSetupSave();assert(!devicesetup::startup&&recording::active&&modeChanges==1); // default != current.
- int before=mutations;web.args["connection"]="direct";httpSetupSave();assert(mutations==before);
+ web.args["connection"]="direct";httpSetupSave();assert(!devicesetup::startup&&devicesetup::direct);
+ int before=mutations;
  boardSupport=false;antennaSupport=true;web.args["connection"]="home";web.args["antenna"]="bad";
  httpSetupSave();assert(mutations==before);web.args["antenna"]="external";httpSetupSave();assert(!reboots);
  // Changing only the microphone must be rolled back when the setup commit fails.
@@ -432,6 +472,14 @@ int main(){
  saveOk=true;httpSetupSave();assert(micFormat==1);
  web.args["variant"]="2";web.args["microphone"]="0";web.args["battery"]="0";
  before=mutations;httpSetupSave();assert(mutations==before&&lastCode==400);
+ // Scoped Recording connection saves cannot touch startup, board or battery.
+ web.args={{"connection","bad"}};before=mutations;httpRecordingConnection();assert(mutations==before&&lastCode==400);
+ web.args["connection"]="home";devicesetup::ssid="";httpRecordingConnection();assert(mutations==before&&lastCode==409);
+ devicesetup::ssid="Home";auth=false;httpRecordingConnection();assert(mutations==before);auth=true;
+ devicesetup::busy=true;httpRecordingConnection();assert(mutations==before);devicesetup::busy=false;
+ const bool startupBefore=devicesetup::startup,batteryBefore=devicesetup::batteryOn;const auto boardBefore=getS3BoardConfig();
+ httpRecordingConnection();assert(mutations==before+1&&!devicesetup::direct&&devicesetup::startup==startupBefore&&devicesetup::batteryOn==batteryBefore);
+ assert(s3BoardVariant==boardBefore.variant&&micFormat==boardBefore.format);
  before=mutations;web.args["ssid"]=String(std::string("ab\0cd",5));httpSetupConnect();assert(mutations==before);
 }
 '''
@@ -509,7 +557,7 @@ int main(){
                             '-fsanitize=undefined', '-fno-sanitize-recover=all',
                             '-I', str(tmp), '-I', str(ROOT / 'esp32-birdnet-mic'),
                             str(tmp / 'test.cpp'), '-o', str(tmp / 'test')], check=True)
-            for scenario in ('wifi-off', 'wifi-off-failure', 'new', 'legacy', 'trial-failure', 'trial-success',
+            for scenario in ('wifi-off', 'wifi-off-failure', 'recording-connection', 'streaming-trial-standalone-preference', 'new', 'legacy', 'trial-failure', 'trial-success',
                              'scan-and-wrap', 'same-ssid-proof', 'uncommitted-trial-expiry', 'migration-recording-no-wifi', 'legacy-key', 'unfinished-key', 'custom-key', 'migration-write-failure', 'battery', 'reset'):
                 with self.subTest(scenario=scenario):
                     subprocess.run([str(tmp / 'test'), scenario], check=True, timeout=10)
