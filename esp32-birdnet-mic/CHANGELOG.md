@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.06 — Experimental noise reduction
+## 2.06 — Experimental noise reduction (unreleased)
 
 - Board and microphone selection remain manual in Audio and Device configuration.
   Saved concrete profiles and tuned audio values are retained after updating.
@@ -17,12 +17,25 @@
 - Shared feature hierarchy groups switches with indented dependent settings.
   Independently saved details require confirmed On; disabled drafts are retained.
   MQTT, schedule and other grouped forms remain configurable before enabling.
-- Persistent feature switches use shared On/Off controls, including Battery in setup.
-  Battery monitoring uses Apply; calibration is directly visible and nested help/settings
-  open by default. Network shows current Home/device connections before backup access details.
-- Recording connection is independent of startup mode. Entering Standalone Recording
-  preserves an existing home connection; explicit Wi-Fi power saving still turns off
-  both connections. Standalone Recording does not retry a lost router connection.
+- Persistent feature switches use shared On/Off controls, including Battery in
+  Device configuration, low-battery protection, recording auto-start and SD logging.
+  Battery monitoring uses Apply; voltage calibration is directly visible. Nested
+  help/settings open by default; top-level panels keep their existing navigation.
+- Network shows actual Home/device Wi-Fi connections first, with backup access
+  details below Home Wi-Fi settings. Saved startup and Recording preferences are
+  presented separately from the current connection state.
+- Recording connection has its own Apply action, independent of the startup mode.
+  Switching modes changes only the current mode; restarting restores the saved
+  default. Booting into Standalone Recording starts device Wi-Fi without searching
+  for a router. Switching to Streaming connects to the saved home network while
+  keeping device Wi-Fi available for control if the router is unavailable.
+- Returning to Standalone Recording preserves an existing home connection and
+  enables device Wi-Fi. Once Home is lost, Standalone does not start new router
+  connection attempts. In Streaming/Home Recording, backup device Wi-Fi closes
+  only after Home has been connected for at least 60 seconds and no AP clients remain.
+- Recording Wi-Fi power saving remains an explicit action. After the configured
+  delay it turns off both Home and device Wi-Fi and suppresses reconnection.
+  Normal access then requires reset or power off/on unless a wake source was configured.
 - Web flasher installation copy uses the manifest version badge. Packaging and
   public verification check current release copy. Poll warnings require two
   consecutive failures from the same endpoint.
