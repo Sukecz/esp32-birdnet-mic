@@ -255,7 +255,7 @@
 <p data-streaming-only class='muted'>Totals since device boot, across all clients. A temporary stall is not a disconnect. Timeouts are included in write failures. Client TEARDOWN can be intentional. Buffer flushes discard queued audio to resume live playback.</p>
 </details>
 <details id='audiosec' class='card'>
-<summary class='sum'><span><span class='section-title' id='t_audio'>Audio</span><span class='section-note'>Microphone format, signal, gain and packet size</span></span><span class='chev' aria-hidden='true'></span></summary>
+<summary class='sum'><span><span class='section-title' id='t_audio'>Audio</span><span class='section-note'>Microphone, gain, sample rate and audio buffer size</span></span><span class='chev' aria-hidden='true'></span></summary>
 <table id='audio_settings'>
 <tr id='row_s3_board' style='display:none'>
 <td class='k'><label for='sel_s3_board'>S3 board</label></td>
@@ -281,7 +281,7 @@
 <option value='2' id='opt_pdm'>PDM microphone (IM73D122)</option>
 </select>
 <button id='btn_mic_apply' onclick="chooseMicSettings()">Apply</button><button id='btn_mic_recommended' onclick="chooseMicSettings(true)">Recommended settings</button><small id='mic_format_label' class='muted'></small>
-</div>
+</div><p class='section-note'>Recommended settings also include High-pass. Review before saving.</p>
 </td>
 </tr>
 <tr id='row_mic_format_hint' style='display:none'>
@@ -318,45 +318,6 @@
 <div class='hint' id='txt_gain_hint'>Amplifies audio after I2S shift; too high will clip.</div>
 </td>
 </tr>
-<tr>
-<td class='k'>
-<span id='t_hpf'>High-pass</span>
-<button type='button' class='help' id='h_hpf' aria-label='Help' aria-expanded='false' title="Cuts low-frequency rumble.">?</button>
-</td>
-<td class='v'>
-<div class='field'>
-<select id='sel_hp'>
-<option value='off'>OFF</option>
-<option value='on'>ON</option>
-</select>
-<button id='btn_hp_set' onclick="setv('hp_enable',sel_hp.value)">Apply</button>
-</div>
-</td>
-</tr>
-<tr id='row_hpf_hint' style='display:none'>
-<td colspan='2'>
-<div class='hint' id='txt_hpf_hint'>Cuts low-frequency rumble.</div>
-</td>
-</tr>
-<tr>
-<td class='k'>
-<span id='t_hpf_cut'>HPF Cutoff</span>
-<button type='button' class='help' id='h_hpf_cut' aria-label='Help' aria-expanded='false' title="High-pass cutoff in Hz.">?</button>
-</td>
-<td class='v'>
-<div class='field'>
-<input id='in_hp_cutoff' type='number' step='1' min='10' max='10000'>
-<span class='unit'>Hz</span>
-<button id='btn_hpf_cut_set' onclick="setv('hp_cutoff',in_hp_cutoff.value)">Apply</button>
-</div>
-</td>
-</tr>
-<tr id='row_hpf_cut_hint' style='display:none'>
-<td colspan='2'>
-<div class='hint' id='txt_hpf_cut_hint'>High-pass cutoff in Hz.</div>
-</td>
-</tr>
-</table><details id='audioadvanced' class='advanced'><summary>Advanced audio settings</summary><table>
 <tr>
 <td class='k'>
 <span id='t_rate'>Sample Rate</span>
@@ -429,8 +390,50 @@
 <td colspan='2'>
 <div class='hint' id='txt_shift_hint'>Digital right shift before gain scaling.</div>
 </td>
-</tr></table><div id='adv' class='muted'></div></details>
+</tr></table><div id='adv' class='muted'></div>
+</details>
+<details id='noisesec' class='card'>
+<summary class='sum'><span><span class='section-title'>Audio noise reduction</span><span class='section-note'>High-pass filter and optional background noise reduction</span></span><span class='chev' aria-hidden='true'></span></summary>
 <table id='noise_settings'>
+<tr>
+<td class='k'>
+<span id='t_hpf'>High-pass</span>
+<button type='button' class='help' id='h_hpf' aria-label='Help' aria-expanded='false' title="Cuts low-frequency rumble.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<select id='sel_hp'>
+<option value='off'>OFF</option>
+<option value='on'>ON</option>
+</select>
+<button id='btn_hp_set' onclick="setv('hp_enable',sel_hp.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_hpf_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_hpf_hint'>Cuts low-frequency rumble.</div>
+</td>
+</tr>
+<tr>
+<td class='k'>
+<span id='t_hpf_cut'>HPF Cutoff</span>
+<button type='button' class='help' id='h_hpf_cut' aria-label='Help' aria-expanded='false' title="High-pass cutoff in Hz.">?</button>
+</td>
+<td class='v'>
+<div class='field'>
+<input id='in_hp_cutoff' type='number' step='1' min='10' max='10000'>
+<span class='unit'>Hz</span>
+<button id='btn_hpf_cut_set' onclick="setv('hp_cutoff',in_hp_cutoff.value)">Apply</button>
+</div>
+</td>
+</tr>
+<tr id='row_hpf_cut_hint' style='display:none'>
+<td colspan='2'>
+<div class='hint' id='txt_hpf_cut_hint'>High-pass cutoff in Hz.</div>
+</td>
+</tr>
+
 <tr><td class='k'><label for='noise_mode'>Noise reduction</label><span class='badge'>Experimental</span></td>
 <td class='v'><div class='field'><select id='noise_mode'><option value='0'>Off</option><option value='1'>On</option></select></div>
 <div class='actions'><button id='noise_save' onclick='saveNoiseSettings()' disabled>Save noise reduction</button></div>
@@ -1502,7 +1505,7 @@ $('health_buffer').textContent=(j.rb_drops??0)+' / '+(j.rb_flushes??0);
 $('health_stop').textContent=j.last_stop_time ? (j.last_stop_stream?'Stream '+j.last_stop_stream:'All streams')+' — '+j.last_stop_reason+' — '+j.last_stop_time+' ('+j.last_stop_age+')' : 'No stop recorded';
 }
 async function saveS3Board(){
- if(micDialogLoading||micDialogState||sectionBusy.has('audiosec'))return;
+ if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('noisesec'))return;
  const variant=Number($('sel_s3_board').value);
  if(!differsFromSaved('s3_board'))return;
  const keys=['s3_board'];
@@ -1511,13 +1514,13 @@ async function saveS3Board(){
 let micDialogState=null,micDialogLoading=false;
 const micProfileKeys=['mic_format','rate','gain','buffer','shift','hp_enable','hp_cutoff'];
 async function chooseMicSettings(force=false){
- if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
+ if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('noisesec')||sectionBusy.has('thermalsec'))return;
  const format=Number($('sel_mic_format').value),label=$('sel_mic_format').selectedOptions[0]?.textContent||'';
  micDialogLoading=true;
  try{
   const [p,a,t]=await Promise.all([fetchJSON('/api/microphone_profile?format='+format),fetchJSON('/api/audio_status'),fetchJSON('/api/thermal')]);
   if(!p.ok||p.mic_format!==format)throw new Error('profile');
-  if(Number($('sel_mic_format').value)!==format||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
+  if(Number($('sel_mic_format').value)!==format||sectionBusy.has('audiosec')||sectionBusy.has('noisesec')||sectionBusy.has('thermalsec'))return;
   if(!force&&a.mic_format===format){feedback('audiosec','This microphone is already selected. Use Recommended settings to review its defaults.');return;}
   const rows=$('mic_dialog_rows');rows.replaceChildren();
   const add=(label,old,value)=>{const tr=document.createElement('tr');for(const text of [label,old,value]){const td=document.createElement('td');td.textContent=String(text);tr.append(td);}rows.append(tr);};
@@ -1542,9 +1545,11 @@ async function saveMicSettings(mode){
  if(state.format===2&&!keys.includes('rate'))keys.push('rate');
  if(mode==='recommended'&&state.profile.cpu_mhz)keys.push('cpu_freq');
  const cpuChange=mode==='recommended'&&state.profile.cpu_mhz;
- if(cpuChange){sectionBusy.add('thermalsec');updateDiscard($('thermalsec'));}
+ const relatedSections=['noisesec',...(cpuChange?['thermalsec']:[])];
+ for(const id of relatedSections){sectionBusy.add(id);updateDiscard($(id));}
+ if(window.updateNoiseSave)updateNoiseSave();
  try{await saveValues('/api/settings/microphone',{format:state.format,settings:mode},keys,'audiosec',mode==='recommended'?'Microphone and recommended settings saved.':'Microphone saved. Custom values preserved.');}
- finally{if(cpuChange){sectionBusy.delete('thermalsec');updateDiscard($('thermalsec'));}}
+ finally{for(const id of relatedSections){sectionBusy.delete(id);updateDiscard($(id));}if(window.updateNoiseSave)updateNoiseSave();}
 }
 $('mic_dialog').addEventListener('close',()=>{micDialogState=null;});
 function renderMicFormat(j){
@@ -1688,7 +1693,7 @@ window.addEventListener('beforeunload',event=>{if(Object.keys(edits).length||wif
 </script>
 <script>const noiseFields=[['noise_mode','noise_mode','mode'],['noise_floor','noise_floor','floor_db'],['noise_adapt','noise_adapt','adapt_s']];
 for(const [id,key] of noiseFields){trackEdit($(id),key);$(id).addEventListener('change',updateNoiseSave);}
-function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;$('noise_save').disabled=busy||sectionBusy.has('audiosec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
+function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;$('noise_save').disabled=busy||sectionBusy.has('noisesec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
 function renderNoiseSettings(s){
  if(!s)return;
  for(const [id,key,field] of noiseFields)syncInput($(id),key,String(s[field]));
@@ -1701,11 +1706,11 @@ function renderNoiseSettings(s){
 }
 async function saveNoiseSettings(){
  if(!noiseFields.some(([,key])=>differsFromSaved(key)))return;
- await saveValues('/api/noise/set',{mode:$('noise_mode').value,floor:$('noise_floor').value,adapt:$('noise_adapt').value},noiseFields.map(([,key])=>key),'audiosec','Noise reduction settings saved.');updateNoiseSave();
+ await saveValues('/api/noise/set',{mode:$('noise_mode').value,floor:$('noise_floor').value,adapt:$('noise_adapt').value},noiseFields.map(([,key])=>key),'noisesec','Noise reduction settings saved.');updateNoiseSave();
 }
 let noiseGraphBusy=false;
 async function updateNoiseSpectrum(){
- if(!$('noise_details').open||!$('noise_diagnostics').open||!$('audiosec').open||noiseGraphBusy)return;
+ if(!$('noise_details').open||!$('noise_diagnostics').open||!$('noisesec').open||noiseGraphBusy)return;
  noiseGraphBusy=true;
  try{
   const s=await fetchJSON('/api/noise?spectra=1');renderNoiseSettings(s);

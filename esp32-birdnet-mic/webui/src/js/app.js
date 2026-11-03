@@ -151,7 +151,7 @@ $('health_buffer').textContent=(j.rb_drops??0)+' / '+(j.rb_flushes??0);
 $('health_stop').textContent=j.last_stop_time ? (j.last_stop_stream?'Stream '+j.last_stop_stream:'All streams')+' — '+j.last_stop_reason+' — '+j.last_stop_time+' ('+j.last_stop_age+')' : 'No stop recorded';
 }
 async function saveS3Board(){
- if(micDialogLoading||micDialogState||sectionBusy.has('audiosec'))return;
+ if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('noisesec'))return;
  const variant=Number($('sel_s3_board').value);
  if(!differsFromSaved('s3_board'))return;
  const keys=['s3_board'];
@@ -160,13 +160,13 @@ async function saveS3Board(){
 let micDialogState=null,micDialogLoading=false;
 const micProfileKeys=['mic_format','rate','gain','buffer','shift','hp_enable','hp_cutoff'];
 async function chooseMicSettings(force=false){
- if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
+ if(micDialogLoading||micDialogState||sectionBusy.has('audiosec')||sectionBusy.has('noisesec')||sectionBusy.has('thermalsec'))return;
  const format=Number($('sel_mic_format').value),label=$('sel_mic_format').selectedOptions[0]?.textContent||'';
  micDialogLoading=true;
  try{
   const [p,a,t]=await Promise.all([fetchJSON('/api/microphone_profile?format='+format),fetchJSON('/api/audio_status'),fetchJSON('/api/thermal')]);
   if(!p.ok||p.mic_format!==format)throw new Error('profile');
-  if(Number($('sel_mic_format').value)!==format||sectionBusy.has('audiosec')||sectionBusy.has('thermalsec'))return;
+  if(Number($('sel_mic_format').value)!==format||sectionBusy.has('audiosec')||sectionBusy.has('noisesec')||sectionBusy.has('thermalsec'))return;
   if(!force&&a.mic_format===format){feedback('audiosec','This microphone is already selected. Use Recommended settings to review its defaults.');return;}
   const rows=$('mic_dialog_rows');rows.replaceChildren();
   const add=(label,old,value)=>{const tr=document.createElement('tr');for(const text of [label,old,value]){const td=document.createElement('td');td.textContent=String(text);tr.append(td);}rows.append(tr);};
@@ -191,9 +191,11 @@ async function saveMicSettings(mode){
  if(state.format===2&&!keys.includes('rate'))keys.push('rate');
  if(mode==='recommended'&&state.profile.cpu_mhz)keys.push('cpu_freq');
  const cpuChange=mode==='recommended'&&state.profile.cpu_mhz;
- if(cpuChange){sectionBusy.add('thermalsec');updateDiscard($('thermalsec'));}
+ const relatedSections=['noisesec',...(cpuChange?['thermalsec']:[])];
+ for(const id of relatedSections){sectionBusy.add(id);updateDiscard($(id));}
+ if(window.updateNoiseSave)updateNoiseSave();
  try{await saveValues('/api/settings/microphone',{format:state.format,settings:mode},keys,'audiosec',mode==='recommended'?'Microphone and recommended settings saved.':'Microphone saved. Custom values preserved.');}
- finally{if(cpuChange){sectionBusy.delete('thermalsec');updateDiscard($('thermalsec'));}}
+ finally{for(const id of relatedSections){sectionBusy.delete(id);updateDiscard($(id));}if(window.updateNoiseSave)updateNoiseSave();}
 }
 $('mic_dialog').addEventListener('close',()=>{micDialogState=null;});
 function renderMicFormat(j){

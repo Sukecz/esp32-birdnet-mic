@@ -40,7 +40,7 @@ const {chromium}=require('playwright-core');
    return route.fulfill({json:fixture[path.slice(5)]||{ok:true,available:false,latest:'1.30'}});
   });
   await page.goto('http://ui.test/');await page.waitForFunction(()=>document.querySelector('#in_gain').value==='1.50');
-  await page.evaluate(()=>{openSection('audiosec');document.getElementById('audioadvanced').open=true;});
+  await page.evaluate(()=>{openSection('audiosec');openSection('noisesec');});
   assert.equal(await page.locator('#sel_mic_format option').count(),3); // Three manual signal formats; ICS/INMP remain one group.
   // Merely selecting a microphone, cancelling or pressing Escape sends no writes.
   await page.selectOption('#sel_mic_format','2');await page.locator('#btn_mic_apply').click();

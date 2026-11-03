@@ -22,7 +22,7 @@ Bird identification runs on the receiving computer, not on the ESP32.
 
 Select your board and microphone in **Device configuration** during setup.
 Saved selections are retained after updating.
-Optional **Adaptive noise reduction (Experimental)** is in Audio after High-pass;
+Optional **Adaptive noise reduction (Experimental)** is in **Audio noise reduction**, together with High-pass;
 it defaults Off and affects RTSP, Listen and SD recordings when enabled. Its
 benefit for BirdNET recognition still needs comparison on real recordings.
 
@@ -411,7 +411,7 @@ When upgrading from the v15 PDM firmware, start with
 **new Gain = old Gain × 2^(16 − old I2S Shift)**, then check the level/clipping.
 For example, Shift 12 / Gain 1.5 becomes Gain 24. Saved Gain is not changed automatically.
 
-**On C3/C5, set Audio → Advanced audio settings → RTP packet size to 512 samples,
+**On C3/C5, set Audio → Audio buffer size to 512 samples,
 and use 160 MHz CPU in Thermal & performance.** The default packet size is already 512, but
 choosing **Keep saved values and save** preserves a previously saved larger size. The firmware reduces its internal audio
 reserve when RAM is limited; this does not automatically change the packet-size setting.

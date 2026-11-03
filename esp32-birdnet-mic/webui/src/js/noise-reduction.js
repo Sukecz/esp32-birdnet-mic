@@ -1,6 +1,6 @@
 const noiseFields=[['noise_mode','noise_mode','mode'],['noise_floor','noise_floor','floor_db'],['noise_adapt','noise_adapt','adapt_s']];
 for(const [id,key] of noiseFields){trackEdit($(id),key);$(id).addEventListener('change',updateNoiseSave);}
-function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;$('noise_save').disabled=busy||sectionBusy.has('audiosec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
+function updateNoiseSave(){const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;$('noise_save').disabled=busy||sectionBusy.has('noisesec')||!noiseFields.some(([,key])=>differsFromSaved(key));}
 function renderNoiseSettings(s){
  if(!s)return;
  for(const [id,key,field] of noiseFields)syncInput($(id),key,String(s[field]));
@@ -13,11 +13,11 @@ function renderNoiseSettings(s){
 }
 async function saveNoiseSettings(){
  if(!noiseFields.some(([,key])=>differsFromSaved(key)))return;
- await saveValues('/api/noise/set',{mode:$('noise_mode').value,floor:$('noise_floor').value,adapt:$('noise_adapt').value},noiseFields.map(([,key])=>key),'audiosec','Noise reduction settings saved.');updateNoiseSave();
+ await saveValues('/api/noise/set',{mode:$('noise_mode').value,floor:$('noise_floor').value,adapt:$('noise_adapt').value},noiseFields.map(([,key])=>key),'noisesec','Noise reduction settings saved.');updateNoiseSave();
 }
 let noiseGraphBusy=false;
 async function updateNoiseSpectrum(){
- if(!$('noise_details').open||!$('noise_diagnostics').open||!$('audiosec').open||noiseGraphBusy)return;
+ if(!$('noise_details').open||!$('noise_diagnostics').open||!$('noisesec').open||noiseGraphBusy)return;
  noiseGraphBusy=true;
  try{
   const s=await fetchJSON('/api/noise?spectra=1');renderNoiseSettings(s);

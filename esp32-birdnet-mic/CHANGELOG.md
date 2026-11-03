@@ -4,14 +4,15 @@
 
 - Board and microphone selection remain manual in Audio and Device configuration.
   Saved concrete profiles and tuned audio values are retained after updating.
-- Optional experimental adaptive noise reduction in Audio, after High-pass.
+- Optional experimental adaptive noise reduction in Audio noise reduction, together with High-pass.
   It processes Listen, RTSP and SD audio, defaults Off and learns again after
   relevant changes. DSP based on a contributor's fixed-point spectral subtraction
   implementation. Better BirdNET recognition is not yet established.
 - Noise settings use the shared draft/save/discard lifecycle. Spectrum and CPU
   diagnostics are under details. Memory/CPU failures keep unfiltered audio flowing;
   the filter never raises CPU frequency. Low-frequency CPU operation needs qualification.
-- Advanced audio settings stays collapsed above experimental noise reduction.
+- Audio settings are directly visible. High-pass and adaptive noise reduction
+  have a separate Audio noise reduction section with independent save scopes.
   Thermal & performance separates CPU speed from temperature protection.
 - Web flasher installation copy uses the manifest version badge. Packaging and
   public verification check current release copy. Poll warnings require two

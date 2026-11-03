@@ -49,4 +49,4 @@ release/device validation workflow.
 Device configuration uses `src/js/setup.js`, assembled into `webui/setup.js`.
 It includes the same `settings/fields.js` draft engine as the main page; edit the
 source fragment and regenerate both source and embedded outputs. Noise reduction
-uses its own logical save group within Audio, and keeps other Audio drafts pending.
+uses its own logical save group in Audio noise reduction. High-pass and noise reduction saves keep each other's drafts pending; microphone recommendations explicitly review any High-pass changes.
