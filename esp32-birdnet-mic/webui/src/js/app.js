@@ -71,6 +71,7 @@ function openSection(id){const el=$(id);if(el)el.open=true;}
 const overviewState={};
 function updateOverview(kind,j){
  overviewState[kind]=j;
+ if(kind==='status'&&typeof updateNoiseSave==='function')updateNoiseSave();
  const put=(id,text,cls='')=>{const el=$(id);if(el){el.textContent=text;el.className=cls;}};
  if(kind==='status'){
   put('overview_wifi','Wi-Fi: '+j.wifi_rssi+' dBm');put('overview_clients','RTSP clients: '+((j.s1_clients||0)+(j.s2_clients||0)));put('overview_uptime','Uptime: '+j.uptime);
