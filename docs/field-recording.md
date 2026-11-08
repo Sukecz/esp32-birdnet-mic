@@ -14,12 +14,12 @@ To choose your own device Wi-Fi password, open **Network → Device Wi-Fi → Ch
    confirm microphone sound. Stop Listen after the sound check.
 3. Choose **Recording duration → Until stopped** or **Set a duration** (minutes,
    up to 10080 = seven days). Choose **Start a new file every** (1–120 minutes).
-   Save the settings. Longer uninterrupted sessions use Until stopped, subject
+   Choose **File format → WAV** (default) or **FLAC (lossless)**, then save the settings. FLAC preserves the same audio samples; space savings depend on the sound. Longer uninterrupted sessions use Until stopped, subject
    to available power and storage.
 4. If wanted, enable **Start recording after power-on**. This is separate from
    choosing the default mode. Enable battery monitoring and configure low-battery
    protection with enough reserve to finish saving before hardware power cutoff.
-5. Make a short test recording, Stop & save, and play the WAV on a computer.
+5. Make a short test recording, Stop & save, and play the WAV or FLAC on a computer.
    Reinsert the card with power disconnected. Start the intended field session.
 6. Check the recording status before leaving. Protect the assembly from water,
    condensation and direct sun without blocking the microphone.
@@ -38,7 +38,7 @@ completion. If automatic thermal recovery is enabled, eligible recovery starts a
 new file after cooling. Do not assume a permanently stopped session will resume.
 
 **There is no ordinary wake timer or remote way to turn Wi-Fi back on.** Reset or
-power-cycle the device. A reset during recording may leave the current `.wav.part`
+power-cycle the device. A reset during recording may leave the current `.wav.part` or `.flac.part`
 unfinished; completed earlier segments remain on the card. For a planned finish,
 set a duration before switching Wi-Fi off and allow time for finalization.
 On restart, the saved default mode and auto-start setting apply again.
@@ -52,7 +52,10 @@ recoverable recordings. Existing recordings are never automatically deleted.
 ## Storage and battery calculations
 
 At 48 kHz × 2 bytes × one channel, PCM uses 96000 bytes/s, 345.6 MB/hour or
-8.2944 GB/day. WAV headers, filesystem space, logs and reserve reduce usable time.
+8.2944 GB/day in WAV. FLAC preserves the same audio and can save around 15–50%
+of space, depending on the sound. Actual savings can be lower or higher; this
+is not a guaranteed minimum. For a conservative plan, use WAV capacity.
+Headers, filesystem space, logs and reserve reduce usable time.
 The [main table](../README.md#recording-outdoors-days-of-sound-on-microsd) uses decimal
 card capacities. Other sample rates scale proportionally. FAT32 is the documented
 filesystem; 64/128 GB examples are arithmetic, not physical qualification. Sense's

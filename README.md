@@ -11,12 +11,12 @@
 </p>
 
 Open-source ESP32 microphone firmware with two modes: **Streaming** sends live audio
-to BirdNET-Go, BirdNET-Pi, VLC or ffmpeg; **Recording** saves WAV files to a microSD
+to BirdNET-Go, BirdNET-Pi, VLC or ffmpeg; **Recording** saves WAV or lossless FLAC files to a microSD
 card, even away from your home Wi-Fi. Use **Listen** for a quick sound check in either mode.
 Bird identification runs on the receiving computer, not on the ESP32.
 
-> **Firmware 2.06** — ESP32-S31 support, optional experimental noise reduction and simpler controls.
-> [What’s new in 2.06](release-notes/2.06.md).
+> **Firmware 2.07** — Lossless FLAC recording, safer full-card shutdown and simpler Recording controls.
+> [What’s new in 2.07](release-notes/2.07.md).
 
 **[Boards](#supported-boards) · [Quick start](#quick-start) · [Modes](#streaming-and-recording) · [Battery](#battery) · [Features](#features) · [Wiring](#microphones-and-wiring) · [Help](#everyday-use-and-troubleshooting)**
 
@@ -132,7 +132,7 @@ Streaming or Recording steps below.
 | | Streaming | Recording |
 |---|---|---|
 | Main purpose | Live audio for a network receiver | Standalone audio collection |
-| Audio destination | BirdNET-Go, BirdNET-Pi, VLC or ffmpeg | WAV files on microSD |
+| Audio destination | BirdNET-Go, BirdNET-Pi, VLC or ffmpeg | WAV or FLAC files on microSD |
 | Home Wi-Fi | Needed for the normal network receiver | Optional; direct device Wi-Fi also works |
 | SD card | Not required | Required |
 | Browser Listen | Available | Available independently of SD writing |
@@ -167,7 +167,7 @@ A `.local` hostname can replace the IP where your network supports mDNS.
    confirms recording; hearing audio alone does not confirm that the card is writing.
 5. You can disconnect your phone and leave the device recording. To finish, reconnect,
    press **Stop & save**, and wait for **Saved** before powering off or removing the card.
-6. Read the WAV files from the card's **`recordings/`** folder on your computer.
+6. Read the WAV or FLAC files from the card's **`recordings/`** folder on your computer.
 
 Files contain **16-bit mono PCM** at the microphone sample rate, including the current
 gain and high-pass settings. PDM runs at **48 kHz** (about **346 MB per hour**).
@@ -198,7 +198,7 @@ your own enclosure and component layout.
 This build uses:
 
 - **XIAO ESP32-C5** with a **PDM microphone**.
-- A **microSD card and module** for offline WAV recording.
+- A **microSD card and module** for offline WAV/FLAC recording.
 - **Four LG MH1 18650 cells** in a **1S parallel pack**.
 - A **1S BMS**, **output fuse** and **power switch**.
 - An enclosure with **3D-printed parts**, including the microphone hood.
@@ -226,9 +226,13 @@ enters deep sleep. A temporary thermal pause awaiting recovery is different.
 Choose a finite duration before switching Wi-Fi off if you want a planned finish.
 Resetting an active recording can leave its current file incomplete.
 
-At **48 kHz, 16-bit mono**, recording uses about **346 MB/hour / 8.29 GB/day**:
+At **48 kHz, 16-bit mono**, WAV uses about **346 MB/hour / 8.29 GB/day**.
+FLAC preserves the same audio and can save around **15–50% of space**, depending
+on the sound. Actual savings can be lower or higher; this is not a guaranteed
+minimum. Quiet recordings can save more, while noise can approach WAV size.
+See the [FLAC FAQ](https://www.xiph.org/flac/faq.html) for why compression varies.
 
-| Card size | Approximate continuous audio capacity |
+| Card size | WAV capacity (conservative planning) |
 |---|---:|
 | 8 GB | 23 hours |
 | 16 GB | 1.9 days |
@@ -237,9 +241,10 @@ At **48 kHz, 16-bit mono**, recording uses about **346 MB/hour / 8.29 GB/day**:
 | 128 GB | 15.4 days* |
 
 These are decimal-capacity calculations before formatting, logs and free-space reserve.
+FLAC can extend these times; the exact capacity depends on the recorded sound.
 *64/128 GB are capacity examples, not qualified card sizes. Use FAT32; do not assume
-factory exFAT works. Sense documentation specifies up to 32 GB. Our C5 physical
-recording test used 32 GB. **Eight continuous days need over 66 GB of audio space**;
+factory exFAT works. Sense documentation specifies up to 32 GB. C5 Recording has been verified with a
+32 GB FAT32 card. **Eight continuous days need over 66 GB in WAV**;
 a 32 GB card fills before a large battery pack runs out.
 
 ## Battery
@@ -270,7 +275,7 @@ it complements the pack's hardware protection.
 
 ## Features
 
-- **Two operating modes:** live RTSP Streaming or standalone microSD WAV Recording.
+- **Two operating modes:** live RTSP Streaming or standalone microSD WAV/FLAC Recording.
 - **Browser sound check:** independent Listen in both modes, playback volume up to
   150%, signal level and microphone health indicators.
 - **Flexible microphones:** I2S and PDM inputs, S3 built-in microphone profiles,
@@ -489,7 +494,7 @@ For setup details, schedules, MQTT and API examples, see the [firmware guide](es
 ### Does BirdNETMic identify birds on the ESP32?
 
 No. In Streaming mode, BirdNET-Go or BirdNET-Pi performs identification on the
-receiving computer. In Recording mode, take the WAV files from the SD card and
+receiving computer. In Recording mode, take the WAV or FLAC files from the SD card and
 process them later.
 
 ### Can I record without a router or internet?

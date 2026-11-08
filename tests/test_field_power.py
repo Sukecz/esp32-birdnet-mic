@@ -75,6 +75,9 @@ namespace recording {
  inline Status view;inline bool working=true,pending=false;
  inline bool recordingMode=true;bool mode(){return recordingMode;}bool busy(){return working;}bool resumePending(){return pending;}
  Status status(){return view;}
+ void updateBatteryLog(uint32_t){}
+ bool sleepLogReady=true;
+ bool prepareSleepLog(const char*,uint8_t){return sleepLogReady;}
  enum class StopReason{LowBattery};
  void requestStop(StopReason=StopReason::LowBattery){if(working)view.state=State::Saving;}
 }
@@ -106,6 +109,8 @@ int main(){
  battery::sample={true,3400,3};serviceFieldPower();assert(triggered()&&!sleeps&&recording::busy());
  serviceFieldPower();assert(!sleeps); // worker still owns the open file.
  recording::working=false;recording::view.state=recording::State::Saved;
+ recording::sleepLogReady=false;serviceFieldPower();assert(!sleeps);
+ recording::sleepLogReady=true;
  serviceFieldPower();assert(sleeps==1&&pauses==1&&timers==0); // ordinary sleep has no wake timer.
  assert(!canStart(battery::sample));battery::sample={true,3600,4};assert(!acknowledge(battery::sample));
  battery::sample.millivolts=3700;assert(acknowledge(battery::sample)&&canStart(battery::sample));

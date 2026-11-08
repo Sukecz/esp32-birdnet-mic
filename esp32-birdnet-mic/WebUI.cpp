@@ -1243,7 +1243,7 @@ static void httpSet() {
     else if (key == "max_clients") {
         handled = true;
         uint32_t v;
-        if (argToUInt(v) && v >= 1 && v <= 2) { maxActiveClients = (uint8_t)v; saveAudioSettings(); applied = true; }
+        if (argToUInt(v) && v >= 1 && v <= MAX_CLIENTS) { maxActiveClients = (uint8_t)v; saveAudioSettings(); applied = true; }
     }
 
     if (!handled) {
@@ -1527,12 +1527,14 @@ static void httpRecordingSettings() {
     if (!requireMutationAuth()) return;
     uint32_t duration = 0, segment = 0;
     const String autoStart = web.arg("auto_start");
+    const String format=web.hasArg("format")?web.arg("format"):String(recording::settings().format?"flac":"wav");
     if (!parseUInt32Strict(web.arg("duration_minutes"), duration) || duration > 10080 ||
         !parseUInt32Strict(web.arg("segment_minutes"), segment) || segment < 1 || segment > 120 ||
-        (autoStart != "0" && autoStart != "1")) {
+        (autoStart != "0" && autoStart != "1") || (format!="wav" && format!="flac")) {
         web.send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid recording settings\"}"); return;
     }
     auto config = recording::settings();
+    config.format=format=="flac";
     config.durationMinutes = duration; config.segmentMinutes = segment; config.autoStart = autoStart == "1";
     bool ok = recording::saveSettings(config);
     apiSendJSON(ok ? F("{\"ok\":true}") : F("{\"ok\":false,\"error\":\"Recording settings could not be saved\"}"));

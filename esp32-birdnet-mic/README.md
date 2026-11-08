@@ -4,16 +4,16 @@
 
 # BirdNETMic Firmware — Streaming and standalone Recording
 
-Two modes: live **RTSP Streaming** or standalone **microSD WAV Recording**.
+Two modes: live **RTSP Streaming** or standalone **microSD WAV/FLAC Recording**.
 Start with the [beginner guide](../README.md) and [field recording guide](../docs/field-recording.md).
-Current firmware: **2.06** ([release notes](../release-notes/2.06.md)).
+Current firmware: **2.07** ([release notes](../release-notes/2.07.md)).
 For new builds we recommend **XIAO ESP32-C5 + IM73D122 PDM**, with an Adafruit BFF for SD.
 
 Arduino firmware for Seeed Studio XIAO ESP32, M5Stack AtomS3U and Espressif ESP32-S31-Function-CoreBoard-1, using I2S or PDM microphones to serve **mono 16-bit PCM/L16** audio over
 **RTSP** for **BirdNET-Go** and **BirdNET-Pi**. It also provides a Web UI, JSON API, MQTT telemetry,
 and Home Assistant MQTT Discovery.
 
-- Current firmware: **v2.06** — Manual audio setup and optional experimental noise reduction.
+- Current firmware: **v2.07** — Lossless FLAC recording and safer full-card shutdown.
 - [Overview, support status and parts](../README.md) · [Release history](CHANGELOG.md)
 - Build targets: Seeed Studio **XIAO ESP32-C3**, **XIAO ESP32-S3**, **XIAO ESP32-C5**, **XIAO ESP32-C6**, **ESP32-S31-Function-CoreBoard-1**
 - Alternative I2S microphone: **Adafruit SPH0645LM4H** in selectable MSB / left-justified mode
@@ -98,7 +98,7 @@ Reads are staged in the app loop and reported in `/api/status`, independently
 of the browser. See the
 [battery guide](../docs/battery-monitoring.md) for GPIOs, APIs and validation limits.
 
-## Audio memory by board (v2.06)
+## Audio memory by board (v2.07)
 
 The build helper enables S3's 8 MB OPI PSRAM (`PSRAM=opi`) and C5's 8 MB
 PSRAM (`PSRAM=enabled`). Streaming puts its normally 64 KiB RTSP reserve there;
@@ -134,7 +134,7 @@ preserve sample alignment. Temporary TCP stalls can recover for up to five secon
 the sender tries the socket before timing out. An empty capture queue has a separate
 two-second starvation limit. Capture
 and SD recording never wait for a browser. This live preview can skip delayed
-sound; the independent SD WAV path retains its separate loss/error accounting. `/api/audio_status` reports `listen_last_stop`,
+sound; the independent SD recording path retains its separate loss/error accounting. `/api/audio_status` reports `listen_last_stop`,
 `listen_overflows`, `listen_send_timeouts`, `listen_socket_errors`,
 `listen_max_loop_gap_ms`, `listen_bytes_sent`, `listen_preview_discarded_bytes`,
 `listen_independent_worker`, `listen_worker_stack_free_bytes`,

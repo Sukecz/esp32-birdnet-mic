@@ -36,7 +36,7 @@ function toggleDirty(el,key){
  if(!el)return; const dirty=!!edits[key]&&differsFromSaved(key); el.classList.toggle('dirty',dirty);
  if(el.type==='checkbox')el.closest('label')?.classList.toggle('dirty',dirty);
  const field=el.closest('.field');
- if(field){let note=field.querySelector('.edit-note');if(!note){note=document.createElement('span');note.className='edit-note';field.append(note);}note.textContent=dirty?'Unsaved':'';}
+ if(field){let note=field.querySelector('.edit-note');if(!note){note=document.createElement('span');note.className='edit-note';field.append(note);}note.textContent=field.querySelector('.dirty')?'Unsaved':'';}
  if(!field&&el.id&&el.parentElement){let note=el.parentElement.querySelector('[data-draft-note="'+el.id+'"]');if(!note){note=document.createElement('span');note.className='edit-note';note.dataset.draftNote=el.id;el.after(note);}note.textContent=dirty?'Unsaved':'';el.setAttribute('aria-label',(el.labels?.[0]?.textContent||el.id)+(dirty?' — Unsaved':''));}
  updateDiscard(el.closest('details.card'));
 }

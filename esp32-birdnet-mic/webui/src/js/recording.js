@@ -38,7 +38,7 @@ function fieldPowerDraftChanged(){
  recordingDraftChanged();
  const draft=fieldPowerDraft();
  fieldPowerDirty=Object.keys(draft).some(k=>Number(fieldPowerState[k])!==draft[k]);
- recordingNode('field_power_dirty').textContent=fieldPowerDirty?'Unsaved':'';
+ recordingNode('field_power_dirty').textContent=Object.keys(draft).some(k=>k!=='wifi_delay_seconds'&&Number(fieldPowerState[k])!==draft[k])?'Unsaved':'';
  const busy=fieldPowerPending||batteryPending||recordingPending||!!(recordingState&&(recordingState.busy||recordingState.cooling_pending));
  recordingNode('field_wifi_save').disabled=busy||draft.wifi_delay_seconds===Number(fieldPowerState.wifi_delay_seconds);
  recordingNode('field_power_save').disabled=busy||!Object.keys(draft).some(k=>k!=='wifi_delay_seconds'&&Number(fieldPowerState[k])!==draft[k]);
@@ -141,12 +141,49 @@ async function checkWifiOffRecovery(controls){
 }
 
 const recordingNode=id=>document.getElementById(id);
-function recordingDurationModeChanged(){const limited=recordingNode('recording_duration_mode').value==='1';recordingNode('recording_hours').value=limited?(Number(recordingNode('recording_hours').value)||60):0;recordingNode('recording_hours').hidden=!limited;recordingNode('recording_minutes_label').hidden=!limited;const group=recordingNode('recording_duration_options');if(group)group.hidden=!limited;recordingDraftChanged();}
+let recordingClockTimer=null,recordingClockSnapshot=null;
+function updateRecordingClock(){
+ const clock=recordingNode('recording_clock');
+ if(!clock||!recordingClockSnapshot||wifiOffIntent)return;
+ const age=performance.now()-recordingClockSnapshot.at;
+ // Freeze a disconnected display rather than claiming an unobserved recording.
+ if(age>10000)return;
+ const seconds=Math.max(0,Math.floor(recordingClockSnapshot.seconds+age/1000));
+ clock.textContent=[Math.floor(seconds/3600),Math.floor(seconds%3600/60),seconds%60].map(v=>String(v).padStart(2,'0')).join(':');
+ clock.setAttribute('datetime','PT'+seconds+'S');
+}
+function renderRecordingIndicator(r){
+ const indicator=recordingNode('recording_indicator');if(!indicator)return;
+ const active=r.mode==='recording'&&r.state==='recording';
+ indicator.hidden=!active;
+ if(!active){if(recordingClockTimer!==null)clearInterval(recordingClockTimer);recordingClockTimer=null;recordingClockSnapshot=null;return;}
+ if(!recordingClockSnapshot||recordingClockSnapshot.source!==r)recordingClockSnapshot={seconds:Number(r.elapsed_seconds)||0,at:performance.now(),source:r};
+ updateRecordingClock();
+ if(recordingClockTimer===null)recordingClockTimer=setInterval(updateRecordingClock,1000);
+}
+
+const recordingSettingGroups={duration:['recording_duration_mode','recording_hours'],format:['recording_format'],segment:['recording_segment'],auto:['recording_auto']};
+function recordingDurationModeChanged(){
+ const limited=recordingNode('recording_duration_mode').value==='1';
+ recordingNode('recording_hours').value=limited?(Number(recordingNode('recording_hours').value)||60):0;
+ recordingNode('recording_hours').hidden=!limited;recordingNode('recording_minutes_label').hidden=!limited;recordingNode('recording_duration_options').hidden=!limited;
+ if(typeof markDirty==='function')for(const id of recordingSettingGroups.duration){editVersions[id]=(editVersions[id]||0)+1;markDirty(id);}
+ recordingDraftChanged();
+}
+function recordingGroupChanged(group){
+ const r=recordingState;
+ if(group==='duration')return !recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(r.duration_minutes?'1':'0')||Number(recordingNode('recording_hours').value)!==r.duration_minutes;
+ if(group==='format')return recordingNode('recording_format').value!==(r.format||'wav');
+ if(group==='segment')return Number(recordingNode('recording_segment').value)!==r.segment_minutes||!recordingNode('recording_segment').value.trim();
+ return recordingNode('recording_auto').value!==(r.auto_start?'1':'0');
+}
 function recordingDraftChanged(){
  if(!recordingState)return;
- recordingDirty=!recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(recordingState.duration_minutes?'1':'0')||Math.round(Number(recordingNode('recording_hours').value))!==recordingState.duration_minutes||Number(recordingNode('recording_segment').value)!==recordingState.segment_minutes||recordingNode('recording_auto').value!==(recordingState.auto_start?'1':'0');
- recordingNode('recording_dirty').textContent=recordingDirty?'Unsaved':'';
- recordingNode('recording_save').disabled=!recordingDirty||recordingPending||recordingState.busy||recordingState.cooling_pending;
+ recordingDirty=Object.keys(recordingSettingGroups).some(recordingGroupChanged);
+ for(const group of Object.keys(recordingSettingGroups)){
+  const button=recordingNode('recording_'+group+'_apply');
+  if(button)button.disabled=!recordingGroupChanged(group)||recordingPending||recordingState.busy||recordingState.cooling_pending;
+ }
  recordingNode('recording_start').disabled=recordingDirty||recordingPending||fieldPowerPending||recordingState.busy||recordingState.cooling_pending||!recordingState.supported||(fieldPowerState&&fieldPowerState.start_allowed===false);
 }
 function recordingTime(seconds){if(seconds>=86400)return Math.floor(seconds/86400)+' days '+Math.floor(seconds%86400/3600)+' hours';if(seconds>=3600)return Math.floor(seconds/3600)+'h '+Math.floor(seconds%3600/60)+'m';return Math.floor(seconds/60)+'m '+Math.floor(seconds%60)+'s';}
@@ -157,6 +194,7 @@ function renderRecording(j){
  const healthTitle=recordingNode('t_health');
  if(healthTitle)healthTitle.textContent=r.mode==='recording'?'Microphone health':'Stream health';
  const first=!recordingState;recordingState=r;
+ renderRecordingIndicator(r);
  const storage=recordingNode('recording_storage');
  if(storage)storage.textContent=r.storage==='sense_builtin'?'Sense built-in microSD slot · FAT32, up to 32 GB. Fit the Sense expansion board with its SD connection enabled.':r.storage==='unavailable'?'This board has no supported SD interface.':'External SPI microSD module.';
  recordingNode('recording_panel').hidden=r.mode!=='recording';
@@ -182,12 +220,13 @@ function renderRecording(j){
  if(capacity){
   const seconds=r.space_seconds;
   const insufficient=r.duration_minutes>0&&Number.isFinite(seconds)&&seconds<Math.max(0,r.duration_minutes*60-r.elapsed_seconds);
-  capacity.textContent=Number.isFinite(seconds)?'Space for approximately '+recordingTime(seconds)+' of audio'+(insufficient?' — less than the remaining recording duration.':'.'):'Recording time estimate unavailable until the SD card is checked.';
+  const flac=r.format==='flac';
+  capacity.textContent=Number.isFinite(seconds)?(flac?'FLAC: plan for about '+recordingTime(seconds)+'. Compression may allow more recording time.':'WAV: space for about '+recordingTime(seconds)+'.')+(insufficient?(flac?' The WAV-size estimate is shorter than the remaining duration.':' Less than the remaining recording duration.'):''):'Recording time estimate unavailable until the SD card is checked.';
   capacity.className='section-note'+(insufficient?' warn':'');
  }
  recordingNode('recording_file').textContent=r.file||'';
- if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').value=r.auto_start?'1':'0';}
- for(const id of ['recording_duration_mode','recording_hours','recording_segment','recording_auto'])recordingNode(id).disabled=r.busy||r.cooling_pending||recordingPending;
+ if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_format').value=r.format||'wav';recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').value=r.auto_start?'1':'0';}
+ for(const id of ['recording_duration_mode','recording_hours','recording_segment','recording_format','recording_auto'])recordingNode(id).disabled=r.busy||r.cooling_pending||recordingPending;
  recordingNode('recording_stop').disabled=(!r.busy&&!r.cooling_pending)||recordingPending;
  const check=recordingNode('recording_check');if(check)check.disabled=r.busy||r.cooling_pending||recordingPending||!r.supported;
  recordingDraftChanged();
@@ -216,10 +255,19 @@ async function changeDeviceMode(mode){
 async function recordingAction(action){
  await recordingPost('/api/recording/action',{action});await loadStatus();
 }
-async function saveRecordingSettings(){
- if(!recordingNode('recording_hours').value.trim()){recordingNode('recording_feedback').textContent='Enter a duration, or 0 to record until stopped.';return;}
- const rawMinutes=Number(recordingNode('recording_hours').value);
- const minutes=Math.abs(rawMinutes-Math.round(rawMinutes))<1e-8?Math.round(rawMinutes):rawMinutes;
- if(!Number.isInteger(minutes)||minutes<0||minutes>10080||(recordingNode('recording_duration_mode').value==='1'&&minutes===0)){recordingNode('recording_feedback').textContent='Choose a duration from 0 to 10080 minutes.';return;}
- await saveRecordingGroup('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').value},draftGroups[0],'recording_panel','recording_feedback','Recording settings saved.');
+async function saveRecordingSettings(group){
+ if(!recordingState||!recordingSettingGroups[group])return;
+ const r=recordingState,values={format:r.format||'wav',duration_minutes:r.duration_minutes,segment_minutes:r.segment_minutes,auto_start:r.auto_start?'1':'0'};
+ const feedback=recordingNode('recording_'+group+'_feedback');
+ if(group==='duration'){
+  const limited=recordingNode('recording_duration_mode').value==='1',raw=recordingNode('recording_hours').value;
+  const minutes=limited?Number(raw):0;
+  if(!raw.trim()||!Number.isInteger(minutes)||minutes<0||minutes>10080||(limited&&minutes===0)){feedback.textContent='Choose a duration from 1 to 10080 minutes, or Until stopped.';return;}
+  values.duration_minutes=minutes;
+ }else if(group==='format')values.format=recordingNode('recording_format').value;
+ else if(group==='segment'){
+  const raw=recordingNode('recording_segment').value,n=Number(raw);
+  if(!raw.trim()||!Number.isInteger(n)||n<1||n>120){feedback.textContent='Choose from 1 to 120 minutes.';return;}values.segment_minutes=n;
+ }else values.auto_start=recordingNode('recording_auto').value;
+ await saveRecordingGroup('/api/recording/settings',values,recordingSettingGroups[group],'recording_panel','recording_'+group+'_feedback','Saved.');
 }

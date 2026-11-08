@@ -5,7 +5,7 @@ function updateNoiseSave(){
  const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;
  for(const [,key,,button] of noiseFields)$(button).disabled=!noiseSettingsLoaded||busy||sectionBusy.has('noisesec')||(key!=='noise_mode'&&!featureEnabled('noise_mode','1'))||!differsFromSaved(key);
  const ready=featureEnabled('noise_mode','1');$('noise_spectrum').hidden=!ready;$('noise_graph_placeholder').hidden=ready;
- if(!ready)$('noise_metrics').hidden=true;
+ if(!ready){$('noise_metrics').hidden=true;noiseGraphFailures=0;$('noise_graph_status').hidden=true;}
 }
 function renderNoiseSettings(s){
  if(!s)return;
@@ -27,13 +27,19 @@ async function saveNoiseSettings(key='noise_mode'){
  values[row[4]]=$(row[0]).value;
  await saveValues('/api/noise/set',values,[key],'noisesec');updateNoiseSave();await updateNoiseSpectrum();
 }
-let noiseGraphBusy=false;
+let noiseGraphBusy=false,noiseGraphFailures=0;
+function setNoiseGraphStatus(failed){
+ // One missed poll is normal while the device is busy; warn after two in a row.
+ noiseGraphFailures=failed?noiseGraphFailures+1:0;
+ const el=$('noise_graph_status');el.hidden=noiseGraphFailures<2;
+}
 async function updateNoiseSpectrum(){
  if(!$('noisesec').open||!featureEnabled('noise_mode','1')||noiseGraphBusy)return;
  noiseGraphBusy=true;
  try{
   // Spectrum requests never replace saved settings from the main status poll.
   const s=await fetchJSON('/api/noise?spectra=1');
+  setNoiseGraphStatus(false);
   const canvas=$('noise_spectrum'),ctx=canvas.getContext('2d'),w=canvas.clientWidth,h=240,dpr=window.devicePixelRatio||1;
   canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,h);ctx.font=getComputedStyle(canvas).font;ctx.fillStyle=getComputedStyle(document.body).color;
@@ -44,7 +50,7 @@ async function updateNoiseSpectrum(){
   for(const level of [0,-30,-60,-90,-120]){const yy=12-level*(h-42)/120;ctx.fillText(String(level),4,yy+5);ctx.beginPath();ctx.moveTo(48,yy);ctx.lineTo(w-16,yy);ctx.stroke();}
   for(const k of [0,64,128,192,256])ctx.fillText((k*s.sample_rate/512000).toFixed(0),x(k)-6,h-8);
   for(const [key,color] of [['level','#3b82f6'],['floor','#f59e0b'],['signature','#10b981']]){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();s[key].forEach((q,k)=>k?ctx.lineTo(x(k),y(q)):ctx.moveTo(x(k),y(q)));ctx.stroke();}
- }catch(_){$('noise_metrics').textContent='Could not load the graph. Retrying…';$('noise_metrics').hidden=false;}finally{noiseGraphBusy=false;}
+ }catch(_){setNoiseGraphStatus(true);}finally{noiseGraphBusy=false;}
 }
 $('noisesec').addEventListener('toggle',updateNoiseSpectrum);
 setInterval(updateNoiseSpectrum,3000);

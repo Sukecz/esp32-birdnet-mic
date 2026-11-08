@@ -14,3 +14,17 @@
 
 /* Responsive table display must still respect the hidden attribute. */
 tr[hidden]{display:none!important}
+
+/* Shared semantic action colors. */
+button.success{background:rgba(16,185,129,.14);border-color:rgba(16,185,129,.4)}
+button.success:hover{background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.6)}
+/* Flat settings rows reuse the ordinary controls, labels and feedback. */
+.settings-row{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(0,1.2fr);gap:6px 16px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)}
+.settings-row:last-child{border-bottom:0}
+.settings-row>label{color:var(--muted)}
+.settings-row>.field{min-width:0}
+.settings-row>.section-note,.settings-row>.feedback{grid-column:2;margin:0;max-width:none}
+.settings-row>.feedback:empty{display:none}
+.settings-list [hidden]{display:none!important}
+.duration-inputs{display:inline-flex;align-items:center;gap:8px}
+@media(max-width:600px){.settings-row{grid-template-columns:minmax(0,1fr);gap:8px;padding:12px 0}.settings-row>.section-note,.settings-row>.feedback{grid-column:1}}

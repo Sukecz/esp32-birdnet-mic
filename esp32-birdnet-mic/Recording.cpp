@@ -1,5 +1,6 @@
 #include "Recording.h"
 #include "RecordingWav.h"
+#include "RecordingFlac.h"
 #include "RecordingPins.h"
 #include "RecordingMemory.h"
 #include "BoundedLog.h"
@@ -31,6 +32,8 @@ Status view;
 BoundedLog<3072>* systemLogs=nullptr;
 uint32_t systemLogDropped = 0;
 std::atomic<bool> journalReadPending{false}, journalReadReady{false};
+std::atomic<bool> sleepLogPending{false}, sleepLogReady{false};
+uint32_t batteryLogMv = 0;
 bool journalReadArchive = false;
 char* journalReadData=nullptr;
 char journalReadFailure[80] = {};
@@ -54,7 +57,7 @@ enum class LogKind : uint8_t { StartRequested, ResumeRequested, Started, Opened,
 struct LogEvent {
     LogKind kind;
     Status status;
-    uint32_t atMs, rate, durationMinutes, segmentMinutes, fileBytes;
+    uint32_t atMs, rate, durationMinutes, segmentMinutes, fileBytes, batteryMv;
     uint64_t totalBytes;
     bool success;
     uint8_t consumed;
@@ -66,7 +69,7 @@ uint8_t logHead = 0, logCount = 0;
 uint32_t logDropped = 0, logDroppedSD = 0;
 void logLocked(LogKind kind, uint32_t fileBytes = 0, uint64_t totalBytes = 0, const char* reason = "", bool success = true) {
     if (!journalConfig.detailed && kind != LogKind::Started && kind != LogKind::Saved &&
-        kind != LogKind::Finished && kind != LogKind::Error && kind != LogKind::Cooling &&
+        kind != LogKind::Finished && kind != LogKind::Error && kind != LogKind::Progress && kind != LogKind::Cooling &&
         kind != LogKind::ResumeRequested && !(kind == LogKind::CardReady && view.state == State::Checking)) return;
     if (logCount == kLogCapacity) {
         if (!(logEvents[logHead].consumed&1)) ++logDropped;
@@ -77,6 +80,7 @@ void logLocked(LogKind kind, uint32_t fileBytes = 0, uint64_t totalBytes = 0, co
     e.kind = kind; e.status = view; e.consumed = 0;
     e.status.droppedSamples = lost.load(); e.status.queueBytes = queueCapacityBytes.load();
     e.atMs = millis(); e.rate = startRate; e.durationMinutes = config.durationMinutes;
+    e.batteryMv = batteryLogMv;
     e.segmentMinutes = config.segmentMinutes; e.fileBytes = fileBytes;
     e.totalBytes = totalBytes ? totalBytes : uint64_t(view.writtenKiB)*1024;
     e.success = success;
@@ -159,6 +163,10 @@ struct Sink {
 };
 Sink sink;
 WavWriter<Sink> wav(sink);
+FlacWriter<Sink> flac(sink);
+uint32_t pcmBytes(){return config.format?flac.bytes():wav.bytes();}
+uint32_t fileBytes(){return config.format?flac.storedBytes():wav.bytes()+44;}
+bool checkpoint(){return config.format?flac.checkpoint():wav.checkpoint();}
 char partial[128], finalName[112];
 uint64_t sessionBytes = 0;
 uint32_t segmentBytes = 0, segmentIndex = 0;
@@ -257,8 +265,8 @@ bool openSegment() {
         if (!strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H-%M-%S", &local))
             strcpy(stamp, "unsynced");
     }
-    snprintf(finalName, sizeof(finalName), "/sd/recordings/%s_%08lx-%04lu.wav",
-             stamp, (unsigned long)sessionId, (unsigned long)++segmentIndex);
+    snprintf(finalName, sizeof(finalName), "/sd/recordings/%s_%08lx-%04lu.%s",
+             stamp, (unsigned long)sessionId, (unsigned long)++segmentIndex, config.format?"flac":"wav");
     snprintf(partial, sizeof(partial), "%s.part", finalName);
     if (access(finalName, F_OK) == 0) { error("Recording filename collision; existing file preserved"); return false; }
     sink.position = 0;
@@ -268,39 +276,41 @@ bool openSegment() {
     strncpy(view.file, partial+3, sizeof(view.file)-1);
     view.verified = false; view.verifiedBytes = 0;
     portEXIT_CRITICAL(&mux);
-    if (!wav.begin(startRate)) { error("WAV header write failed"); return false; }
+    if (!(config.format?flac.begin(startRate):wav.begin(startRate))) { error("Recording header write failed"); return false; }
     logEvent(LogKind::Opened, 44, completedBytes+sessionBytes);
     return true;
 }
 bool verifyWav() {
-    uint8_t expected[44], actual[44]; wavHeader(expected, startRate, wav.bytes());
+    uint8_t expected[44], actual[44]; wavHeader(expected, startRate, pcmBytes());
+    const size_t headerSize=config.format?42:44;
+    if(config.format)flac.expectedHeader(expected);
     const int fd = open(partial, O_RDONLY);
     if (fd < 0) { ioFailure("open-read", errno, 0, 44, -1); return false; }
     errno = 0;
-    const ssize_t n = ::read(fd, actual, sizeof(actual));
-    bool ok = n == 44;
+    const ssize_t n = ::read(fd, actual, headerSize);
+    bool ok = n == ssize_t(headerSize);
     if (!ok) ioFailure("read", errno, 0, 44, n);
-    if (ok && memcmp(expected, actual, 44)) { ioFailure("wav-header", 0, 0, 44, 44); ok = false; }
+    if (ok && memcmp(expected, actual, headerSize)) { ioFailure("wav-header", 0, 0, 44, 44); ok = false; }
     if (ok) {
         const off_t end = lseek(fd, 0, SEEK_END);
-        if (end != off_t(wav.bytes()+44)) { ioFailure("wav-size", errno, 0, wav.bytes()+44, end); ok = false; }
+        if (end != off_t(fileBytes())) { ioFailure("wav-size", errno, 0, fileBytes(), end); ok = false; }
     }
     if (::close(fd)) { ioFailure("close-read", errno, 0, 0, -1); ok = false; }
     return ok;
 }
 bool closeSegment(bool finalize) {
     if (sink.fd < 0) return false;
-    bool ok = finalize && wav.checkpoint();
+    bool ok = finalize && checkpoint();
     if (::close(sink.fd) != 0) { ioFailure("close", errno, sink.position, 0, -1); ok = false; }
     sink.fd = -1;
-    if (ok && !verifyWav()) { error("WAV verification failed; partial file preserved"); ok = false; }
+    if (ok && !verifyWav()) { error("Recording verification failed; partial file preserved"); ok = false; }
     if (ok && ::rename(partial, finalName) != 0) ok = false;
     if (ok) {
         portENTER_CRITICAL(&mux);
         strncpy(view.file, finalName+3, sizeof(view.file)-1);
-        view.verified = true; view.verifiedBytes = wav.bytes()+44;
+        view.verified = true; view.verifiedBytes = fileBytes();
         portEXIT_CRITICAL(&mux);
-        logEvent(LogKind::Saved, wav.bytes()+44, completedBytes+sessionBytes);
+        logEvent(LogKind::Saved, fileBytes(), completedBytes+sessionBytes);
     } else error("SD save failed; partial file preserved");
     return ok;
 }
@@ -396,6 +406,22 @@ void discardQueue() {
 void worker(void*) {
     for (;;) {
         if (!starting.load()) { vTaskDelay(pdMS_TO_TICKS(10)); continue; }
+        if (sleepLogPending.exchange(false)) {
+            // Preserve the recording result; all SD access remains on this worker.
+            const auto pins = sessionPins;
+            SD.end(); SPI.begin(pins.sck, pins.miso, pins.mosi, pins.cs);
+            if (SD.begin(pins.cs, SPI, storageClockHz, "/sd", 5, false) && SD.cardType() != CARD_NONE) {
+                openJournal(); closeJournal();
+            } else {
+                portENTER_CRITICAL(&mux);
+                strcpy(view.logError, "Sleep log unavailable: SD card could not be mounted");
+                journalWarningPending = true;
+                portEXIT_CRITICAL(&mux);
+            }
+            SD.end(); SPI.end();
+            sleepLogReady.store(true); starting.store(false); running.store(false);
+            continue;
+        }
         if(journalReadPending.exchange(false)) {
             readJournalTail();starting.store(false);running.store(false);continue;
         }
@@ -417,6 +443,9 @@ void worker(void*) {
             updateSpace();
             openJournal();
             logEvent(LogKind::CardReady);
+            if (!checking && !diagnostic && view.freeBytes <= kStorageReserveBytes) {
+                error("SD full; reserved space kept for file close and logs"); healthy = false;
+            }
             if (!checking && !diagnostic && !SD.exists("/recordings") && !SD.mkdir("/recordings")) {
                 error("Cannot create recordings directory"); healthy = false;
             }
@@ -452,7 +481,7 @@ void worker(void*) {
             if (item) {
                 size_t offset = 0;
                 while (offset < bytes && healthy) {
-                    if (wav.bytes() == segmentBytes) {
+                    if (pcmBytes() == segmentBytes) {
                         const uint64_t rotationAt = esp_timer_get_time();
                         healthy = closeSegment(true) && openSegment();
                         flushJournal();
@@ -460,12 +489,17 @@ void worker(void*) {
                         if (!healthy) break;
                     }
                     size_t n = bytes-offset;
-                    if (n > segmentBytes-wav.bytes()) n = segmentBytes-wav.bytes();
+                    if (n > segmentBytes-pcmBytes()) n = segmentBytes-pcmBytes();
                     uint64_t before = esp_timer_get_time();
-                    healthy = wav.append(item+offset, n);
+                    healthy = config.format?flac.append(item+offset,n):wav.append(item+offset, n);
                     uint32_t writeMs = uint32_t((esp_timer_get_time()-before)/1000);
                     noteStorageDelay(before);
-                    if (!healthy) { error(errno == ENOSPC ? "SD full; partial file preserved" : "SD write failed; partial file preserved"); break; }
+                    if (!healthy) {
+                        updateSpace();
+                        error(view.ioErrno == ENOSPC || view.freeBytes <= kStorageReserveBytes ?
+                              "SD full; partial file preserved" : "SD write failed; partial file preserved");
+                        break;
+                    }
                     sessionBytes += n; offset += n;
                     portENTER_CRITICAL(&mux);
                     view.writtenKiB = uint32_t((completedBytes+sessionBytes)/1024);
@@ -473,22 +507,26 @@ void worker(void*) {
                     portEXIT_CRITICAL(&mux);
                 }
                 vRingbufferReturnItem(queue, item);
+                // A codec backlog must not monopolize this single-core task
+                // above the web/application loop, including Stop and power control.
+                if (healthy) vTaskDelay(1);
             }
             if (captureFailed.load()) { error("Microphone capture interrupted; partial file preserved"); healthy = false; }
             if (lost.load()) { error("Audio buffer overflow; recording stopped with a gap"); healthy = false; }
             if (!healthy) break;
             if (millis()-checkpointAt >= 5000) {
                 const uint64_t syncAt = esp_timer_get_time();
-                healthy = wav.checkpoint();
+                healthy = checkpoint();
                 noteStorageDelay(syncAt);
                 if (!healthy) { error("SD checkpoint failed; partial file preserved"); break; }
                 updateSpace(); flushJournal(); checkpointAt = millis();
+                if (view.freeBytes <= kStorageReserveBytes) requestStop(StopReason::StorageFull);
             }
             portENTER_CRITICAL(&mux);
             view.elapsedSeconds = uint32_t((completedUs+sessionBytes*500000ULL/startRate)/1000000);
             portEXIT_CRITICAL(&mux);
-            if (uint32_t(millis()-progressAt) >= 300000) {
-                logEvent(LogKind::Progress, wav.bytes()+44, completedBytes+sessionBytes);
+            if (uint32_t(millis()-progressAt) >= (journalConfig.detailed ? 300000U : 1800000U)) {
+                logEvent(LogKind::Progress, fileBytes(), completedBytes+sessionBytes);
                 progressAt = millis();
             }
             if (!item && !accepting.load() && !inPush.load()) break;
@@ -508,6 +546,7 @@ void worker(void*) {
             requestedReason.load()==StopReason::LowBattery ? "low battery" :
             requestedReason.load()==StopReason::Thermal ? "thermal pause" :
             requestedReason.load()==StopReason::ModeChange ? "mode changed" :
+            requestedReason.load()==StopReason::StorageFull ? "SD full (safety reserve)" :
             requestedReason.load()==StopReason::Update ? "firmware update" : "stop requested" :
             targetFrames ? "duration limit" : "capture stopped";
         logEvent(LogKind::Finished, 0, completedBytes+sessionBytes, reason, healthy);
@@ -602,6 +641,34 @@ void queueSystemLog(const char* line) {
     const size_t n=strlen(line)<511?strlen(line):511;
     portENTER_CRITICAL(&mux);if(systemLogs)systemLogDropped+=systemLogs->append(line,n);else ++systemLogDropped;portEXIT_CRITICAL(&mux);
 }
+void updateBatteryLog(uint32_t mv) {
+    portENTER_CRITICAL(&mux); batteryLogMv = mv; portEXIT_CRITICAL(&mux);
+}
+bool prepareSleepLog(const char* reason, uint8_t variant) {
+#if RECORDING_SPI_SUPPORTED
+    if (!mode() || !journalConfig.sdEnabled || sleepLogReady.load()) return true;
+    if (busy()) return false;
+    // Never prevent low-battery shutdown if the filesystem task cannot start.
+    if (!prepare(false)) {
+        portENTER_CRITICAL(&mux);
+        strcpy(view.logError, "Sleep log unavailable: not enough memory for SD");
+        journalWarningPending = true;
+        portEXIT_CRITICAL(&mux);
+        return true;
+    }
+    sessionPins = recordingpins::resolve(variant);
+    char line[256];
+    uint32_t mv;
+    portENTER_CRITICAL(&mux); mv = batteryLogMv; portEXIT_CRITICAL(&mux);
+    snprintf(line,sizeof(line),"[uptime %lus] %s; battery_mv=%lu (0=unavailable)",
+             (unsigned long)(millis()/1000), reason, (unsigned long)mv);
+    queueSystemLog(line);
+    sleepLogPending.store(true); running.store(true); starting.store(true);
+    return false;
+#else
+    (void)reason; (void)variant; return true;
+#endif
+}
 bool requestLogTail(bool archive, bool supported, uint8_t variant) {
     if(busy() || resumePending() || !mode() || !supported)return false;
     const auto pins=recordingpins::resolve(variant);if(!pins.supported)return false;
@@ -632,16 +699,17 @@ void begin() {
     Preferences prefs;
     if (prefs.begin("recording", true)) {
         Settings saved;
-        if (prefs.getBytesLength("settings") == sizeof(saved) &&
-            prefs.getBytes("settings", &saved, sizeof(saved)) == sizeof(saved) &&
-            saved.magic == config.magic && saved.recordingMode <= 1 && saved.autoStart <= 1 &&
+        const size_t length=prefs.getBytesLength("settings");
+        if ((length==offsetof(Settings,format) || length==sizeof(saved)) &&
+            prefs.getBytes("settings", &saved, length) == length &&
+            saved.magic == config.magic && saved.recordingMode <= 1 && saved.autoStart <= 1 && saved.format <= 1 &&
             saved.durationMinutes <= 10080 && saved.segmentMinutes >= 1 && saved.segmentMinutes <= 120) config = saved;
         prefs.end();
     }
 }
 Settings settings() { return config; }
 bool saveSettings(const Settings& value) {
-    if (busy() || resumePending() || value.magic != config.magic || value.recordingMode > 1 || value.autoStart > 1 ||
+    if (busy() || resumePending() || value.magic != config.magic || value.recordingMode > 1 || value.autoStart > 1 || value.format > 1 ||
         value.durationMinutes > 10080 || value.segmentMinutes < 1 || value.segmentMinutes > 120) return false;
     if (memcmp(&config, &value, sizeof(config)) == 0) return true;
     Preferences prefs;
@@ -700,6 +768,7 @@ static bool startSession(uint32_t rate, bool supported, uint8_t boardVariant, bo
     const auto pins = recordingpins::resolve(boardVariant);
     if (!supported || !pins.supported) { error("SD recording is unavailable for this board"); return false; }
 #if RECORDING_SPI_SUPPORTED
+    sleepLogReady.store(false);
     if (rate < 8000 || rate > 96000) { error("Unsupported WAV sample rate"); return false; }
     // A new attempt must not inherit a previous card-check error and mask a
     // current allocation failure. Stop/cleanup still preserve their first error.
@@ -829,6 +898,7 @@ String formatEvent(const LogEvent& e) {
             case LogKind::Started:snprintf(text,sizeof(text),"Recording: started; file=%s; rate=%luHz",s.file,(unsigned long)e.rate);break;
             case LogKind::Saved:snprintf(text,sizeof(text),"Recording: saved; file=%s; bytes=%lu",s.file,(unsigned long)e.fileBytes);break;
             case LogKind::Finished:snprintf(text,sizeof(text),"Recording: %s; duration=%lus; audio_bytes=%llu; reason=%s",e.success?"stopped":"failed",(unsigned long)s.elapsedSeconds,(unsigned long long)e.totalBytes,e.reason);break;
+            case LogKind::Progress:snprintf(text,sizeof(text),"Recording: progress; duration=%lus; audio_bytes=%llu",(unsigned long)s.elapsedSeconds,(unsigned long long)e.totalBytes);break;
             case LogKind::Error:snprintf(text,sizeof(text),"Recording: ERROR; %s; file=%s",s.error,s.file[0]?s.file:"-");break;
             case LogKind::Cooling:snprintf(text,sizeof(text),"Recording: paused for cooling");break;
             case LogKind::ResumeRequested:snprintf(text,sizeof(text),"Recording: resuming after cooling");break;
@@ -837,8 +907,11 @@ String formatEvent(const LogEvent& e) {
         }
         line=text;
         if(e.kind==LogKind::Error && s.ioOperation[0]) {
-            snprintf(text,sizeof(text),"; io=%s; errno=%d",s.ioOperation,s.ioErrno);line+=text;
+            snprintf(text,sizeof(text),"; io=%s; errno=%d; offset=%lu; requested=%lu; returned=%ld",s.ioOperation,s.ioErrno,(unsigned long)s.ioOffset,(unsigned long)s.ioRequested,(long)s.ioReturned);line+=text;
         }
+        snprintf(text,sizeof(text),"; battery_mv=%lu (0=unavailable); free_bytes=%llu; dropped=%lu; max_write_ms=%lu",
+            (unsigned long)e.batteryMv,(unsigned long long)s.freeBytes,(unsigned long)s.droppedSamples,(unsigned long)s.maxWriteMs);
+        line+=text;
         return line;
     }
     const char* name = "event";
@@ -875,6 +948,8 @@ String formatEvent(const LogEvent& e) {
             (unsigned long)s.maxWriteMs,s.file[0]?s.file:"-");
     }
     line = text;
+    line += "; battery_mv="; line += String(e.batteryMv);
+    line += " (0=unavailable); free_bytes="; line += String((unsigned long long)s.freeBytes);
     if (uint32_t(millis()-e.atMs) > 1000) { line += "; event_uptime_ms="; line += String(e.atMs); }
     if (e.reason[0]) { line += "; reason="; line += e.reason; }
     if (s.error[0]) { line += "; error="; line += s.error; }
@@ -911,10 +986,11 @@ String statusJson(bool supported, uint8_t boardVariant, uint32_t sampleRate) {
     out += ",\"cooling_pending\":"; out += resumePending() ? "true" : "false";
     out += ",\"space_seconds\":";
     out += s.cardReady && sampleRate >= 8000 && sampleRate <= 96000
-        ? String(uint32_t(s.freeBytes/(uint64_t(sampleRate)*2))) : String("null");
+        ? String(uint32_t((s.freeBytes>kStorageReserveBytes?s.freeBytes-kStorageReserveBytes:0)/(uint64_t(sampleRate)*2))) : String("null");
     out += ",\"card_ready\":"; out += s.cardReady ? "true" : "false";
     out += ",\"elapsed_seconds\":" + String(s.elapsedSeconds);
     out += ",\"duration_minutes\":" + String(config.durationMinutes);
+    out += ",\"format\":\"" + String(config.format?"flac":"wav") + "\"";
     out += ",\"segment_minutes\":" + String(config.segmentMinutes);
     out += ",\"auto_start\":"; out += config.autoStart ? "true" : "false";
     out += ",\"logging\":{\"sd_enabled\":" + String(journalConfig.sdEnabled?"true":"false") + ",\"detailed\":" + String(journalConfig.detailed?"true":"false") + ",\"max_kib\":" + String(journalConfig.maxKiB) + ",\"file\":\"/recording.log\",\"bytes\":" + String(s.logBytes) + ",\"error\":\"" + String(s.logError) + "\"}";

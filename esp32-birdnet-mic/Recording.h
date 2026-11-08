@@ -7,6 +7,8 @@ namespace recording {
 // Shared SD protocol and clock across the supported XIAO family. Buffer
 // allocation adapts to available PSRAM/internal RAM rather than the chip name.
 constexpr uint32_t kDefaultStorageClockHz = 16000000, kDefaultWriteBlockBytes = 4096;
+// Next 5 s at 96 kHz, queued PCM, final metadata and logs.
+constexpr uint64_t kStorageReserveBytes = 2ULL * 1024 * 1024;
 enum class State : uint8_t { Ready, Starting, Recording, Saving, Saved, Error, Checking, Cooling };
 struct Settings {
     uint32_t magic = 0x52454331;
@@ -14,6 +16,7 @@ struct Settings {
     uint16_t segmentMinutes = 60;
     uint8_t recordingMode = 0;
     uint8_t autoStart = 0;
+    uint8_t format = 0; // WAV=0, FLAC=1; legacy blobs default to WAV.
 };
 struct Status {
     State state = State::Ready;
@@ -47,6 +50,8 @@ struct LogSettings {
 LogSettings logSettings();
 bool saveLogSettings(const LogSettings& settings);
 void queueSystemLog(const char* line);
+void updateBatteryLog(uint32_t millivolts); // 0 = monitoring unavailable; main loop only
+bool prepareSleepLog(const char* reason, uint8_t boardVariant = 0); // false until worker closes journal
 bool requestLogTail(bool archive, bool hardwareSupported, uint8_t boardVariant = 0);
 bool logTailBusy();
 bool logTailReady();
@@ -70,7 +75,7 @@ bool checkCard(bool hardwareSupported, uint8_t boardVariant = 0); // async, no r
 bool setStorageClock(uint32_t hz, uint32_t writeBlockBytes = kDefaultWriteBlockBytes);
 bool diagnose(bool hardwareSupported, uint8_t boardVariant = 0);
 void push(const int16_t* pcm, size_t samples); // capture only; never waits for SD
-enum class StopReason : uint8_t { User, LowBattery, Thermal, ModeChange, Update };
+enum class StopReason : uint8_t { User, LowBattery, Thermal, ModeChange, Update, StorageFull };
 void requestStop(StopReason reason = StopReason::User);
 void captureFault();
 bool stop(uint32_t timeoutMs = 10000); // false: caller must defer destructive action

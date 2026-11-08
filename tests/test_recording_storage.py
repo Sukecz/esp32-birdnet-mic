@@ -124,7 +124,8 @@ struct Card {
   b[34]=32;b[37]=8;return true;
  }
  uint64_t totalBytes(){return 1ULL<<30;}
- uint64_t usedBytes(){return 0;}
+ uint64_t used=0;
+ uint64_t usedBytes(){return used;}
  bool exists(const char* p){return std::filesystem::exists(root+p);}
  bool mkdir(const char* p){return std::filesystem::create_directory(root+p);}
 };inline Card SD;
@@ -152,9 +153,10 @@ int spiBegins=0;
 constexpr uint8_t boardVariant=TEST_SENSE;
 std::function<void()> beforeReceive, mountHook=[]{};
 bool failQueue=false,cardMissing=false,failSync=false,shortWrite=false,failRename=false,corruptRead=false;
+bool zeroErrno=false;
 size_t maxPosixWrite=0;
 int test_fsync(int fd){return failSync?-1:fsync(fd);}
-ssize_t test_write(int fd,const void* p,size_t n){if(n>maxPosixWrite)maxPosixWrite=n;if(shortWrite&&n){errno=ENOSPC;return write(fd,p,n-1);}return write(fd,p,n);}
+ssize_t test_write(int fd,const void* p,size_t n){if(n>maxPosixWrite)maxPosixWrite=n;if(shortWrite&&n){errno=zeroErrno?0:ENOSPC;return write(fd,p,n-1);}return write(fd,p,n);}
 ssize_t test_read(int fd,void* p,size_t n){const ssize_t got=read(fd,p,n);if(corruptRead&&got>0)((uint8_t*)p)[0]^=1;return got;}
 int test_rename(const char* a,const char* b){return failRename?-1:rename(a,b);}
 #define time test_time
@@ -190,6 +192,7 @@ void runSession(int fault=0){
    if(fault==7&&receives==2)testNow+=300000;
    if(fault==1 && receives==2) failQueue=true;
    if(fault==2 && receives==2) shortWrite=true;
+   if(fault==8 && receives==2) {shortWrite=true;zeroErrno=true;SD.used=SD.totalBytes();}
    if(fault==6 && receives==2) captureFault();
    static int16_t samples[2048]={1,-1,32767,-32768};
    push(samples,2048);
@@ -222,6 +225,11 @@ int main(){
 #else
  assert(recordingpins::resolve(s3boards::Sense).cs==D6);
 #endif
+ // Read the exact legacy 12-byte blob without resetting user settings.
+ Settings legacy;legacy.durationMinutes=17;legacy.segmentMinutes=23;
+ savedPrefs.assign(reinterpret_cast<uint8_t*>(&legacy),reinterpret_cast<uint8_t*>(&legacy)+offsetof(Settings,format));
+ begin();assert(settings().durationMinutes==17&&settings().segmentMinutes==23&&settings().format==0);
+ savedPrefs.clear();config=Settings{};
  begin();assert(!mode());assert(!logSettings().detailed&&logSettings().sdEnabled);journalConfig.detailed=1;auto config=settings();config.recordingMode=1;assert(saveSettings(config));
 #if defined(ARDUINO_XIAO_ESP32S3)
  assert(!start(8000,true,s3boards::AtomS3U)&&spiBegins==0);
@@ -260,7 +268,8 @@ int main(){
 assert(status().queueBytes==512*1024);
  assert(status().verified&&status().verifiedBytes==44+5*2048*2);testInternal=86*1024;assert(status().state==State::Saved);assert(status().writtenKiB==20);assert(std::filesystem::exists(SD.root+status().file));
  assert(std::string(status().file).find("2026-10-26_13-34-56_")!=std::string::npos);
- assert(std::string(statusJson(true,boardVariant,48000)).find("\"space_seconds\":11184")!=std::string::npos);
+ // 1 GiB card space minus the 2 MiB finalization reserve, at 48 kHz PCM16.
+ assert(std::string(statusJson(true,boardVariant,48000)).find("\"space_seconds\":11162")!=std::string::npos);
  // Saved WAV metadata reflects bytes actually written, not a guessed duration.
  std::ifstream file(SD.root+status().file,std::ios::binary);uint8_t h[44];file.read((char*)h,44);
  assert(h[34]==16&&h[22]==1);assert(std::filesystem::file_size(SD.root+status().file)==44+5*2048*2);
@@ -307,6 +316,17 @@ assert(kDefaultStorageClockHz==16000000&&kDefaultWriteBlockBytes==4096);
  assert(sessionBytes==uint64_t(8000)*2*120&&segmentIndex==2);
  assert(wav.bytes()==8000*2*60);
  assert(std::filesystem::file_size(SD.root+status().file)==44+8000*2*60);
+ // FLAC uses the same real worker, rotation and save verification.
+ config=settings();config.format=1;assert(saveSettings(config));
+ recording::config=Settings{};begin();assert(settings().format==1&&settings().segmentMinutes==1);
+ beforeReceive=[] {static int16_t samples[2048]={};testNow+=10;push(samples,2048);};
+ assert(start(8000,true,boardVariant));runWorker();assert(status().state==State::Saved&&status().verified);
+ assert(segmentIndex==2&&flac.bytes()==8000*2*60);
+ assert(std::string(status().file).find(".flac")!=std::string::npos);
+ assert(std::filesystem::file_size(SD.root+status().file)==flac.storedBytes());
+ config.format=0;assert(saveSettings(config));
+ beforeReceive=[] {static int16_t samples[2048]={};testNow+=10;push(samples,2048);};
+ assert(start(8000,true,boardVariant));runWorker();assert(status().state==State::Saved);
  // Collision must never replace an existing complete WAV.
  segmentIndex=0;std::string existing=finalName; // Current name is segment 2.
  segmentIndex=1;assert(!openSegment());assert(std::filesystem::file_size(existing)==44+8000*2*60);
@@ -374,6 +394,38 @@ assert(kDefaultStorageClockHz==16000000&&kDefaultWriteBlockBytes==4096);
  assert(appendOne.find("Recording: started")!=std::string::npos&&appendOne.find("Recording: stopped")!=std::string::npos);
  assert(appendOne.find("Wi-Fi disabled")!=std::string::npos&&appendOne.find("start requested")==std::string::npos);
  const size_t firstSize=contents().size();runSession();assert(contents().size()>firstSize);
+ updateBatteryLog(3806);runSession();assert(logged("battery_mv=3806"));
+ // Normal progress is a half-hour summary with voltage and storage, not debug spam.
+ beforeReceive=[] {testNow+=1800000;requestStop();};
+ assert(start(8000,true,boardVariant));runWorker();lastLogs=drainLogs();
+ assert(logged("Recording: progress")&&logged("free_bytes="));
+ // SD full is handled before exhausting metadata/log space: finalize valid audio.
+ beforeReceive=[] {
+  static int16_t pcm[2048]={1,-1};push(pcm,2048);
+  SD.used=SD.totalBytes()-kStorageReserveBytes;testNow+=5000;
+ };
+ assert(start(8000,true,boardVariant));runWorker();lastLogs=drainLogs();
+ assert(status().state==State::Saved&&status().verified&&logged("SD full (safety reserve)"));
+ const auto fullResult=status();
+ assert(!prepareSleepLog("Recording: entering deep sleep until reset/power cycle",boardVariant));
+ assert(busy());runWorker();assert(prepareSleepLog("unused",boardVariant)&&!busy());
+ assert(contents().find("entering deep sleep")!=std::string::npos);
+ assert(status().state==fullResult.state&&status().verified);
+ assert(status().writtenKiB==fullResult.writtenKiB);
+ // A card already below the reserve never opens a new audio file.
+ assert(start(8000,true,boardVariant));runWorker();lastLogs=drainLogs();
+ assert(status().state==State::Error&&logged("reserved space"));
+ SD.used=0;runSession();
+ // A short write with errno=0 must keep its exact I/O details (as in the field log).
+ zeroErrno=true;runSession(2);zeroErrno=false;
+ assert(status().state==State::Error&&status().ioErrno==0&&logged("requested=")&&logged("returned="));
+ runSession(8);zeroErrno=false;SD.used=0;
+ assert(status().state==State::Error&&status().ioErrno==0&&logged("SD full; partial file preserved"));
+ runSession();cardMissing=true;
+ assert(!prepareSleepLog("Recording: entering deep sleep",boardVariant));runWorker();
+ assert(prepareSleepLog("unused",boardVariant)&&!busy()&&status().logError[0]);
+ cardMissing=false;
+ runSession();
  const auto beforeRead=status();assert(requestLogTail(false,true,boardVariant));runWorker();
  assert(logTailReady()&&logTailError().empty()&&logTail().find("Recording: stopped")!=std::string::npos);
  assert(logTailFileBytes()==contents().size()&&status().state==beforeRead.state&&status().writtenKiB==beforeRead.writtenKiB&&status().verified);
@@ -384,6 +436,13 @@ assert(kDefaultStorageClockHz==16000000&&kDefaultWriteBlockBytes==4096);
  runSession();assert(!status().logError[0]);
  logsConfig.sdEnabled=0;assert(saveLogSettings(logsConfig));const auto disabledBefore=contents();
  runSession();assert(contents()==disabledBefore&&status().state==State::Saved);
+ // Available recording time excludes the metadata/log reserve without underflow.
+ view.cardReady=true;view.freeBytes=kStorageReserveBytes+96000;
+ assert(statusJson(true,boardVariant,48000).find("\"space_seconds\":1,")!=std::string::npos);
+ view.freeBytes=kStorageReserveBytes;
+ assert(statusJson(true,boardVariant,48000).find("\"space_seconds\":0,")!=std::string::npos);
+ view.freeBytes=1;
+ assert(statusJson(true,boardVariant,48000).find("\"space_seconds\":0,")!=std::string::npos);
 
 
 

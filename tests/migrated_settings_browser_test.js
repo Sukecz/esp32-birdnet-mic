@@ -33,7 +33,7 @@ const {chromium}=require('playwright-core');
   // finish refreshing. Start the next scenario only after that transaction ends.
   const settled=()=>page.waitForFunction(()=>!pollBusy&&!recordingPending&&!recordingLogPending&&!batteryPending&&!fieldPowerPending&&!sectionBusy.size);
   await settled();await page.selectOption('#themeSel',theme);
-  const groups=[['recording_auto','recording_save','recording_panel','recording_feedback','0','1'],['recording_log_level','recording_log_save','logssec','recording_log_feedback','0','1'],['battery_monitor','battery_save','batterysec','battery_feedback','1','0'],['field_wifi_delay','field_wifi_save','recording_panel','field_wifi_feedback','3','5'],['field_cutoff','field_power_save','batterysec','field_power_feedback','3.50','3.60']];
+  const groups=[['recording_auto','recording_auto_apply','recording_panel','recording_auto_feedback','0','1'],['recording_log_level','recording_log_save','logssec','recording_log_feedback','0','1'],['battery_monitor','battery_save','batterysec','battery_feedback','1','0'],['field_wifi_delay','field_wifi_save','recording_panel','field_wifi_feedback','3','5'],['field_cutoff','field_power_save','batterysec','field_power_feedback','3.50','3.60']];
   for(const [id,save,root,feedback,original,changed] of groups){
    if(root!=='recording_panel')await page.evaluate(id=>openSection(id),root);
    if(root==='logssec')await page.evaluate(()=>document.getElementById('recording_log_settings').open=true);

@@ -1,8 +1,10 @@
 # Recording logs
 
 In **Recording → Recording log**, choose **Normal** for everyday operation.
-Normal logging records recording starts, saved WAV files and sizes, stops,
-thermal pauses/resumes and errors. **Detailed diagnostics** additionally records
+Normal logging records recording starts, saved files and sizes, stops,
+thermal pauses/resumes, errors and a progress summary every 30 minutes.
+Events include battery voltage (millivolts; 0 means unavailable), free space,
+dropped samples and maximum storage delay. **Detailed diagnostics** additionally records
 card/SPI details, individual preparation steps and progress every five minutes.
 Normal is the default.
 
@@ -82,6 +84,10 @@ return the complete retained history without allocating it as one large String.
 After Wi-Fi is turned off, a completed recording or recording error puts the
 device into deep sleep once the storage worker has closed the files and log.
 A thermal pause with pending recovery keeps its cooling/resume behavior.
+Before sleeping, the storage worker reopens the journal, writes the sleep reason
+and battery voltage, flushes it and unmounts the card. This records the intent to
+sleep; it does not measure sleep current or prove the hardware entered sleep.
+An absent or failed card may prevent this final entry; shutdown still proceeds.
 Restart or power-cycle the device to restore Wi-Fi; normal sleep has no wake timer.
 With Wi-Fi on, finishing a recording leaves the controls available.
 
@@ -92,3 +98,14 @@ the existing low-battery sleep setting.
 If the radio cannot be turned off, firmware restores the control connection,
 reports the error and permits retry. The UI also restores controls if the device
 becomes reachable after an interrupted connection.
+
+## Card capacity limit
+
+Recording stops and saves when a five-second space check reaches a 2 MiB
+reserve (about 2.1 MB). This leaves room for queued audio, the final file header
+and the journal, rather than deliberately writing until the card rejects data.
+The normal stop reason is `SD full (safety reserve)`. Starting below this reserve
+is rejected without creating another recording file. The remaining-time estimate
+also excludes this reserve. Unexpected short writes
+still preserve `.part` files and their original I/O details; the normal log now
+includes the offset, requested bytes and returned bytes even when errno is zero.

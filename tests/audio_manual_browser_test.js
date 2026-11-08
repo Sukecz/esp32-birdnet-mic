@@ -9,7 +9,7 @@ const assets=require('./ui_assets');
   const fixture=JSON.parse(fs.readFileSync('tests/fixtures/ui-state.json'));
   fixture.audio_status.s3_board_supported=true;fixture.audio_status.s3_board=0;
   fixture.audio_status.noise={mode:0,floor_db:12,adapt_s:15,active:false,learn_pct:0,cpu_pct:0,cpu_peak_pct:0,est_reduction_db:0};
-  const writes=[],errors=[];let fail=false,graphReads=0;
+  const writes=[],errors=[];let fail=false,graphFail=false,graphReads=0;
   const page=await browser.newPage({viewport:{width,height:1000}});page.on('pageerror',e=>errors.push(e.message));
   await page.route('http://auto.test/**',route=>{
    const path=new URL(route.request().url()).pathname;
@@ -26,7 +26,7 @@ const assets=require('./ui_assets');
     return route.fulfill({json:{ok:true}});
    }
    if(path==='/api/microphone_profile')return route.fulfill({json:{ok:true,mic_format:Number(new URL(route.request().url()).searchParams.get('format')),sample_rate:48000,gain:1.5,buffer_size:512,i2s_shift:12,hp_enable:true,hp_cutoff_hz:500,cpu_mhz:0,board:'XIAO ESP32-S3 Sense'}});
-   if(path==='/api/noise'){graphReads++;return route.fulfill({json:fixture.audio_status.noise});}
+   if(path==='/api/noise'){graphReads++;if(graphFail)return route.fulfill({status:503,body:'busy'});return route.fulfill({json:fixture.audio_status.noise});}
    if(path==='/api/logs')return route.fulfill({body:'test'});
    return route.fulfill({json:fixture[path.slice(5)]||{ok:true,available:false}});
   });
@@ -63,6 +63,16 @@ const assets=require('./ui_assets');
   assert(!await dirty('noise_mode'));assert(await page.locator('#noise_floor').isEnabled());assert(await dirty('in_gain'));
   assert.deepEqual(writes.at(-1).v,{mode:'1',floor:'12',adapt:'15'});
   await page.waitForFunction(()=>!noiseGraphBusy);const reads=graphReads;await page.evaluate(()=>updateNoiseSpectrum());assert(graphReads>reads);
+  // One failed graph poll stays quiet, two in a row warn, the next success clears it; learning progress keeps its own line.
+  Object.assign(fixture.audio_status.noise,{active:true,learned:false,learn_pct:40});await page.evaluate(()=>refreshAll());
+  assert.match(await page.locator('#noise_metrics').textContent(),/Learning background: 40%/);
+  graphFail=true;await page.evaluate(()=>updateNoiseSpectrum());assert(await page.locator('#noise_graph_status').isHidden(),'one miss is not reported');
+  await page.evaluate(()=>updateNoiseSpectrum());assert(await page.locator('#noise_graph_status').isVisible(),'two misses in a row are reported');
+  assert.match(await page.locator('#noise_metrics').textContent(),/Learning background/);await page.evaluate(()=>refreshAll());assert(await page.locator('#noise_graph_status').isVisible(),'status poll does not hide a graph failure');
+  graphFail=false;await page.evaluate(()=>updateNoiseSpectrum());assert(await page.locator('#noise_graph_status').isHidden(),'success clears the warning');
+  graphFail=true;await page.evaluate(()=>updateNoiseSpectrum());graphFail=false;await page.evaluate(()=>updateNoiseSpectrum());graphFail=true;await page.evaluate(()=>updateNoiseSpectrum());
+  assert(await page.locator('#noise_graph_status').isHidden(),'a success resets the count');graphFail=false;
+  Object.assign(fixture.audio_status.noise,{active:false,learn_pct:0});await page.evaluate(()=>refreshAll());
   const openReads=graphReads;await page.evaluate(()=>{document.getElementById('noisesec').open=false;return updateNoiseSpectrum();});assert.equal(graphReads,openReads);await page.evaluate(()=>openSection('noisesec'));
   for(const [id,changed,original] of [['noise_floor','6','12'],['noise_adapt','60','15']]){
    await page.selectOption('#'+id,changed);assert(await dirty(id));await page.evaluate(()=>refreshAll());assert.equal(await page.inputValue('#'+id),changed);

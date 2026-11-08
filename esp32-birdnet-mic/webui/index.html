@@ -39,6 +39,20 @@
 
 /* Responsive table display must still respect the hidden attribute. */
 tr[hidden]{display:none!important}
+
+/* Shared semantic action colors. */
+button.success{background:rgba(16,185,129,.14);border-color:rgba(16,185,129,.4)}
+button.success:hover{background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.6)}
+/* Flat settings rows reuse the ordinary controls, labels and feedback. */
+.settings-row{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(0,1.2fr);gap:6px 16px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)}
+.settings-row:last-child{border-bottom:0}
+.settings-row>label{color:var(--muted)}
+.settings-row>.field{min-width:0}
+.settings-row>.section-note,.settings-row>.feedback{grid-column:2;margin:0;max-width:none}
+.settings-row>.feedback:empty{display:none}
+.settings-list [hidden]{display:none!important}
+.duration-inputs{display:inline-flex;align-items:center;gap:8px}
+@media(max-width:600px){.settings-row{grid-template-columns:minmax(0,1fr);gap:8px;padding:12px 0}.settings-row>.section-note,.settings-row>.feedback{grid-column:1}}
 </style>
 <style>
 #direct_access{margin:14px 0 20px;padding:14px;border:1px solid var(--border);border-left:3px solid var(--acc);border-radius:12px;background:var(--row)}#direct_access h3{margin:0 0 6px}#direct_access>p{margin:0 0 12px;font-size:12px;line-height:1.45}#direct_access table{margin:0}
@@ -92,7 +106,18 @@ tr[hidden]{display:none!important}
 .overview>.health-checks{display:flex;flex-direction:column;justify-content:center;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--row);font-weight:750;font-size:13px;min-width:0;overflow-wrap:anywhere}
 .health-checks a{text-decoration:none}#overview_mic:before{content:none}
 @media(max-width:600px){.playback{padding:8px;gap:6px 8px}.mode-controls label,.listen-volume label{display:none}.listen-controls{gap:8px}.listen-volume{grid-template-columns:64px 5ch;gap:5px}#listen_volume{width:64px}#listen_button{padding:8px 10px;min-width:75px}.overview>.health-checks{padding:10px;font-size:12px}}
-@media(max-width:360px){.playback{column-gap:6px}#device_mode{width:96px;font-size:12px;padding:6px}.listen-controls{gap:4px}.listen-volume{grid-template-columns:40px 5ch;gap:3px}#listen_volume{width:40px}#listen_button{min-width:60px;padding:8px 6px}#listen_button:before{display:none}}
+@media(max-width:360px){.playback{column-gap:6px}#device_mode{width:96px;padding:6px}.listen-controls{gap:4px}.listen-volume{grid-template-columns:40px 5ch;gap:3px}#listen_volume{width:40px}#listen_button{min-width:60px;padding:8px 6px}#listen_button:before{display:none}}
+
+.recording-indicator{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:var(--fg);font:inherit;font-variant-numeric:tabular-nums}
+.recording-indicator[hidden]{display:none}
+.recording-dot{width:9px;height:9px;flex:none;border-radius:50%;background:var(--bad)}
+.recording-actions button{white-space:nowrap}
+@media(max-width:600px){
+ .playback:has(.recording-indicator:not([hidden])){grid-template-columns:minmax(0,1fr)}
+ .playback:has(.recording-indicator:not([hidden])) .listen-controls{grid-column:1;grid-row:2;justify-content:space-between}
+ .playback:has(.recording-indicator:not([hidden])) #listen_status{grid-column:1;grid-row:3;justify-self:start;text-align:left}
+ .playback:has(.recording-indicator:not([hidden])) #device_mode_feedback{grid-column:1;grid-row:4}
+}
 </style>
 <script src="/ap-password.js" defer></script>
 </head>
@@ -127,6 +152,7 @@ tr[hidden]{display:none!important}
 <div class='mode-controls' aria-label='Device mode'>
 <label for='device_mode' title='Current mode. Set the startup mode in Device configuration.'>Mode</label>
 <select id='device_mode' onchange='changeDeviceMode(this.value)'><option value='streaming'>Streaming</option><option value='recording'>Recording</option></select>
+<div id='recording_indicator' class='recording-indicator' role='status' aria-live='off' hidden><span class='recording-dot' aria-hidden='true'></span><strong>REC</strong><time id='recording_clock' datetime='PT0S'>00:00:00</time></div>
 </div>
 <div class='listen-controls'>
 <div class='listen-volume'>
@@ -159,40 +185,48 @@ tr[hidden]{display:none!important}
 <p><a href='#thermalsec' onclick="openSection('thermalsec')">Open Thermal &amp; performance</a></p></div><div id='microphone_notice' class='thermal-alert' role='alert' hidden><strong>Microphone signal warning</strong><p id='microphone_notice_detail'></p><a href='#audiosec' onclick="openSection('audiosec')">Check Audio settings</a> &middot; <a href='#healthsec' onclick="openSection('healthsec')">Open Stream health</a></div>
 <section id='recording_panel' class='card' hidden>
 <h2 class='section-title'>Recording</h2>
-<p class='section-note'>Listen checks the microphone. SD write status is shown separately below.</p>
 <p id='recording_summary' role='status' aria-live='polite'>Checking card…</p>
 <p id='recording_storage' class='section-note'></p>
 <p id='recording_capacity' class='section-note'></p>
 <p id='recording_file' class='mono'></p>
-<div class='actions'>
-<button id='recording_check' onclick="recordingAction('check')">Check SD card</button>
-<button id='recording_start' onclick="recordingAction('start')">Start recording</button>
-<button id='recording_stop' onclick="recordingAction('stop')">Stop &amp; save</button>
+<div class='actions recording-actions'>
+<button id='recording_start' class='success' onclick="recordingAction('start')">Start recording</button>
+<button id='recording_stop' class='danger' onclick="recordingAction('stop')">Stop &amp; save</button>
 </div>
-<div class='feature-group'>
-<div class='feature-main actions'><label for='recording_duration_mode'>Recording duration</label><select id='recording_duration_mode' onchange='recordingDurationModeChanged()'><option value='0'>Until stopped</option><option value='1'>Set a duration</option></select></div>
-<div id='recording_duration_options' class='feature-settings' role='group' aria-label='Recording duration settings' data-feature-parent='recording_duration_mode' hidden>
-<div class='field'><label id='recording_minutes_label' for='recording_hours'>Minutes</label><input id='recording_hours' type='number' min='0' max='10080' step='1' required value='0' oninput='recordingDraftChanged()'></div>
-</div></div>
-<table class='feature-main'><tr><td class='k'><label for='recording_auto'>Start recording after power-on</label></td><td class='v'><div class='field'><select id='recording_auto' onchange='recordingDraftChanged()'><option value='0'>Off</option><option value='1'>On</option></select></div></td></tr></table>
-<div class='recording-settings'>
-<h3>Recording settings</h3>
-<div class='field'>
-<label for='recording_segment'>Start a new file every (minutes)</label>
-<input id='recording_segment' type='number' min='1' max='120' step='1' value='60' oninput='recordingDraftChanged()'>
-</div>
-<p class='section-note'>Long recordings are split into separate files. Old recordings are kept; recording stops when the card is full.</p>
-</div>
-<div class='actions'><button id='recording_save' onclick='saveRecordingSettings()' disabled>Save recording settings</button><span id='recording_dirty' class='edit-note'></span></div>
+<div class='actions'><button id='recording_check' onclick="recordingAction('check')">Check SD card</button></div>
 <p id='recording_feedback' class='feedback' role='status' aria-live='polite'></p>
-<div class='recording-settings'>
-<h3>Wi-Fi power saving</h3>
-<div class='field'><label for='field_wifi_delay'>Wi-Fi switch-off delay (seconds)</label><input id='field_wifi_delay' type='number' min='0' max='60' step='1' value='3' oninput='fieldPowerDraftChanged()'></div>
-<div class='actions'><button id='field_wifi_save' onclick='saveFieldPowerSettings(true)' disabled>Save power settings</button><button id='recording_wifi_off' onclick='switchRecordingWifiOff()' disabled>Turn Wi-Fi off until restart</button></div>
-<p class='section-note'>Start recording, then turn Wi-Fi off to save power. When recording finishes or fails, the device sleeps. Restart the device to reconnect.</p>
-<p id='field_wifi_feedback' class='feedback' role='status' aria-live='polite'></p>
-<p><a href='#batterysec' onclick="openSection('batterysec')">Configure low-battery protection</a></p>
+<h3>Recording settings</h3>
+<div id='recording_settings' class='settings-list'>
+<div class='settings-row'>
+<label for='recording_duration_mode'>Recording duration</label>
+<div class='field'><select id='recording_duration_mode' onchange='recordingDurationModeChanged()'><option value='0'>Until stopped</option><option value='1'>Set a duration</option></select><span id='recording_duration_options' class='duration-inputs' hidden><label id='recording_minutes_label' for='recording_hours'>Minutes</label><input id='recording_hours' type='number' min='0' max='10080' step='1' required value='0' oninput='recordingDraftChanged()'></span><button id='recording_duration_apply' onclick="saveRecordingSettings('duration')" disabled>Apply</button></div>
+<p id='recording_duration_feedback' class='feedback' role='status' aria-live='polite'></p>
 </div>
+<div class='settings-row'>
+<label for='recording_format'>File format</label>
+<div class='field'><select id='recording_format' onchange='recordingDraftChanged()'><option value='wav'>WAV</option><option value='flac'>FLAC (lossless)</option></select><button id='recording_format_apply' onclick="saveRecordingSettings('format')" disabled>Apply</button></div>
+<p class='section-note'>FLAC keeps the same audio and can save around 15–50% of space, depending on the sound. Actual savings can be lower or higher.</p>
+<p id='recording_format_feedback' class='feedback' role='status' aria-live='polite'></p>
+</div>
+<div class='settings-row'>
+<label for='recording_segment'>New file every</label>
+<div class='field'><input id='recording_segment' type='number' min='1' max='120' step='1' value='60' oninput='recordingDraftChanged()'><span class='unit'>minutes</span><button id='recording_segment_apply' onclick="saveRecordingSettings('segment')" disabled>Apply</button></div>
+<p class='section-note'>Long recordings are split into files. Existing recordings are kept.</p>
+<p id='recording_segment_feedback' class='feedback' role='status' aria-live='polite'></p>
+</div>
+<div class='settings-row'>
+<label for='recording_auto'>Start after power-on</label>
+<div class='field'><select id='recording_auto' onchange='recordingDraftChanged()'><option value='0'>Off</option><option value='1'>On</option></select><button id='recording_auto_apply' onclick="saveRecordingSettings('auto')" disabled>Apply</button></div>
+<p id='recording_auto_feedback' class='feedback' role='status' aria-live='polite'></p>
+</div>
+</div>
+<h3>Wi-Fi power saving</h3>
+<div class='settings-list'>
+<div class='settings-row'><label for='field_wifi_delay'>Switch-off delay</label><div class='field'><input id='field_wifi_delay' type='number' min='0' max='60' step='1' value='3' oninput='fieldPowerDraftChanged()'><span class='unit'>seconds</span><button id='field_wifi_save' onclick='saveFieldPowerSettings(true)' disabled>Apply</button></div><p id='field_wifi_feedback' class='feedback' role='status' aria-live='polite'></p></div>
+</div>
+<div class='actions'><button id='recording_wifi_off' onclick='switchRecordingWifiOff()' disabled>Turn Wi-Fi off until restart</button></div>
+<p class='section-note'>Start recording, then turn Wi-Fi off to save power. When recording ends, the device sleeps. Reset or power off/on to reconnect.</p>
+<p><a href='#batterysec' onclick="openSection('batterysec')">Low-battery protection</a></p>
 
 
 </section>
@@ -460,6 +494,7 @@ tr[hidden]{display:none!important}
 <p class='section-note'>Start with Normal. Strong may hide quiet bird calls. Slow follows background changes more gently.</p>
 <p class='section-note'>Changes streaming, Listen and SD audio. Low CPU speeds may cause streaming dropouts.</p>
 <p id='noise_metrics' class='section-note' role='status' hidden></p>
+<p id='noise_graph_status' class='section-note warn' role='status' hidden>Could not load the graph. Retrying…</p>
 <canvas hidden id='noise_spectrum' width='800' height='240' aria-label='Input sound, estimated background and learned background'></canvas>
 <p class='section-note'>Blue: input sound · Orange: current background estimate · Green: learned background.</p>
 <p class='section-note'>Left to right: low to high pitch (kHz). Higher lines mean louder sound (dBFS).</p>
@@ -1411,7 +1446,7 @@ function toggleDirty(el,key){
  if(!el)return; const dirty=!!edits[key]&&differsFromSaved(key); el.classList.toggle('dirty',dirty);
  if(el.type==='checkbox')el.closest('label')?.classList.toggle('dirty',dirty);
  const field=el.closest('.field');
- if(field){let note=field.querySelector('.edit-note');if(!note){note=document.createElement('span');note.className='edit-note';field.append(note);}note.textContent=dirty?'Unsaved':'';}
+ if(field){let note=field.querySelector('.edit-note');if(!note){note=document.createElement('span');note.className='edit-note';field.append(note);}note.textContent=field.querySelector('.dirty')?'Unsaved':'';}
  if(!field&&el.id&&el.parentElement){let note=el.parentElement.querySelector('[data-draft-note="'+el.id+'"]');if(!note){note=document.createElement('span');note.className='edit-note';note.dataset.draftNote=el.id;el.after(note);}note.textContent=dirty?'Unsaved':'';el.setAttribute('aria-label',(el.labels?.[0]?.textContent||el.id)+(dirty?' — Unsaved':''));}
  updateDiscard(el.closest('details.card'));
 }
@@ -1749,7 +1784,7 @@ function updateNoiseSave(){
  const busy=!!overviewState.status?.recording?.busy;$('noise_busy_hint').hidden=!busy;
  for(const [,key,,button] of noiseFields)$(button).disabled=!noiseSettingsLoaded||busy||sectionBusy.has('noisesec')||(key!=='noise_mode'&&!featureEnabled('noise_mode','1'))||!differsFromSaved(key);
  const ready=featureEnabled('noise_mode','1');$('noise_spectrum').hidden=!ready;$('noise_graph_placeholder').hidden=ready;
- if(!ready)$('noise_metrics').hidden=true;
+ if(!ready){$('noise_metrics').hidden=true;noiseGraphFailures=0;$('noise_graph_status').hidden=true;}
 }
 function renderNoiseSettings(s){
  if(!s)return;
@@ -1771,13 +1806,19 @@ async function saveNoiseSettings(key='noise_mode'){
  values[row[4]]=$(row[0]).value;
  await saveValues('/api/noise/set',values,[key],'noisesec');updateNoiseSave();await updateNoiseSpectrum();
 }
-let noiseGraphBusy=false;
+let noiseGraphBusy=false,noiseGraphFailures=0;
+function setNoiseGraphStatus(failed){
+ // One missed poll is normal while the device is busy; warn after two in a row.
+ noiseGraphFailures=failed?noiseGraphFailures+1:0;
+ const el=$('noise_graph_status');el.hidden=noiseGraphFailures<2;
+}
 async function updateNoiseSpectrum(){
  if(!$('noisesec').open||!featureEnabled('noise_mode','1')||noiseGraphBusy)return;
  noiseGraphBusy=true;
  try{
   // Spectrum requests never replace saved settings from the main status poll.
   const s=await fetchJSON('/api/noise?spectra=1');
+  setNoiseGraphStatus(false);
   const canvas=$('noise_spectrum'),ctx=canvas.getContext('2d'),w=canvas.clientWidth,h=240,dpr=window.devicePixelRatio||1;
   canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,h);ctx.font=getComputedStyle(canvas).font;ctx.fillStyle=getComputedStyle(document.body).color;
@@ -1788,7 +1829,7 @@ async function updateNoiseSpectrum(){
   for(const level of [0,-30,-60,-90,-120]){const yy=12-level*(h-42)/120;ctx.fillText(String(level),4,yy+5);ctx.beginPath();ctx.moveTo(48,yy);ctx.lineTo(w-16,yy);ctx.stroke();}
   for(const k of [0,64,128,192,256])ctx.fillText((k*s.sample_rate/512000).toFixed(0),x(k)-6,h-8);
   for(const [key,color] of [['level','#3b82f6'],['floor','#f59e0b'],['signature','#10b981']]){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();s[key].forEach((q,k)=>k?ctx.lineTo(x(k),y(q)):ctx.moveTo(x(k),y(q)));ctx.stroke();}
- }catch(_){$('noise_metrics').textContent='Could not load the graph. Retrying…';$('noise_metrics').hidden=false;}finally{noiseGraphBusy=false;}
+ }catch(_){setNoiseGraphStatus(true);}finally{noiseGraphBusy=false;}
 }
 $('noisesec').addEventListener('toggle',updateNoiseSpectrum);
 setInterval(updateNoiseSpectrum,3000);
@@ -2003,7 +2044,7 @@ function fieldPowerDraftChanged(){
  recordingDraftChanged();
  const draft=fieldPowerDraft();
  fieldPowerDirty=Object.keys(draft).some(k=>Number(fieldPowerState[k])!==draft[k]);
- recordingNode('field_power_dirty').textContent=fieldPowerDirty?'Unsaved':'';
+ recordingNode('field_power_dirty').textContent=Object.keys(draft).some(k=>k!=='wifi_delay_seconds'&&Number(fieldPowerState[k])!==draft[k])?'Unsaved':'';
  const busy=fieldPowerPending||batteryPending||recordingPending||!!(recordingState&&(recordingState.busy||recordingState.cooling_pending));
  recordingNode('field_wifi_save').disabled=busy||draft.wifi_delay_seconds===Number(fieldPowerState.wifi_delay_seconds);
  recordingNode('field_power_save').disabled=busy||!Object.keys(draft).some(k=>k!=='wifi_delay_seconds'&&Number(fieldPowerState[k])!==draft[k]);
@@ -2106,12 +2147,49 @@ async function checkWifiOffRecovery(controls){
 }
 
 const recordingNode=id=>document.getElementById(id);
-function recordingDurationModeChanged(){const limited=recordingNode('recording_duration_mode').value==='1';recordingNode('recording_hours').value=limited?(Number(recordingNode('recording_hours').value)||60):0;recordingNode('recording_hours').hidden=!limited;recordingNode('recording_minutes_label').hidden=!limited;const group=recordingNode('recording_duration_options');if(group)group.hidden=!limited;recordingDraftChanged();}
+let recordingClockTimer=null,recordingClockSnapshot=null;
+function updateRecordingClock(){
+ const clock=recordingNode('recording_clock');
+ if(!clock||!recordingClockSnapshot||wifiOffIntent)return;
+ const age=performance.now()-recordingClockSnapshot.at;
+ // Freeze a disconnected display rather than claiming an unobserved recording.
+ if(age>10000)return;
+ const seconds=Math.max(0,Math.floor(recordingClockSnapshot.seconds+age/1000));
+ clock.textContent=[Math.floor(seconds/3600),Math.floor(seconds%3600/60),seconds%60].map(v=>String(v).padStart(2,'0')).join(':');
+ clock.setAttribute('datetime','PT'+seconds+'S');
+}
+function renderRecordingIndicator(r){
+ const indicator=recordingNode('recording_indicator');if(!indicator)return;
+ const active=r.mode==='recording'&&r.state==='recording';
+ indicator.hidden=!active;
+ if(!active){if(recordingClockTimer!==null)clearInterval(recordingClockTimer);recordingClockTimer=null;recordingClockSnapshot=null;return;}
+ if(!recordingClockSnapshot||recordingClockSnapshot.source!==r)recordingClockSnapshot={seconds:Number(r.elapsed_seconds)||0,at:performance.now(),source:r};
+ updateRecordingClock();
+ if(recordingClockTimer===null)recordingClockTimer=setInterval(updateRecordingClock,1000);
+}
+
+const recordingSettingGroups={duration:['recording_duration_mode','recording_hours'],format:['recording_format'],segment:['recording_segment'],auto:['recording_auto']};
+function recordingDurationModeChanged(){
+ const limited=recordingNode('recording_duration_mode').value==='1';
+ recordingNode('recording_hours').value=limited?(Number(recordingNode('recording_hours').value)||60):0;
+ recordingNode('recording_hours').hidden=!limited;recordingNode('recording_minutes_label').hidden=!limited;recordingNode('recording_duration_options').hidden=!limited;
+ if(typeof markDirty==='function')for(const id of recordingSettingGroups.duration){editVersions[id]=(editVersions[id]||0)+1;markDirty(id);}
+ recordingDraftChanged();
+}
+function recordingGroupChanged(group){
+ const r=recordingState;
+ if(group==='duration')return !recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(r.duration_minutes?'1':'0')||Number(recordingNode('recording_hours').value)!==r.duration_minutes;
+ if(group==='format')return recordingNode('recording_format').value!==(r.format||'wav');
+ if(group==='segment')return Number(recordingNode('recording_segment').value)!==r.segment_minutes||!recordingNode('recording_segment').value.trim();
+ return recordingNode('recording_auto').value!==(r.auto_start?'1':'0');
+}
 function recordingDraftChanged(){
  if(!recordingState)return;
- recordingDirty=!recordingNode('recording_hours').value.trim()||recordingNode('recording_duration_mode').value!==(recordingState.duration_minutes?'1':'0')||Math.round(Number(recordingNode('recording_hours').value))!==recordingState.duration_minutes||Number(recordingNode('recording_segment').value)!==recordingState.segment_minutes||recordingNode('recording_auto').value!==(recordingState.auto_start?'1':'0');
- recordingNode('recording_dirty').textContent=recordingDirty?'Unsaved':'';
- recordingNode('recording_save').disabled=!recordingDirty||recordingPending||recordingState.busy||recordingState.cooling_pending;
+ recordingDirty=Object.keys(recordingSettingGroups).some(recordingGroupChanged);
+ for(const group of Object.keys(recordingSettingGroups)){
+  const button=recordingNode('recording_'+group+'_apply');
+  if(button)button.disabled=!recordingGroupChanged(group)||recordingPending||recordingState.busy||recordingState.cooling_pending;
+ }
  recordingNode('recording_start').disabled=recordingDirty||recordingPending||fieldPowerPending||recordingState.busy||recordingState.cooling_pending||!recordingState.supported||(fieldPowerState&&fieldPowerState.start_allowed===false);
 }
 function recordingTime(seconds){if(seconds>=86400)return Math.floor(seconds/86400)+' days '+Math.floor(seconds%86400/3600)+' hours';if(seconds>=3600)return Math.floor(seconds/3600)+'h '+Math.floor(seconds%3600/60)+'m';return Math.floor(seconds/60)+'m '+Math.floor(seconds%60)+'s';}
@@ -2122,6 +2200,7 @@ function renderRecording(j){
  const healthTitle=recordingNode('t_health');
  if(healthTitle)healthTitle.textContent=r.mode==='recording'?'Microphone health':'Stream health';
  const first=!recordingState;recordingState=r;
+ renderRecordingIndicator(r);
  const storage=recordingNode('recording_storage');
  if(storage)storage.textContent=r.storage==='sense_builtin'?'Sense built-in microSD slot · FAT32, up to 32 GB. Fit the Sense expansion board with its SD connection enabled.':r.storage==='unavailable'?'This board has no supported SD interface.':'External SPI microSD module.';
  recordingNode('recording_panel').hidden=r.mode!=='recording';
@@ -2147,12 +2226,13 @@ function renderRecording(j){
  if(capacity){
   const seconds=r.space_seconds;
   const insufficient=r.duration_minutes>0&&Number.isFinite(seconds)&&seconds<Math.max(0,r.duration_minutes*60-r.elapsed_seconds);
-  capacity.textContent=Number.isFinite(seconds)?'Space for approximately '+recordingTime(seconds)+' of audio'+(insufficient?' — less than the remaining recording duration.':'.'):'Recording time estimate unavailable until the SD card is checked.';
+  const flac=r.format==='flac';
+  capacity.textContent=Number.isFinite(seconds)?(flac?'FLAC: plan for about '+recordingTime(seconds)+'. Compression may allow more recording time.':'WAV: space for about '+recordingTime(seconds)+'.')+(insufficient?(flac?' The WAV-size estimate is shorter than the remaining duration.':' Less than the remaining recording duration.'):''):'Recording time estimate unavailable until the SD card is checked.';
   capacity.className='section-note'+(insufficient?' warn':'');
  }
  recordingNode('recording_file').textContent=r.file||'';
- if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').value=r.auto_start?'1':'0';}
- for(const id of ['recording_duration_mode','recording_hours','recording_segment','recording_auto'])recordingNode(id).disabled=r.busy||r.cooling_pending||recordingPending;
+ if(first||!recordingDirty){recordingNode('recording_hours').value=r.duration_minutes;recordingNode('recording_duration_mode').value=r.duration_minutes?'1':'0';recordingNode('recording_hours').hidden=!r.duration_minutes;recordingNode('recording_minutes_label').hidden=!r.duration_minutes;const group=recordingNode('recording_duration_options');if(group)group.hidden=!r.duration_minutes;recordingNode('recording_format').value=r.format||'wav';recordingNode('recording_segment').value=String(r.segment_minutes);recordingNode('recording_auto').value=r.auto_start?'1':'0';}
+ for(const id of ['recording_duration_mode','recording_hours','recording_segment','recording_format','recording_auto'])recordingNode(id).disabled=r.busy||r.cooling_pending||recordingPending;
  recordingNode('recording_stop').disabled=(!r.busy&&!r.cooling_pending)||recordingPending;
  const check=recordingNode('recording_check');if(check)check.disabled=r.busy||r.cooling_pending||recordingPending||!r.supported;
  recordingDraftChanged();
@@ -2181,12 +2261,21 @@ async function changeDeviceMode(mode){
 async function recordingAction(action){
  await recordingPost('/api/recording/action',{action});await loadStatus();
 }
-async function saveRecordingSettings(){
- if(!recordingNode('recording_hours').value.trim()){recordingNode('recording_feedback').textContent='Enter a duration, or 0 to record until stopped.';return;}
- const rawMinutes=Number(recordingNode('recording_hours').value);
- const minutes=Math.abs(rawMinutes-Math.round(rawMinutes))<1e-8?Math.round(rawMinutes):rawMinutes;
- if(!Number.isInteger(minutes)||minutes<0||minutes>10080||(recordingNode('recording_duration_mode').value==='1'&&minutes===0)){recordingNode('recording_feedback').textContent='Choose a duration from 0 to 10080 minutes.';return;}
- await saveRecordingGroup('/api/recording/settings',{duration_minutes:String(minutes),segment_minutes:recordingNode('recording_segment').value,auto_start:recordingNode('recording_auto').value},draftGroups[0],'recording_panel','recording_feedback','Recording settings saved.');
+async function saveRecordingSettings(group){
+ if(!recordingState||!recordingSettingGroups[group])return;
+ const r=recordingState,values={format:r.format||'wav',duration_minutes:r.duration_minutes,segment_minutes:r.segment_minutes,auto_start:r.auto_start?'1':'0'};
+ const feedback=recordingNode('recording_'+group+'_feedback');
+ if(group==='duration'){
+  const limited=recordingNode('recording_duration_mode').value==='1',raw=recordingNode('recording_hours').value;
+  const minutes=limited?Number(raw):0;
+  if(!raw.trim()||!Number.isInteger(minutes)||minutes<0||minutes>10080||(limited&&minutes===0)){feedback.textContent='Choose a duration from 1 to 10080 minutes, or Until stopped.';return;}
+  values.duration_minutes=minutes;
+ }else if(group==='format')values.format=recordingNode('recording_format').value;
+ else if(group==='segment'){
+  const raw=recordingNode('recording_segment').value,n=Number(raw);
+  if(!raw.trim()||!Number.isInteger(n)||n<1||n>120){feedback.textContent='Choose from 1 to 120 minutes.';return;}values.segment_minutes=n;
+ }else values.auto_start=recordingNode('recording_auto').value;
+ await saveRecordingGroup('/api/recording/settings',values,recordingSettingGroups[group],'recording_panel','recording_'+group+'_feedback','Saved.');
 }
 </script>
 <script id='browser_audio_script'>
@@ -2323,10 +2412,10 @@ fetch('/api/update_space',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(s
 
 <script>
 function friendlyBytes(n){const u=['B','KB','MB','GB'];let i=0;while(n>=1000&&i<3){n/=1000;i++;}return n.toLocaleString('en',{maximumFractionDigits:i?1:0})+' '+u[i];}
-const draftGroups=[['recording_duration_mode','recording_hours','recording_segment','recording_auto'],['recording_log_level','recording_log_sd','recording_log_max'],['field_wifi_delay','field_guard','field_cutoff','field_confirm','field_hysteresis','field_sleep'],['battery_monitor']];
+const draftGroups=[['recording_duration_mode','recording_hours','recording_segment','recording_format','recording_auto'],['recording_log_level','recording_log_sd','recording_log_max'],['field_wifi_delay','field_guard','field_cutoff','field_confirm','field_hysteresis','field_sleep'],['battery_monitor']];
 function highlightNewDrafts(){
  if(!recordingState||!fieldPowerState||!batteryState)return;
- const saved={recording_duration_mode:recordingState.duration_minutes?1:0,recording_hours:recordingState.duration_minutes,recording_segment:recordingState.segment_minutes,recording_auto:String(Number(!!recordingState.auto_start)),recording_log_level:Number(recordingLogState?.detailed),recording_log_sd:String(Number(!!recordingLogState?.sd_enabled)),recording_log_max:Number(((recordingLogState?.max_kib||0)*1024/1e6).toFixed(2)),field_wifi_delay:fieldPowerState.wifi_delay_seconds,field_guard:String(Number(!!fieldPowerState.enabled)),field_cutoff:fieldPowerState.cutoff_mv/1000,field_confirm:fieldPowerState.confirm_seconds,field_hysteresis:fieldPowerState.hysteresis_mv/1000,field_sleep:Number(fieldPowerState.sleep_after_save),battery_monitor:String(Number(!!batteryState.enabled))};
+ const saved={recording_format:recordingState.format||'wav',recording_duration_mode:recordingState.duration_minutes?1:0,recording_hours:recordingState.duration_minutes,recording_segment:recordingState.segment_minutes,recording_auto:String(Number(!!recordingState.auto_start)),recording_log_level:Number(recordingLogState?.detailed),recording_log_sd:String(Number(!!recordingLogState?.sd_enabled)),recording_log_max:Number(((recordingLogState?.max_kib||0)*1024/1e6).toFixed(2)),field_wifi_delay:fieldPowerState.wifi_delay_seconds,field_guard:String(Number(!!fieldPowerState.enabled)),field_cutoff:fieldPowerState.cutoff_mv/1000,field_confirm:fieldPowerState.confirm_seconds,field_hysteresis:fieldPowerState.hysteresis_mv/1000,field_sleep:Number(fieldPowerState.sleep_after_save),battery_monitor:String(Number(!!batteryState.enabled))};
  for(const ids of draftGroups)for(const id of ids)syncInput(document.getElementById(id),id,saved[id]);
  for(const rootId of ['recording_panel','batterysec','logssec']){
   const root=document.getElementById(rootId);updateDiscard(root);

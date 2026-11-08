@@ -1,6 +1,6 @@
 # Manual OTA firmware
 
-> **Firmware 2.06:** Automatic audio setup and optional experimental noise reduction. See the [main guide](../README.md).
+> **Firmware 2.07:** Lossless FLAC recording and safer full-card shutdown. See the [main guide](../README.md).
 
 
 This folder contains app-only firmware files for manual OTA update through the device

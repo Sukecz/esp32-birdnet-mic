@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.07 — 2026-11-08
+
+- **Recording:** choose WAV or lossless FLAC, with automatic file splitting and conservative storage estimates.
+- **Full-card handling:** reserve space to finish the current file safely, preserve existing recordings and complete offline shutdown reliably.
+- **SD logs:** include battery voltage, free space, periodic progress, clearer write errors and the reason for sleep.
+- **Recording UI:** simpler settings with independent Apply actions, accurate unsaved indicators, colored Start/Stop buttons and a REC timer beside Mode.
+- **Audio and diagnostics:** more reliable FLAC recording on C5, nonblocking USB logging, clearer noise-graph recovery and a consistent RTSP client limit.
+
 ## 2.06 — 2026-11-03
 
 - **ESP32-S31:** support for Function-CoreBoard-1 with its built-in ES8311 microphone, CPU speeds up to 320 MHz and optional battery measurement on GPIO42 through an external divider. Recording mode is selectable; SD-card recording is not supported on this board.

@@ -31,7 +31,7 @@ const {chromium}=require('playwright-core');
    if(path==='/api/logs')return route.fulfill({body:''});return route.fulfill({json:fixture[path.slice(5)]||{ok:true,available:false,latest:'1.36'}});
   });
   await page.goto('http://power.test/');await page.waitForFunction(()=>fieldPowerState!==null);
-  assert(await page.locator('#recording_wifi_off').isDisabled());await page.fill('#field_wifi_delay','5');assert.equal(await page.locator('#field_power_dirty').textContent(),'Unsaved');
+  assert(await page.locator('#recording_wifi_off').isDisabled());await page.fill('#field_wifi_delay','5');assert.equal(await page.locator('#field_wifi_delay').locator('..').locator('.edit-note').textContent(),'Unsaved');assert.equal(await page.locator('#field_power_dirty').textContent(),'');
   await page.evaluate(()=>loadStatus());assert.equal(await page.locator('#field_wifi_delay').inputValue(),'5');await page.fill('#field_wifi_delay','3');assert.equal(await page.locator('#field_power_dirty').textContent(),'');assert.equal(posts.length,0);
   await page.locator('#batterysec > summary').click();await page.selectOption('#field_guard','1');await page.locator('#battery_protection_advanced').evaluate(e=>e.open=true);await page.fill('#field_cutoff','3.60');await page.fill('#field_confirm','15');await page.fill('#field_hysteresis','0.12');await page.selectOption('#field_sleep','0');
   await page.click('#field_power_save');await page.waitForFunction(()=>!fieldPowerDirty&&!fieldPowerPending);

@@ -65,7 +65,7 @@ static bool recordingAutoStartPending = false;
 #include "FixedAudio.h"
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go / BirdNET-Pi) ==================
-#define FW_VERSION "2.06"
+#define FW_VERSION "2.07"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 // Build timestamp for diagnostics (compile time)
@@ -1720,6 +1720,11 @@ void logHeapTrend() {
 
 void setup() {
     Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT && ARDUINO_USB_MODE
+    // USB logging is optional. A connected host that stops reading must not
+    // hold the application loop for seconds for each detailed recording line.
+    Serial.setTxTimeoutMs(1);
+#endif
     delay(100);
 
     // Complete an explicitly requested flash migration before audio, Wi-Fi,
@@ -1947,6 +1952,7 @@ void flushRecordingLogs() {
 }
 
 static void sleepRecordingDevice(uint32_t receipt, const char* reason) {
+    if (!recording::prepareSleepLog(reason, s3BoardVariant)) return;
     const uint32_t wake = fieldTestWake ? fieldTestWake : fieldTestOfflineWake;
     if (wake) storeFieldPowerReceipt(receipt);
     flushRecordingLogs();
@@ -1964,6 +1970,7 @@ static void serviceFieldPower() {
         wifiErrorReported = true;
     } else wifiErrorReported = false;
     auto reading = battery::reading(devicesetup::batteryMonitoring(), s3BoardVariant);
+    recording::updateBatteryLog(reading.valid ? reading.millivolts : 0);
     // Explicit sleep diagnostic simulates low voltage without changing ADC calibration,
     // saved thresholds or the normal (untimed) shutdown behavior.
     if (fieldTestWake && reading.valid) {
@@ -1985,6 +1992,8 @@ static void serviceFieldPower() {
         const auto state = recording::status().state;
         fieldpower::saved(state != recording::State::Error);
         fieldPowerSaveFinished = true;
+    }
+    if (fieldpower::triggered() && fieldPowerSaveFinished && !recording::busy()) {
         if (fieldpower::settings().sleepAfterSave && !fieldTestAt) {
             sleepRecordingDevice(2, "Recording: low-battery stop completed; entering deep sleep until reset/power cycle");
             return;
