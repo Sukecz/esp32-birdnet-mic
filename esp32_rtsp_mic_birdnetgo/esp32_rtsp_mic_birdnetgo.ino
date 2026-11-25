@@ -1,13 +1,16 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
-#include "driver/i2s.h"
+#include "driver/i2s_std.h"   // new I2S driver (legacy driver/i2s.h was removed in Arduino-ESP32 4.x)
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/stream_buffer.h"
 #include <ArduinoOTA.h>
 #include <Preferences.h>
 #include <math.h>
 #include "WebUI.h"
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go) ==================
-#define FW_VERSION "1.3.0"
+#define FW_VERSION "1.4.0"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 
@@ -53,9 +56,53 @@ unsigned long lastRTSPActivity = 0;
 // -- Buffers
 uint8_t rtspParseBuffer[1024];
 int rtspParseBufferPos = 0;
-//
-int32_t* i2s_32bit_buffer = nullptr;
-int16_t* i2s_16bit_buffer = nullptr;
+
+// -- Audio pipeline (v1.4.0)
+// A dedicated FreeRTOS task reads the microphone in small fixed chunks and pushes
+// processed 16-bit samples into a ring buffer. The main loop (RTSP, Web UI, OTA)
+// only pulls whole packets out of that ring, so slow Wi-Fi writes or Web UI
+// requests can no longer starve the I2S DMA and silently drop audio.
+#define CAPTURE_CHUNK_SAMPLES 256          // ~5.3 ms at 48 kHz
+#define AUDIO_RING_BYTES      (64 * 1024)  // ~680 ms of 16-bit audio at 48 kHz
+#define CAPTURE_TASK_PRIORITY 10           // above loop() (1), below Wi-Fi/lwIP
+#define CAPTURE_TASK_STACK    4096
+#define SEND_TIMEOUT_MS       2000         // give up on a stuck TCP write after this
+
+static int32_t captureRaw[CAPTURE_CHUNK_SAMPLES];
+static int16_t captureOut[CAPTURE_CHUNK_SAMPLES];
+static StreamBufferHandle_t audioRing = nullptr;
+// Pause handshake guarding the I2S driver + DSP state. (A mutex does not work here:
+// the higher-priority capture task would immediately re-take it and starve loop().)
+static volatile bool capturePauseReq = false;
+static volatile bool capturePaused = false;
+static i2s_chan_handle_t i2sRxChan = nullptr;
+static TaskHandle_t captureTaskHandle = nullptr;
+static volatile bool i2sReady = false;
+uint8_t* rtpPacketBuffer = nullptr;              // 4 (interleave) + 12 (RTP) + payload
+size_t rtpPacketBufferSize = 0;
+
+// -- Pipeline diagnostics (reset on each PLAY)
+volatile uint32_t i2sOverflowCount = 0;   // I2S DMA overruns (capture task too slow)
+volatile uint32_t ringDroppedSamples = 0; // samples dropped because sender fell >ring behind
+uint32_t sendFailCount = 0;               // connections closed due to stuck TCP writes (since boot)
+uint8_t ringPeakFillPct = 0;              // highest ring fill seen while streaming
+
+// -- Test tone (diagnostic, not persisted): replaces mic samples with a clean sine
+volatile bool testToneEnabled = false;
+volatile uint16_t testToneHz = 1000;
+static int16_t sineTable[256];
+static uint32_t tonePhase = 0;
+
+// Called from loop() context only. Blocks until the capture task is parked outside
+// any I2S/DSP access (at most one ~5 ms read), then lets the caller touch that state.
+static void audioPause() {
+    if (!captureTaskHandle) return;          // task not started yet: nothing to wait for
+    capturePauseReq = true;
+    while (!capturePaused) vTaskDelay(1);
+}
+static void audioResume() {
+    capturePauseReq = false;
+}
 
 // -- Global state
 unsigned long audioPacketsSent = 0;
@@ -91,6 +138,7 @@ uint16_t highpassCutoffHz = DEFAULT_HPF_CUTOFF_HZ;
 Biquad hpf;
 uint32_t hpfConfigSampleRate = 0;
 uint16_t hpfConfigCutoff = 0;
+bool hpfConfigEnabled = false;
 
 // -- Preferences for persistent settings
 Preferences audioPrefs;
@@ -192,8 +240,11 @@ void applyWifiTxPower(bool log = true) {
     }
 }
 
-// Recompute HPF coefficients (2nd-order Butterworth high-pass)
-void updateHighpassCoeffs() {
+// Recompute HPF coefficients (2nd-order Butterworth high-pass).
+// Caller must have paused the capture task (audioPause) or be the capture task so the filter state is not
+// modified while samples are being processed.
+static void computeHighpassCoeffsLocked() {
+    hpfConfigEnabled = highpassEnabled;
     if (!highpassEnabled) {
         hpf.reset();
         hpfConfigSampleRate = currentSampleRate;
@@ -227,7 +278,14 @@ void updateHighpassCoeffs() {
     hpf.reset();
 
     hpfConfigSampleRate = currentSampleRate;
-    hpfConfigCutoff = (uint16_t)fc;
+    hpfConfigCutoff = highpassCutoffHz;  // store the requested value so change detection is stable
+}
+
+// Thread-safe wrapper used by setup and the Web UI.
+void updateHighpassCoeffs() {
+    audioPause();
+    computeHighpassCoeffsLocked();
+    audioResume();
 }
 
 // Uptime -> "Xd Yh Zm Ts"
@@ -541,24 +599,41 @@ void resetToDefaultSettings() {
     simplePrintln("Defaults applied. Device will reboot.");
 }
 
+// (Re)allocate the outgoing RTP packet buffer for the current buffer size.
+// Only called from the loop task (same task that sends), so no locking is needed.
+static bool allocPacketBuffer() {
+    size_t need = 4 + 12 + (size_t)currentBufferSize * sizeof(int16_t);
+    if (rtpPacketBuffer && rtpPacketBufferSize == need) return true;
+    if (rtpPacketBuffer) { free(rtpPacketBuffer); rtpPacketBuffer = nullptr; rtpPacketBufferSize = 0; }
+    rtpPacketBuffer = (uint8_t*)malloc(need);
+    if (!rtpPacketBuffer) return false;
+    rtpPacketBufferSize = need;
+    return true;
+}
+
 // Restart I2S with new parameters
 void restartI2S() {
     simplePrintln("Restarting I2S with new parameters...");
+    // A running stream's SDP (sample rate) may no longer be valid, and the client would
+    // otherwise sit on a silent connection until it times out. Close it so the client
+    // reconnects right away with the new settings.
+    if (isStreaming && rtspClient && rtspClient.connected()) {
+        rtspClient.stop();
+        simplePrintln("Closed active RTSP stream; client will reconnect with new settings");
+    }
     isStreaming = false;
 
-    if (i2s_32bit_buffer) { free(i2s_32bit_buffer); i2s_32bit_buffer = nullptr; }
-    if (i2s_16bit_buffer) { free(i2s_16bit_buffer); i2s_16bit_buffer = nullptr; }
+    // Stop the capture task from touching the driver/DSP while we rebuild it
+    audioPause();
+    setup_i2s_driver();
+    computeHighpassCoeffsLocked();
+    if (audioRing) xStreamBufferReset(audioRing);
+    audioResume();
 
-    i2s_32bit_buffer = (int32_t*)malloc(currentBufferSize * sizeof(int32_t));
-    i2s_16bit_buffer = (int16_t*)malloc(currentBufferSize * sizeof(int16_t));
-    if (!i2s_32bit_buffer || !i2s_16bit_buffer) {
+    if (!allocPacketBuffer()) {
         simplePrintln("FATAL: Memory allocation failed after parameter change!");
         ESP.restart();
     }
-
-    setup_i2s_driver();
-    // Refresh HPF with current parameters
-    updateHighpassCoeffs();
     maxPacketRate = 0;
     minPacketRate = 0xFFFFFFFF;
     simplePrintln("I2S restarted successfully");
@@ -583,32 +658,62 @@ void setupOTA() {
     ArduinoOTA.begin();
 }
 
-// I2S setup
+// DMA overrun callback (runs in ISR context): the capture task fell behind and the
+// driver discarded the oldest DMA buffer.
+static bool onI2SRecvOverflow(i2s_chan_handle_t, i2s_event_data_t*, void*) {
+    i2sOverflowCount = i2sOverflowCount + 1;
+    return false;
+}
+
+// I2S setup. Caller must have paused the capture task (audioPause) once it is running.
 void setup_i2s_driver() {
-    i2s_driver_uninstall(I2S_NUM_0);
+    i2sReady = false;
+    if (i2sRxChan) {
+        i2s_channel_disable(i2sRxChan);
+        i2s_del_channel(i2sRxChan);
+        i2sRxChan = nullptr;
+    }
 
-    uint16_t dma_buf_len = (currentBufferSize > 512) ? 512 : currentBufferSize;
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = 8;                       // 8 x 256 samples = ~43 ms of DMA headroom
+    chan_cfg.dma_frame_num = CAPTURE_CHUNK_SAMPLES;
+    esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &i2sRxChan);
+    if (err != ESP_OK) {
+        simplePrintln("ERROR: i2s_new_channel failed (" + String((int)err) + ")");
+        i2sRxChan = nullptr;
+        return;
+    }
 
-    i2s_config_t i2s_config = {
-        .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
-        .sample_rate = currentSampleRate,
-        .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
-        .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-        .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-        .dma_buf_count = 8,
-        .dma_buf_len = dma_buf_len,
+    // Philips I2S, 32-bit slots, mono LEFT (ICS-43434 with L/R pin tied to GND).
+    // Same on-wire format as the previous legacy-driver config (STAND_I2S, ONLY_LEFT).
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(currentSampleRate),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
+        .gpio_cfg = {
+            .mclk = I2S_GPIO_UNUSED,
+            .bclk = (gpio_num_t)I2S_BCLK_PIN,
+            .ws = (gpio_num_t)I2S_LRCLK_PIN,
+            .dout = I2S_GPIO_UNUSED,
+            .din = (gpio_num_t)I2S_DOUT_PIN,
+            .invert_flags = { .mclk_inv = false, .bclk_inv = false, .ws_inv = false },
+        },
     };
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;  // C6 default for mono is BOTH; force left
 
-    i2s_pin_config_t pin_config = {
-        .bck_io_num = I2S_BCLK_PIN,
-        .ws_io_num = I2S_LRCLK_PIN,
-        .data_out_num = I2S_PIN_NO_CHANGE,
-        .data_in_num = I2S_DOUT_PIN
-    };
-
-    i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
-    i2s_set_pin(I2S_NUM_0, &pin_config);
+    err = i2s_channel_init_std_mode(i2sRxChan, &std_cfg);
+    if (err == ESP_OK) {
+        i2s_event_callbacks_t cbs = {};
+        cbs.on_recv_q_ovf = onI2SRecvOverflow;
+        i2s_channel_register_event_callback(i2sRxChan, &cbs, NULL);
+        err = i2s_channel_enable(i2sRxChan);
+    }
+    if (err != ESP_OK) {
+        simplePrintln("ERROR: I2S init failed (" + String((int)err) + ")");
+        i2s_del_channel(i2sRxChan);
+        i2sRxChan = nullptr;
+        return;
+    }
+    i2sReady = true;
 
     // (5) log i2sShiftBits for easier debugging
     simplePrintln("I2S ready: " + String(currentSampleRate) + "Hz, gain " +
@@ -616,109 +721,194 @@ void setup_i2s_driver() {
                   ", shiftBits " + String(i2sShiftBits));
 }
 
+// Write the whole buffer or fail. Retries short/zero writes until SEND_TIMEOUT_MS so a
+// brief Wi-Fi stall does not abort the stream mid-packet.
 static bool writeAll(WiFiClient &client, const uint8_t* data, size_t len) {
     size_t off = 0;
+    unsigned long start = millis();
     while (off < len) {
         int w = client.write(data + off, len - off);
-        if (w <= 0) return false;
-        off += (size_t)w;
+        if (w > 0) {
+            off += (size_t)w;
+            start = millis();  // progress made: restart the stall timer
+            continue;
+        }
+        if (!client.connected() || (millis() - start) > SEND_TIMEOUT_MS) return false;
+        delay(2);
     }
     return true;
 }
 
-void sendRTPPacket(WiFiClient &client, int16_t* audioData, int numSamples) {
-    if (!client.connected()) return;
+// Build one contiguous frame ('$' interleave header + RTP header + payload) in
+// rtpPacketBuffer and send it in a single write. The payload must already be in
+// rtpPacketBuffer[16..] as host-order int16 samples.
+// If the write cannot complete, the TCP framing is no longer trustworthy, so the
+// connection is closed; the client (BirdNET-Go/ffmpeg) then reconnects cleanly
+// instead of hanging on a half-sent packet.
+static bool sendRTPPacket(WiFiClient &client, int numSamples) {
+    if (!client.connected()) return false;
 
     const uint16_t payloadSize = (uint16_t)(numSamples * (int)sizeof(int16_t));
     const uint16_t packetSize = (uint16_t)(12 + payloadSize);
+    uint8_t* b = rtpPacketBuffer;
 
     // RTSP interleaved header: '$' 0x24, channel 0, length
-    uint8_t inter[4];
-    inter[0] = 0x24;
-    inter[1] = 0x00;
-    inter[2] = (uint8_t)((packetSize >> 8) & 0xFF);
-    inter[3] = (uint8_t)(packetSize & 0xFF);
+    b[0] = 0x24;
+    b[1] = 0x00;
+    b[2] = (uint8_t)((packetSize >> 8) & 0xFF);
+    b[3] = (uint8_t)(packetSize & 0xFF);
 
     // RTP header (12 bytes)
-    uint8_t header[12];
-    header[0] = 0x80;      // V=2, P=0, X=0, CC=0
-    header[1] = 96;        // M=0, PT=96 (dynamic)
-    // (3) safe byte-wise filling (no unaligned writes)
-    header[2] = (uint8_t)((rtpSequence >> 8) & 0xFF);
-    header[3] = (uint8_t)(rtpSequence & 0xFF);
-    header[4] = (uint8_t)((rtpTimestamp >> 24) & 0xFF);
-    header[5] = (uint8_t)((rtpTimestamp >> 16) & 0xFF);
-    header[6] = (uint8_t)((rtpTimestamp >> 8) & 0xFF);
-    header[7] = (uint8_t)(rtpTimestamp & 0xFF);
-    header[8]  = (uint8_t)((rtpSSRC >> 24) & 0xFF);
-    header[9]  = (uint8_t)((rtpSSRC >> 16) & 0xFF);
-    header[10] = (uint8_t)((rtpSSRC >> 8) & 0xFF);
-    header[11] = (uint8_t)(rtpSSRC & 0xFF);
+    uint8_t* h = b + 4;
+    h[0] = 0x80;      // V=2, P=0, X=0, CC=0
+    h[1] = 96;        // M=0, PT=96 (dynamic)
+    h[2] = (uint8_t)((rtpSequence >> 8) & 0xFF);
+    h[3] = (uint8_t)(rtpSequence & 0xFF);
+    h[4] = (uint8_t)((rtpTimestamp >> 24) & 0xFF);
+    h[5] = (uint8_t)((rtpTimestamp >> 16) & 0xFF);
+    h[6] = (uint8_t)((rtpTimestamp >> 8) & 0xFF);
+    h[7] = (uint8_t)(rtpTimestamp & 0xFF);
+    h[8]  = (uint8_t)((rtpSSRC >> 24) & 0xFF);
+    h[9]  = (uint8_t)((rtpSSRC >> 16) & 0xFF);
+    h[10] = (uint8_t)((rtpSSRC >> 8) & 0xFF);
+    h[11] = (uint8_t)(rtpSSRC & 0xFF);
 
     // Host->network: per-sample byte-swap (16bit PCM L16 big-endian)
+    uint8_t* pl = b + 16;
     for (int i = 0; i < numSamples; ++i) {
-        uint16_t s = (uint16_t)audioData[i];
-        s = (uint16_t)((s << 8) | (s >> 8)); // htons without dependency
-        audioData[i] = (int16_t)s;
+        uint8_t lo = pl[2 * i];
+        pl[2 * i] = pl[2 * i + 1];
+        pl[2 * i + 1] = lo;
     }
 
-    if (!writeAll(client, inter, sizeof(inter)) ||
-        !writeAll(client, header, sizeof(header)) ||
-        !writeAll(client, (uint8_t*)audioData, payloadSize)) {
+    if (!writeAll(client, b, 4 + (size_t)packetSize)) {
+        sendFailCount++;
         isStreaming = false;
-        return;
+        client.stop();
+        simplePrintln("RTSP send stalled > " + String(SEND_TIMEOUT_MS) +
+                      " ms (weak Wi-Fi?) - closed connection so the client can reconnect");
+        return false;
     }
 
     rtpSequence++;
     rtpTimestamp += (uint32_t)numSamples;
     audioPacketsSent++;
+    return true;
 }
 
-// Audio streaming
-void streamAudio(WiFiClient &client) {
-    if (!isStreaming || !client.connected()) return;
+// Convert one raw I2S chunk to 16-bit PCM (or test tone) and update metering.
+// Runs in the capture task.
+static void processCaptureChunk(int samples) {
+    if (highpassEnabled != hpfConfigEnabled ||
+        (highpassEnabled && (hpfConfigSampleRate != currentSampleRate || hpfConfigCutoff != highpassCutoffHz))) {
+        computeHighpassCoeffsLocked();
+    }
 
-    size_t bytesRead = 0;
-    esp_err_t result = i2s_read(I2S_NUM_0, i2s_32bit_buffer,
-                                currentBufferSize * sizeof(int32_t),
-                                &bytesRead, 50 / portTICK_PERIOD_MS);
+    bool clipped = false;
+    float peakAbs = 0.0f;
 
-    if (result == ESP_OK && bytesRead > 0) {
-        int samplesRead = bytesRead / sizeof(int32_t);
-
-        // If HPF params changed dynamically, recompute
-        if (highpassEnabled && (hpfConfigSampleRate != currentSampleRate || hpfConfigCutoff != highpassCutoffHz)) {
-            updateHighpassCoeffs();
+    if (testToneEnabled) {
+        // Clean sine at -12 dBFS, bypassing shift/HPF/gain. The I2S clock still paces
+        // it, so this exercises the exact same timing + network path as the mic.
+        uint32_t inc = (uint32_t)(((uint64_t)testToneHz << 32) / currentSampleRate);
+        for (int i = 0; i < samples; i++) {
+            int16_t v = sineTable[tonePhase >> 24];
+            tonePhase += inc;
+            captureOut[i] = v;
+            float a = fabsf((float)v);
+            if (a > peakAbs) peakAbs = a;
         }
-
-        bool clipped = false;
-        float peakAbs = 0.0f;
-        for (int i = 0; i < samplesRead; i++) {
-            float sample = (float)(i2s_32bit_buffer[i] >> i2sShiftBits);
-            if (highpassEnabled) sample = hpf.process(sample);
-            float amplified = sample * currentGainFactor;
+    } else {
+        const float gain = currentGainFactor;
+        const uint8_t shift = i2sShiftBits;
+        const bool hp = highpassEnabled;
+        for (int i = 0; i < samples; i++) {
+            float sample = (float)(captureRaw[i] >> shift);
+            if (hp) sample = hpf.process(sample);
+            float amplified = sample * gain;
             float aabs = fabsf(amplified);
             if (aabs > peakAbs) peakAbs = aabs;
-            if (aabs > 32767.0f) clipped = true;
-            if (amplified > 32767.0f) amplified = 32767.0f;
-            if (amplified < -32768.0f) amplified = -32768.0f;
-            i2s_16bit_buffer[i] = (int16_t)amplified;
+            if (amplified > 32767.0f) { amplified = 32767.0f; clipped = true; }
+            if (amplified < -32768.0f) { amplified = -32768.0f; clipped = true; }
+            captureOut[i] = (int16_t)amplified;
         }
-        // Update metering after processing the block
-        if (peakAbs > 32767.0f) peakAbs = 32767.0f;
-        lastPeakAbs16 = (uint16_t)peakAbs;
-        audioClippedLastBlock = clipped;
-        if (clipped) audioClipCount++;
+    }
 
-        // Update peak hold for a short window (~3 s) to match UI polling cadence
-        if (lastPeakAbs16 > peakHoldAbs16) {
-            peakHoldAbs16 = lastPeakAbs16;
-            peakHoldUntilMs = millis() + 3000UL;
-        } else if (peakHoldAbs16 > 0 && millis() > peakHoldUntilMs) {
-            peakHoldAbs16 = 0;
+    // Update metering after processing the block
+    if (peakAbs > 32767.0f) peakAbs = 32767.0f;
+    lastPeakAbs16 = (uint16_t)peakAbs;
+    audioClippedLastBlock = clipped;
+    if (clipped) audioClipCount++;
+
+    // Peak hold for a short window (~3 s) to match UI polling cadence
+    if (lastPeakAbs16 > peakHoldAbs16) {
+        peakHoldAbs16 = lastPeakAbs16;
+        peakHoldUntilMs = millis() + 3000UL;
+    } else if (peakHoldAbs16 > 0 && millis() > peakHoldUntilMs) {
+        peakHoldAbs16 = 0;
+    }
+}
+
+// Capture task: always reading the mic so the DMA never overruns, regardless of
+// what the network or Web UI is doing.
+static void captureTask(void*) {
+    for (;;) {
+        if (capturePauseReq) {
+            capturePaused = true;
+            while (capturePauseReq) vTaskDelay(1);
+            capturePaused = false;
+            continue;
+        }
+        if (!i2sReady) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
         }
 
-        sendRTPPacket(client, i2s_16bit_buffer, samplesRead);
+        size_t bytesRead = 0;
+        esp_err_t r = i2s_channel_read(i2sRxChan, captureRaw, sizeof(captureRaw), &bytesRead, 100);
+        int samples = (r == ESP_OK) ? (int)(bytesRead / sizeof(int32_t)) : 0;
+        if (samples > 0) {
+            processCaptureChunk(samples);
+
+            if (isStreaming && audioRing) {
+                size_t want = (size_t)samples * sizeof(int16_t);
+                size_t space = xStreamBufferSpacesAvailable(audioRing) & ~(size_t)1;
+                size_t put = (want <= space) ? want : space;
+                if (put) xStreamBufferSend(audioRing, captureOut, put, 0);
+                if (put < want) ringDroppedSamples = ringDroppedSamples + (uint32_t)((want - put) / sizeof(int16_t));
+            }
+        }
+        if (samples == 0) vTaskDelay(1);
+    }
+}
+
+// Clear the ring and diagnostics at stream start (called from loop task on PLAY).
+static void resetAudioPipelineForStream() {
+    audioPause();
+    if (audioRing) xStreamBufferReset(audioRing);
+    i2sOverflowCount = 0;
+    ringDroppedSamples = 0;
+    ringPeakFillPct = 0;
+    audioResume();
+}
+
+// Audio streaming: send every complete packet waiting in the ring buffer.
+// Bounded per call so the Web UI/OTA keep getting serviced.
+void streamAudio(WiFiClient &client) {
+    if (!isStreaming || !client.connected() || !audioRing || !rtpPacketBuffer) return;
+
+    const size_t payloadBytes = (size_t)currentBufferSize * sizeof(int16_t);
+    if (4 + 12 + payloadBytes > rtpPacketBufferSize) return;  // buffer size changing
+
+    for (int n = 0; n < 8 && isStreaming; n++) {
+        size_t avail = xStreamBufferBytesAvailable(audioRing);
+        uint8_t fill = (uint8_t)((avail * 100) / AUDIO_RING_BYTES);
+        if (fill > ringPeakFillPct) ringPeakFillPct = fill;
+        if (avail < payloadBytes) break;
+
+        size_t got = xStreamBufferReceive(audioRing, rtpPacketBuffer + 16, payloadBytes, 0);
+        if (got < sizeof(int16_t)) break;
+        if (!sendRTPPacket(client, (int)(got / sizeof(int16_t)))) break;
     }
 }
 
@@ -770,6 +960,7 @@ void handleRTSPCommand(WiFiClient &client, String request) {
         client.print("Session: " + rtspSessionId + "\r\n");
         client.print("Range: npt=0.000-\r\n\r\n");
 
+        resetAudioPipelineForStream();
         isStreaming = true;
         rtpSequence = 0;
         rtpTimestamp = 0;
@@ -850,12 +1041,14 @@ void setup() {
     // Load settings from flash
     loadAudioSettings();
 
-    // Allocate buffers with current size
-    i2s_32bit_buffer = (int32_t*)malloc(currentBufferSize * sizeof(int32_t));
-    i2s_16bit_buffer = (int16_t*)malloc(currentBufferSize * sizeof(int16_t));
-    if (!i2s_32bit_buffer || !i2s_16bit_buffer) {
+    // Allocate the outgoing packet buffer and the capture ring
+    audioRing = xStreamBufferCreate(AUDIO_RING_BYTES, 1);
+    if (!allocPacketBuffer() || !audioRing) {
         simplePrintln("FATAL: Memory allocation failed!");
         ESP.restart();
+    }
+    for (int i = 0; i < 256; i++) {
+        sineTable[i] = (int16_t)lrintf(8192.0f * sinf(2.0f * 3.14159265f * (float)i / 256.0f)); // -12 dBFS
     }
 
     // WiFi optimization for stable streaming
@@ -875,8 +1068,13 @@ void setup() {
     applyWifiTxPower(true);
 
     setupOTA();
-    setup_i2s_driver();
-    updateHighpassCoeffs();
+    setup_i2s_driver();          // capture task not running yet: no pause needed
+    computeHighpassCoeffsLocked();
+    if (xTaskCreate(captureTask, "audio_capture", CAPTURE_TASK_STACK, nullptr,
+                    CAPTURE_TASK_PRIORITY, &captureTaskHandle) != pdPASS) {
+        simplePrintln("FATAL: could not start audio capture task");
+        ESP.restart();
+    }
 
     if (!overheatLatched) {
         rtspServer.begin();
@@ -971,7 +1169,7 @@ void loop() {
         }
 
         if (!rtspClient || !rtspClient.connected()) {
-            WiFiClient newClient = rtspServer.available();
+            WiFiClient newClient = rtspServer.accept();
             if (newClient) {
                 rtspClient = newClient;
                 rtspClient.setNoDelay(true);
@@ -1006,4 +1204,8 @@ void loop() {
         delay(50);
         ESP.restart();
     }
+
+    // Yield briefly: audio is buffered by the capture task, so this costs nothing
+    // and keeps the idle task (and its watchdog) happy.
+    delay(1);
 }
