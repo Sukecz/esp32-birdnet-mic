@@ -7,10 +7,12 @@
 #include <ArduinoOTA.h>
 #include <Preferences.h>
 #include <math.h>
+#include <errno.h>
+#include <lwip/sockets.h>   // non-blocking send() for RTP
 #include "WebUI.h"
 
 // ================== SETTINGS (ESP32 RTSP Mic for BirdNET-Go) ==================
-#define FW_VERSION "1.4.0"
+#define FW_VERSION "1.4.1"
 // Expose FW version as a global C string for WebUI/API
 const char* FW_VERSION_STR = FW_VERSION;
 
@@ -24,7 +26,8 @@ const char* FW_VERSION_STR = FW_VERSION;
 #define DEFAULT_SAMPLE_RATE 48000
 #define DEFAULT_GAIN_FACTOR 1.2f
 #define DEFAULT_BUFFER_SIZE 1024   // Stable streaming profile by default
-#define DEFAULT_WIFI_TX_DBM 19.5f  // Default WiFi TX power in dBm
+#define DEFAULT_WIFI_TX_DBM 15.0f  // Default WiFi TX power in dBm (19.5 runs the C6 ~8-11 C hotter without fixing stalls)
+#define DEFAULT_EXTERNAL_ANTENNA false  // XIAO ESP32-C6: false = onboard antenna, true = U.FL external antenna
 // High-pass filter defaults (to remove low-frequency rumble)
 #define DEFAULT_HPF_ENABLED true
 #define DEFAULT_HPF_CUTOFF_HZ 500
@@ -66,7 +69,9 @@ int rtspParseBufferPos = 0;
 #define AUDIO_RING_BYTES      (64 * 1024)  // ~680 ms of 16-bit audio at 48 kHz
 #define CAPTURE_TASK_PRIORITY 10           // above loop() (1), below Wi-Fi/lwIP
 #define CAPTURE_TASK_STACK    4096
-#define SEND_TIMEOUT_MS       2000         // give up on a stuck TCP write after this
+#define SEND_TIMEOUT_MS       10000        // close the stream if TCP accepts no data for this long
+#define STALL_RECOVERY_MS     1000         // a frame blocked longer than this counts as a recovered stall
+#define STALE_BACKLOG_PCT     90           // after a stall, skip the backlog only if the ring is this full
 
 static int32_t captureRaw[CAPTURE_CHUNK_SAMPLES];
 static int16_t captureOut[CAPTURE_CHUNK_SAMPLES];
@@ -85,12 +90,15 @@ size_t rtpPacketBufferSize = 0;
 volatile uint32_t i2sOverflowCount = 0;   // I2S DMA overruns (capture task too slow)
 volatile uint32_t ringDroppedSamples = 0; // samples dropped because sender fell >ring behind
 uint32_t sendFailCount = 0;               // connections closed due to stuck TCP writes (since boot)
+uint32_t stallRecoveries = 0;             // stalls > STALL_RECOVERY_MS that recovered (reset on PLAY)
+uint32_t staleFlushedSamples = 0;         // samples skipped to return to live audio (reset on PLAY)
 uint8_t ringPeakFillPct = 0;              // highest ring fill seen while streaming
 
 // -- Test tone (diagnostic, not persisted): replaces mic samples with a clean sine
 volatile bool testToneEnabled = false;
 volatile uint16_t testToneHz = 1000;
 static int16_t sineTable[256];
+static void txReset();   // non-blocking RTP sender state (defined with the send path)
 static uint32_t tonePhase = 0;
 
 // Called from loop() context only. Blocks until the capture task is parked outside
@@ -182,6 +190,8 @@ uint8_t cpuFrequencyMhz = 160;          // CPU frequency (default 160 MHz)
 
 // -- WiFi TX power (configurable)
 float wifiTxPowerDbm = DEFAULT_WIFI_TX_DBM;
+// -- Antenna selection (XIAO ESP32-C6 RF switch, persisted)
+bool externalAntenna = DEFAULT_EXTERNAL_ANTENNA;
 wifi_power_t currentWifiPowerLevel = WIFI_POWER_19_5dBm;
 
 // -- RTSP connect/PLAY statistics
@@ -225,6 +235,20 @@ static wifi_power_t pickWifiPowerLevel(float dbm) {
     if (dbm <= 18.5f) return WIFI_POWER_18_5dBm;
     if (dbm <= 19.0f) return WIFI_POWER_19dBm;
     return WIFI_POWER_19_5dBm;
+}
+
+// Drive the XIAO ESP32-C6 RF switch: GPIO3 LOW enables switch control, GPIO14 picks
+// the antenna (LOW = onboard ceramic, HIGH = U.FL external). Safe to call at runtime.
+// NOTE: on a board without this RF switch, remove the call in setup() so GPIO3/14
+// are not driven.
+void applyAntenna(bool log) {
+    pinMode(3, OUTPUT);
+    digitalWrite(3, LOW);
+    pinMode(14, OUTPUT);
+    digitalWrite(14, externalAntenna ? HIGH : LOW);
+    if (log) {
+        simplePrintln(String("Antenna: ") + (externalAntenna ? "external (U.FL, GPIO14 HIGH)" : "onboard (GPIO14 LOW)"));
+    }
 }
 
 // Apply WiFi TX power
@@ -478,6 +502,7 @@ void loadAudioSettings() {
     autoThresholdEnabled = audioPrefs.getBool("thrAuto", true);
     cpuFrequencyMhz = audioPrefs.getUChar("cpuFreq", 160);
     wifiTxPowerDbm = audioPrefs.getFloat("wifiTxDbm", DEFAULT_WIFI_TX_DBM);
+    externalAntenna = audioPrefs.getBool("extAnt", DEFAULT_EXTERNAL_ANTENNA);
     highpassEnabled = audioPrefs.getBool("hpEnable", DEFAULT_HPF_ENABLED);
     highpassCutoffHz = (uint16_t)audioPrefs.getUInt("hpCutoff", DEFAULT_HPF_CUTOFF_HZ);
     overheatProtectionEnabled = audioPrefs.getBool("ohEnable", DEFAULT_OVERHEAT_PROTECTION);
@@ -504,6 +529,7 @@ void loadAudioSettings() {
                   ", Gain=" + String(currentGainFactor, 1) +
                   ", Buffer=" + String(currentBufferSize) +
                   ", WiFiTX=" + String(txShown, 1) + "dBm" +
+                  ", Antenna=" + String(externalAntenna ? "external" : "onboard") +
                   ", shiftBits=" + String(i2sShiftBits) +
                   ", HPF=" + String(highpassEnabled?"on":"off") +
                   ", HPFcut=" + String(highpassCutoffHz) + "Hz");
@@ -524,6 +550,7 @@ void saveAudioSettings() {
     audioPrefs.putBool("thrAuto", autoThresholdEnabled);
     audioPrefs.putUChar("cpuFreq", cpuFrequencyMhz);
     audioPrefs.putFloat("wifiTxDbm", wifiTxPowerDbm);
+    audioPrefs.putBool("extAnt", externalAntenna);
     audioPrefs.putBool("hpEnable", highpassEnabled);
     audioPrefs.putUInt("hpCutoff", (uint32_t)highpassCutoffHz);
     audioPrefs.putBool("ohEnable", overheatProtectionEnabled);
@@ -578,6 +605,7 @@ void resetToDefaultSettings() {
     performanceCheckInterval = 15;
     cpuFrequencyMhz = 160;
     wifiTxPowerDbm = DEFAULT_WIFI_TX_DBM;
+    externalAntenna = DEFAULT_EXTERNAL_ANTENNA;
     highpassEnabled = DEFAULT_HPF_ENABLED;
     highpassCutoffHz = DEFAULT_HPF_CUTOFF_HZ;
     overheatProtectionEnabled = DEFAULT_OVERHEAT_PROTECTION;
@@ -622,6 +650,7 @@ void restartI2S() {
         simplePrintln("Closed active RTSP stream; client will reconnect with new settings");
     }
     isStreaming = false;
+    txReset();   // the packet buffer may be reallocated below
 
     // Stop the capture task from touching the driver/DSP while we rebuild it
     audioPause();
@@ -721,32 +750,44 @@ void setup_i2s_driver() {
                   ", shiftBits " + String(i2sShiftBits));
 }
 
-// Write the whole buffer or fail. Retries short/zero writes until SEND_TIMEOUT_MS so a
-// brief Wi-Fi stall does not abort the stream mid-packet.
-static bool writeAll(WiFiClient &client, const uint8_t* data, size_t len) {
-    size_t off = 0;
-    unsigned long start = millis();
-    while (off < len) {
-        int w = client.write(data + off, len - off);
-        if (w > 0) {
-            off += (size_t)w;
-            start = millis();  // progress made: restart the stall timer
-            continue;
-        }
-        if (!client.connected() || (millis() - start) > SEND_TIMEOUT_MS) return false;
-        delay(2);
-    }
-    return true;
+// ---- Non-blocking RTP transmit (v1.4.1) ----
+// Exactly one interleaved RTP frame is "in flight" at a time, held in rtpPacketBuffer.
+// It is pushed with non-blocking send() calls across loop() passes, so a Wi-Fi stall
+// no longer freezes the Web UI/OTA. RTSP replies are deferred while a frame is
+// partially sent, so they can never be spliced into the middle of an RTP frame.
+// The stream is only closed if TCP accepts no data at all for SEND_TIMEOUT_MS.
+static size_t txLen = 0;                 // bytes in the pending frame (0 = idle)
+static size_t txOff = 0;                 // bytes of it already sent
+static unsigned long txStartMs = 0;      // when the frame was queued
+static unsigned long txProgressMs = 0;   // last time send() accepted bytes
+static uint32_t dropsAccounted = 0;      // ringDroppedSamples already folded into rtpTimestamp
+
+static void txReset() {
+    txLen = 0;
+    txOff = 0;
+}
+
+// >0 bytes accepted, 0 would block, <0 hard error
+static int sendNonBlocking(WiFiClient &client, const uint8_t* data, size_t len) {
+    int fd = client.fd();
+    if (fd < 0) return -1;
+    errno = 0;
+    int w = send(fd, data, len, MSG_DONTWAIT);
+    if (w > 0) return w;
+    if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) return 0;
+    if (w == 0) return 0;
+    return -1;
 }
 
 // Build one contiguous frame ('$' interleave header + RTP header + payload) in
-// rtpPacketBuffer and send it in a single write. The payload must already be in
+// rtpPacketBuffer and mark it pending. The payload must already be in
 // rtpPacketBuffer[16..] as host-order int16 samples.
-// If the write cannot complete, the TCP framing is no longer trustworthy, so the
-// connection is closed; the client (BirdNET-Go/ffmpeg) then reconnects cleanly
-// instead of hanging on a half-sent packet.
-static bool sendRTPPacket(WiFiClient &client, int numSamples) {
-    if (!client.connected()) return false;
+static void queueRTPFrame(int numSamples) {
+    // Samples the capture task had to drop still advance the RTP clock, so the
+    // receiver sees a gap instead of audio silently shifted in time.
+    uint32_t drops = ringDroppedSamples;
+    rtpTimestamp += drops - dropsAccounted;
+    dropsAccounted = drops;
 
     const uint16_t payloadSize = (uint16_t)(numSamples * (int)sizeof(int16_t));
     const uint16_t packetSize = (uint16_t)(12 + payloadSize);
@@ -781,19 +822,71 @@ static bool sendRTPPacket(WiFiClient &client, int numSamples) {
         pl[2 * i + 1] = lo;
     }
 
-    if (!writeAll(client, b, 4 + (size_t)packetSize)) {
-        sendFailCount++;
-        isStreaming = false;
-        client.stop();
-        simplePrintln("RTSP send stalled > " + String(SEND_TIMEOUT_MS) +
-                      " ms (weak Wi-Fi?) - closed connection so the client can reconnect");
-        return false;
-    }
-
     rtpSequence++;
     rtpTimestamp += (uint32_t)numSamples;
     audioPacketsSent++;
-    return true;
+
+    txLen = 4 + (size_t)packetSize;
+    txOff = 0;
+    txStartMs = txProgressMs = millis();
+}
+
+// Push the pending frame. Returns 1 when complete, 0 when it must wait for the
+// next loop() pass, -1 when the connection must be closed.
+static int pumpRTPFrame(WiFiClient &client) {
+    while (txOff < txLen) {
+        int w = sendNonBlocking(client, rtpPacketBuffer + txOff, txLen - txOff);
+        if (w > 0) {
+            txOff += (size_t)w;
+            txProgressMs = millis();
+            continue;
+        }
+        if (w < 0 || !client.connected()) return -1;
+        if (millis() - txProgressMs > SEND_TIMEOUT_MS) return -1;
+        return 0;
+    }
+    return 1;
+}
+
+// After a stall the ring may hold a large backlog. Small backlogs drain by themselves
+// (TCP catches up faster than real time), so audio is only skipped when the backlog
+// exceeds STALE_BACKLOG_PCT of the ring, i.e. when it is about to overflow and lose
+// the newest audio anyway; dropping the oldest instead keeps the stream live. It is
+// trimmed to one packet and the RTP clock advances by the skipped amount, so the
+// stream resumes near the live edge instead of carrying the latency forever.
+static void recoverAfterStall(size_t payloadBytes, unsigned long stallMs) {
+    stallRecoveries++;
+    size_t avail = xStreamBufferBytesAvailable(audioRing) & ~(size_t)1;
+    uint32_t dropped = 0;
+    if (avail * 100 > (size_t)AUDIO_RING_BYTES * STALE_BACKLOG_PCT && avail > payloadBytes) {
+        size_t toDrop = avail - payloadBytes;
+        while (toDrop >= sizeof(int16_t)) {
+            size_t chunk = toDrop < payloadBytes ? toDrop : payloadBytes;
+            size_t got = xStreamBufferReceive(audioRing, rtpPacketBuffer + 16, chunk, 0);
+            if (got == 0) break;
+            dropped += (uint32_t)(got / sizeof(int16_t));
+            toDrop -= got;
+        }
+        rtpTimestamp += dropped;
+        staleFlushedSamples += dropped;
+    }
+    simplePrintln("RTSP send recovered after " + String(stallMs) + " ms stall" +
+                  (dropped ? "; skipped " + String(dropped) + " stale samples to resume live audio"
+                           : String("; backlog kept")));
+}
+
+static void failStream(WiFiClient &client) {
+    sendFailCount++;
+    isStreaming = false;
+    txReset();
+    client.stop();
+    simplePrintln("RTSP send stalled > " + String(SEND_TIMEOUT_MS) +
+                  " ms (weak Wi-Fi?) - closed connection so the client can reconnect");
+}
+
+// True while an RTP frame is partially sent (RTSP replies must wait).
+bool rtpFramePending() {
+    return txLen != 0;
 }
 
 // Convert one raw I2S chunk to 16-bit PCM (or test tone) and update metering.
@@ -889,18 +982,38 @@ static void resetAudioPipelineForStream() {
     i2sOverflowCount = 0;
     ringDroppedSamples = 0;
     ringPeakFillPct = 0;
+    dropsAccounted = 0;
+    stallRecoveries = 0;
+    staleFlushedSamples = 0;
+    txReset();
     audioResume();
 }
 
-// Audio streaming: send every complete packet waiting in the ring buffer.
-// Bounded per call so the Web UI/OTA keep getting serviced.
+// Audio streaming: finish the pending frame, then send whole packets waiting in the
+// ring. Never blocks: returns as soon as TCP would block. Bounded per call so the
+// Web UI/OTA keep getting serviced.
 void streamAudio(WiFiClient &client) {
     if (!isStreaming || !client.connected() || !audioRing || !rtpPacketBuffer) return;
 
     const size_t payloadBytes = (size_t)currentBufferSize * sizeof(int16_t);
     if (4 + 12 + payloadBytes > rtpPacketBufferSize) return;  // buffer size changing
 
-    for (int n = 0; n < 8 && isStreaming; n++) {
+    {
+        uint8_t fill = (uint8_t)((xStreamBufferBytesAvailable(audioRing) * 100) / AUDIO_RING_BYTES);
+        if (fill > ringPeakFillPct) ringPeakFillPct = fill;
+    }
+
+    for (int n = 0; n < 16 && isStreaming; n++) {
+        if (txLen) {
+            int r = pumpRTPFrame(client);
+            if (r < 0) { failStream(client); return; }
+            if (r == 0) return;                       // TCP full: try again next pass
+            unsigned long took = millis() - txStartMs;
+            txReset();
+            if (took > STALL_RECOVERY_MS) recoverAfterStall(payloadBytes, took);
+            continue;
+        }
+
         size_t avail = xStreamBufferBytesAvailable(audioRing);
         uint8_t fill = (uint8_t)((avail * 100) / AUDIO_RING_BYTES);
         if (fill > ringPeakFillPct) ringPeakFillPct = fill;
@@ -908,7 +1021,7 @@ void streamAudio(WiFiClient &client) {
 
         size_t got = xStreamBufferReceive(audioRing, rtpPacketBuffer + 16, payloadBytes, 0);
         if (got < sizeof(int16_t)) break;
-        if (!sendRTPPacket(client, (int)(got / sizeof(int16_t)))) break;
+        queueRTPFrame((int)(got / sizeof(int16_t)));
     }
 }
 
@@ -1029,17 +1142,12 @@ void setup() {
     bootTime = millis(); // Store boot time
     rtpSSRC = (uint32_t)random(1, 0x7FFFFFFF);
 
-    // Enable external antenna (for XIAO ESP32-C6).
-    // NOTE: If you are using a board without the RF switch (or no external antenna), comment out or remove this block.
-    pinMode(3, OUTPUT);
-    digitalWrite(3, LOW);
-    Serial.println("RF switch control enabled (GPIO3 LOW)");
-    pinMode(14, OUTPUT);
-    digitalWrite(14, HIGH);
-    Serial.println("External antenna selected (GPIO14 HIGH)");
-
     // Load settings from flash
     loadAudioSettings();
+
+    // XIAO ESP32-C6 antenna selection (persisted setting, default onboard).
+    // NOTE: on a board without the RF switch, remove this line.
+    applyAntenna(true);
 
     // Allocate the outgoing packet buffer and the capture ring
     audioRing = xStreamBufferCreate(AUDIO_RING_BYTES, 1);
@@ -1173,6 +1281,7 @@ void loop() {
             if (newClient) {
                 rtspClient = newClient;
                 rtspClient.setNoDelay(true);
+                txReset();
                 rtspParseBufferPos = 0;
                 lastRTSPActivity = millis();
                 lastRtspClientConnectMs = millis();
@@ -1185,7 +1294,8 @@ void loop() {
             if (rtspClient.available()) {
                 lastRTSPActivity = millis();
             }
-            processRTSP(rtspClient);
+            // Never write an RTSP reply into the middle of a half-sent RTP frame.
+            if (!(isStreaming && rtpFramePending())) processRTSP(rtspClient);
             if (isStreaming) {
                 streamAudio(rtspClient);
             }

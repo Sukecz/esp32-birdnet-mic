@@ -4,7 +4,7 @@ This repository contains an ESP32-based I²S microphone streamer for BirdNET-Go.
 
 - Latest version: `esp32_rtsp_mic_birdnetgo` (Web UI + JSON API)
 
-Key features (v1.4.0):
+Key features (v1.4.1):
 - Web UI on port 80 (English/Czech) with live status, controls and settings
 - JSON API for automation/integration
 - Auto-recovery when packet rate degrades; auto/manual threshold mode
@@ -13,6 +13,8 @@ Key features (v1.4.0):
 - OTA update support and WiFi Manager onboarding
 - Built-in high-pass filter (configurable) to cut low-frequency rumble (traffic, wind)
 - RTSP keep-alive support (GET_PARAMETER)
+- Non-blocking RTP sending: rides out Wi-Fi stalls up to 10 s without reconnecting, and the Web UI stays responsive
+- XIAO ESP32-C6 antenna selection (onboard/external) in the Web UI, default onboard
 - Web UI level meter with clipping warning and guidance (EN/CZ)
 - Glitch-free capture: dedicated audio task + ring buffer, so Wi-Fi hiccups or Web UI use no longer drop audio
 - Stream diagnostics (mic overruns, buffer drops, send stalls) and a **test-tone mode** to tell firmware/network issues apart from mic/wiring issues
@@ -36,7 +38,7 @@ Screenshot (Web UI)
 | 2.4 GHz antenna (IPEX/U.FL) | optional | If your board/revision uses external antenna | [AliExpress](https://www.aliexpress.com/item/1005008490414283.html) |
 
 > **Sourcing note:** Links are provided for convenience and may change over time. Always verify the exact part (e.g., **ICS-43434**) in the listing before buying.
-> **Antenna note:** If you run this firmware on a board without the XIAO ESP32-C6 RF switch (or you use only the internal antenna), comment out the GPIO3/GPIO14 antenna block in `setup()` to avoid forcing those pins.
+> **Antenna note:** Since v1.4.1 the XIAO ESP32-C6 uses its onboard antenna by default; switch to *External* in the Web UI only with a 2.4 GHz U.FL antenna attached. On a board without the XIAO ESP32-C6 RF switch, remove the `applyAntenna(true);` call in `setup()` to avoid driving GPIO3/GPIO14.
 
 ---
 

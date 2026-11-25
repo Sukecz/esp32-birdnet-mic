@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1 — 2026-11-25
+- RTSP/RTP sending is now non-blocking (port of the upstream esp32-birdnet-mic 1.22/1.26 approach). One frame is in flight at a time and is pushed across loop passes, so a Wi-Fi stall no longer freezes the Web UI/OTA. RTSP replies wait until the frame is complete, so they can never corrupt the interleaved stream.
+- Stall tolerance raised from 2 s to 10 s without progress before the connection is closed. Upstream found that short limits turn brief Wi-Fi hiccups into much longer client reconnects.
+- After a stall the backlog normally drains by itself. Audio is only skipped (oldest first, to resume live) when the ring is ≥ 90 % full and about to overflow anyway. Samples dropped by a full ring or skipped now advance the RTP timestamp, so clients see a correctly timed gap instead of shifted audio.
+- New diagnostics: `stall_recoveries`, `stale_skipped_samples` (API + "Recovered stalls" row in Stream Diagnostics). Buffer peak fill is now also measured while a send is blocked.
+- XIAO ESP32-C6 antenna is now a saved setting (`antenna=internal|external`, Web UI → WiFi → Antenna) and defaults to the **onboard** antenna. v1.4.0 forced the external U.FL antenna, which stalls and drops audio when no (or a bad) external antenna is attached.
+- Default Wi-Fi TX power 19.5 → 15 dBm (upstream measured 19.5 dBm running the C6 8–11 °C hotter without fixing stalls). Existing saved TX settings are kept.
+
 ## 1.4.0 — 2026-11-25
 - Audio pipeline: the microphone is now read by a dedicated FreeRTOS task into a ~680 ms ring buffer. Slow Wi-Fi writes or Web UI requests can no longer stall I2S and silently drop audio (heard as clicks, skips or "time jumps").
 - RTSP/RTP: each packet is sent as one contiguous write (was 3 small TCP writes). Short Wi-Fi stalls are retried for up to 2 s; if a write still cannot finish, the connection is closed cleanly so the client reconnects at once instead of hanging on a half-sent packet.

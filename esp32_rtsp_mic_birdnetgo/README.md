@@ -10,7 +10,7 @@ An ESP32‑C6 + I²S digital microphone (ICS‑43434) streamer that exposes a **
 - **RTSP audio:** `rtsp://<device-ip>:8554/audio` (**L16/PCM**, mono, **RTP over TCP**)  
 - **Board:** Seeed Studio **XIAO ESP32‑C6** (tested)  
 - **Mic:** **ICS‑43434** (I²S, mono)  
-- **Defaults:** 48 kHz sample‑rate, gain 1.2, buffer 1024, Wi‑Fi TX ≈ 19.5 dBm, shiftBits 12, HPF ON (500 Hz), CPU 160 MHz, thermal cutoff 80 °C (protection ON)
+- **Defaults:** 48 kHz sample‑rate, gain 1.2, buffer 1024, Wi‑Fi TX 15 dBm, onboard antenna, shiftBits 12, HPF ON (500 Hz), CPU 160 MHz, thermal cutoff 80 °C (protection ON)
 - **Onboarding:** WiFiManager AP **ESP32‑RTSP‑Mic‑AP** on first boot  
 - **Clients:** One RTSP client at a time (single connection handled)
 
@@ -54,8 +54,10 @@ At 48 kHz the I²S bit clock runs at ~3 MHz, which is fast enough for loose or l
 
 ### Antenna control (XIAO ESP32‑C6)
 - **GPIO3 → LOW** (RF switch control enabled)  
-- **GPIO14 → HIGH** (select external antenna)
-- If you use a different ESP32 board or keep the internal antenna, comment out the GPIO3/GPIO14 block in `setup()` so the firmware does not drive pins that your hardware lacks.
+- **GPIO14** selects the antenna: **LOW = onboard** ceramic antenna (default since v1.4.1), **HIGH = external** U.FL antenna.
+- Choose it in the Web UI (*WiFi → Antenna*) or via `GET /api/set?key=antenna&value=internal|external`. It applies immediately and is saved.
+- Only select *External* with a 2.4 GHz antenna firmly clicked onto the U.FL connector. With no antenna (or a bad pigtail) the RSSI can still look fine while the link stalls and drops audio.
+- If you use a different ESP32 board, remove the `applyAntenna(true);` call in `setup()` so the firmware does not drive GPIO3/GPIO14.
 
 > Keep I²S lines short; use shielded cable for longer runs to reduce EMI.
 
@@ -88,7 +90,8 @@ At 48 kHz the I²S bit clock runs at ~3 MHz, which is fast enough for loose or l
 #define DEFAULT_SAMPLE_RATE 48000
 #define DEFAULT_GAIN_FACTOR 1.2f
 #define DEFAULT_BUFFER_SIZE 1024
-#define DEFAULT_WIFI_TX_DBM 19.5f
+#define DEFAULT_WIFI_TX_DBM 15.0f
+#define DEFAULT_EXTERNAL_ANTENNA false   // XIAO ESP32-C6: onboard antenna
 // I²S pins:
 #define I2S_BCLK_PIN 21
 #define I2S_LRCLK_PIN 1
@@ -113,7 +116,8 @@ Keys (namespace `"audio"`):
 - `minRate` — default **50** (pkt/s threshold)  
 - `checkInterval` — default **15** (minutes)  
 - `cpuFreq` — default **160** (MHz)  
-- `wifiTxDbm` — default **19.5** (dBm)  
+- `wifiTxDbm` — default **15** (dBm; was 19.5 before v1.4.1 — existing saved values are kept)  
+- `extAnt` — default **false** (XIAO ESP32‑C6 onboard antenna)  
 - `ohEnable` — default **true** (thermal protection ON)  
 - `ohThresh` — default **80** (°C shutdown limit, steps of 5)  
 - `ohReason`, `ohStamp`, `ohTripC` — persisted info about the latest thermal shutdown
@@ -144,13 +148,14 @@ Keys (namespace `"audio"`):
 - Audio: edit values inline (Sample rate, Gain, Buffer). Latency and Profile are computed.
 - Reliability: Auto‑recovery (Auto/Manual threshold). Check interval configurable.
 - Thermal: enable/disable overheat protection, pick shutdown limit (30–95 °C, step 5), view status and last shutdown reason/time (`/api/thermal`). The latch survives reboots and must be acknowledged in the UI before the RTSP server can be re-enabled. If the MCU stops reporting temperature, the UI flags it and the protection pauses automatically.
-- Wi‑Fi: TX Power (dBm) editable inline.
+- Wi‑Fi: TX Power (dBm) editable inline; Antenna (onboard/external, XIAO ESP32‑C6).
 - Stream Diagnostics: test tone ON/OFF + frequency, and per-stream counters (mic overruns, buffer drops, buffer peak fill) plus send stalls since boot.
 - Actions: Server ON/OFF, Reset I2S, Reboot, Defaults (restores app settings and reboots).
 - The API mirrors the UI — open **DevTools → Network** to inspect endpoints and JSON.
 
-### Diagnostics API (v1.4.0)
-- `GET /api/audio_status` additionally returns `test_tone`, `test_tone_hz`, `i2s_overflows`, `ring_dropped_samples`, `ring_peak_fill_pct`, `send_failures`.
+### Diagnostics API (v1.4.0+)
+- `GET /api/audio_status` additionally returns `test_tone`, `test_tone_hz`, `i2s_overflows`, `ring_dropped_samples`, `ring_peak_fill_pct`, `send_failures`, and (v1.4.1) `stall_recoveries`, `stale_skipped_samples`.
+- `GET /api/status` returns `antenna` (`internal`/`external`) since v1.4.1.
 - Test tone: `GET /api/set?key=test_tone&value=on|off`, `GET /api/set?key=test_tone_hz&value=1000` (50 Hz … sample‑rate/2). Not persisted.
 
 ---
@@ -169,7 +174,8 @@ Keys (namespace `"audio"`):
 |---|---|---|
 | Random pops / crackle, tone is clean | all counters 0 | Wiring (jumper wires, L/R pin, ground) |
 | Gaps / skips | **Buffer drops** > 0, high **peak fill** | Weak Wi‑Fi (RSSI < −75 dBm), try a larger Buffer or better antenna |
-| Stream restarts | **Send stalls** > 0 | Wi‑Fi stopped accepting data for > 2 s |
+| Short skips, no reconnect | **Recovered stalls** > 0 | Wi‑Fi paused > 1 s but recovered; audio is only skipped if the backlog nearly fills the buffer |
+| Stream restarts | **Send stalls** > 0 | Wi‑Fi accepted no data for 10 s; on a XIAO ESP32‑C6 also check the *Antenna* setting |
 | Gaps even with good Wi‑Fi | **Mic overruns** > 0 | CPU starvation — please open an issue with your settings |
 | Steady hiss, low level | — | Gain staging: raise Gain / lower Shift; check the level meter |
 | Thin / tinny sound | — | HPF cutoff too high; try 200–300 Hz or OFF |
